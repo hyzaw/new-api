@@ -48,6 +48,7 @@ func SetApiRouter(router *gin.Engine) {
 
 		apiRouter.POST("/stripe/webhook", controller.StripeWebhook)
 		apiRouter.POST("/creem/webhook", controller.CreemWebhook)
+		apiRouter.POST("/alipay/f2f/notify", controller.AlipayF2FNotify)
 		apiRouter.POST("/waffo/webhook", controller.WaffoWebhook)
 
 		// Universal secure verification routes
@@ -90,6 +91,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/stripe/pay", middleware.CriticalRateLimit(), controller.RequestStripePay)
 				selfRoute.POST("/stripe/amount", controller.RequestStripeAmount)
 				selfRoute.POST("/creem/pay", middleware.CriticalRateLimit(), controller.RequestCreemPay)
+				selfRoute.POST("/alipay_f2f/pay", middleware.CriticalRateLimit(), controller.RequestAlipayF2FPay)
+				selfRoute.GET("/alipay_f2f/status", controller.AlipayF2FStatus)
 				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)

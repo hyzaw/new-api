@@ -53,6 +53,7 @@ const PAYMENT_METHOD_MAP = {
   creem: 'Creem',
   waffo: 'Waffo',
   alipay: '支付宝',
+  alipay_f2f: '支付宝当面付',
   wxpay: '微信',
 };
 
@@ -217,14 +218,14 @@ const TopupHistoryModal = ({ visible, onCancel, t }) => {
           if (record.status === 'pending') {
             actions.push(
               <Button
-                key="complete"
+                key='complete'
                 size='small'
                 type='primary'
                 theme='outline'
                 onClick={() => confirmAdminComplete(record.trade_no)}
               >
                 {t('补单')}
-              </Button>
+              </Button>,
             );
           }
           return actions.length > 0 ? <>{actions}</> : null;
