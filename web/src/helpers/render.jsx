@@ -1671,6 +1671,7 @@ export function renderModelPrice(opts) {
   let groupRatio = effectiveGroupRatio;
 
   const { symbol, rate } = getCurrencyConfig();
+  const resolvedCompletionRatio = completionRatio ?? 0;
 
   if (!shouldUseRatioBillingProcess(modelPrice)) {
     if (modelPrice !== -1) {
@@ -1695,11 +1696,8 @@ export function renderModelPrice(opts) {
       ]);
     }
 
-    if (completionRatio === undefined) {
-      completionRatio = 0;
-    }
     const inputRatioPrice = modelRatio * 2.0;
-    const completionRatioPrice = modelRatio * 2.0 * completionRatio;
+    const completionRatioPrice = modelRatio * 2.0 * resolvedCompletionRatio;
     const cacheRatioPrice = modelRatio * 2.0 * cacheRatio;
     const imageRatioPrice = modelRatio * 2.0 * imageRatio;
     let effectiveInputTokens =
@@ -1908,12 +1906,8 @@ export function renderModelPrice(opts) {
     );
   }
 
-  if (completionRatio === undefined) {
-    completionRatio = 0;
-  }
-
   const modelRatioValue = formatRatioValue(modelRatio);
-  const completionRatioValue = formatRatioValue(completionRatio);
+  const completionRatioValue = formatRatioValue(resolvedCompletionRatio);
   const cacheRatioValue = formatRatioValue(cacheRatio);
   const imageRatioValue = formatRatioValue(imageRatio);
   const inputRatioPrice = modelRatio * 2.0;
@@ -2427,6 +2421,8 @@ export function renderAudioModelPrice(opts) {
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
+  const resolvedCompletionRatio = completionRatio ?? 0;
+  const resolvedAudioRatio = Number.parseFloat(audioRatio ?? 0);
 
   if (!shouldUseRatioBillingProcess(modelPrice)) {
     if (modelPrice !== -1) {
@@ -2450,22 +2446,21 @@ export function renderAudioModelPrice(opts) {
       ]);
     }
 
-    if (completionRatio === undefined) {
-      completionRatio = 0;
-    }
-    audioRatio = parseFloat(audioRatio).toFixed(6);
     const inputRatioPrice = modelRatio * 2.0;
-    const completionRatioPrice = modelRatio * 2.0 * completionRatio;
+    const completionRatioPrice = modelRatio * 2.0 * resolvedCompletionRatio;
     const textPrice =
       ((inputTokens - cacheTokens + cacheTokens * cacheRatio) / 1000000) *
         inputRatioPrice *
         groupRatio +
       (completionTokens / 1000000) * completionRatioPrice * groupRatio;
     const audioPrice =
-      (audioInputTokens / 1000000) * inputRatioPrice * audioRatio * groupRatio +
+      (audioInputTokens / 1000000) *
+        inputRatioPrice *
+        resolvedAudioRatio *
+        groupRatio +
       (audioCompletionTokens / 1000000) *
         inputRatioPrice *
-        audioRatio *
+        resolvedAudioRatio *
         audioCompletionRatio *
         groupRatio;
     const totalPrice = textPrice + audioPrice;
@@ -2511,11 +2506,11 @@ export function renderAudioModelPrice(opts) {
           textInputPrice: formatBillingDisplayPrice(inputRatioPrice, rate),
           textCompPrice: formatBillingDisplayPrice(completionRatioPrice, rate),
           audioInputPrice: formatBillingDisplayPrice(
-            audioRatio * inputRatioPrice,
+            resolvedAudioRatio * inputRatioPrice,
             rate,
           ),
           audioCompPrice: formatBillingDisplayPrice(
-            audioRatio * audioCompletionRatio * inputRatioPrice,
+            resolvedAudioRatio * audioCompletionRatio * inputRatioPrice,
             rate,
           ),
           ratioType: ratioLabel,
@@ -2541,14 +2536,10 @@ export function renderAudioModelPrice(opts) {
     );
   }
 
-  if (completionRatio === undefined) {
-    completionRatio = 0;
-  }
-
   const modelRatioValue = formatRatioValue(modelRatio);
-  const completionRatioValue = formatRatioValue(completionRatio);
+  const completionRatioValue = formatRatioValue(resolvedCompletionRatio);
   const cacheRatioValue = formatRatioValue(cacheRatio);
-  const audioRatioValue = formatRatioValue(audioRatio);
+  const audioRatioValue = formatRatioValue(resolvedAudioRatio);
   const audioCompletionRatioValue = formatRatioValue(audioCompletionRatio);
 
   const inputRatioPrice = modelRatio * 2.0;
@@ -2716,6 +2707,7 @@ export function renderClaudeModelPrice(opts) {
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
+  const resolvedCompletionRatio = completionRatio ?? 0;
 
   if (!shouldUseRatioBillingProcess(modelPrice)) {
     if (modelPrice !== -1) {
@@ -2739,12 +2731,8 @@ export function renderClaudeModelPrice(opts) {
       ]);
     }
 
-    if (completionRatio === undefined) {
-      completionRatio = 0;
-    }
-
     const inputRatioPrice = modelRatio * 2.0;
-    const completionRatioPrice = modelRatio * 2.0 * completionRatio;
+    const completionRatioPrice = modelRatio * 2.0 * resolvedCompletionRatio;
     const cacheRatioPrice = modelRatio * 2.0 * cacheRatio;
     const cacheCreationRatioPrice = modelRatio * 2.0 * cacheCreationRatio;
     const cacheCreationRatioPrice5m = modelRatio * 2.0 * cacheCreationRatio5m;
@@ -2926,12 +2914,8 @@ export function renderClaudeModelPrice(opts) {
     );
   }
 
-  if (completionRatio === undefined) {
-    completionRatio = 0;
-  }
-
   const modelRatioValue = formatRatioValue(modelRatio);
-  const completionRatioValue = formatRatioValue(completionRatio);
+  const completionRatioValue = formatRatioValue(resolvedCompletionRatio);
   const cacheRatioValue = formatRatioValue(cacheRatio);
   const cacheCreationRatioValue = formatRatioValue(cacheCreationRatio);
   const cacheCreationRatio5mValue = formatRatioValue(cacheCreationRatio5m);
