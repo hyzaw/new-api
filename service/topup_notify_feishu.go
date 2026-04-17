@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -14,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -43,6 +45,10 @@ type feishuMessageRequest struct {
 type feishuMessageResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
+}
+
+func buildFeishuMessageUUID(tradeNo string) string {
+	return uuid.NewSHA1(uuid.NameSpaceURL, []byte("new-api/topup/"+tradeNo)).String()
 }
 
 type feishuCard struct {
@@ -116,7 +122,7 @@ func notifyTopupSuccessToFeishu(tradeNo string, callerIP string, callbackSource 
 		ReceiveID: setting.TopupNotifyFeishuChatID,
 		MsgType:   "interactive",
 		Content:   cardContent,
-		UUID:      "newapi-topup-" + common.Sha1([]byte(tradeNo)),
+		UUID:      buildFeishuMessageUUID(tradeNo),
 	}
 	payloadBytes, err := common.Marshal(messageReq)
 	if err != nil {
@@ -190,7 +196,7 @@ func doFeishuRequest(method string, requestURL string, payload []byte, bearerTok
 			return nil, err
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return nil, fmt.Errorf("feishu request failed with status %d", resp.StatusCode)
+			return nil, fmt.Errorf("feishu request failed with status %d: %s", resp.StatusCode, truncateFeishuErrorBody(body))
 		}
 		return body, nil
 	}
@@ -214,13 +220,25 @@ func doFeishuRequest(method string, requestURL string, payload []byte, bearerTok
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("feishu request failed with status %d", resp.StatusCode)
+		return nil, fmt.Errorf("feishu request failed with status %d: %s", resp.StatusCode, truncateFeishuErrorBody(body))
 	}
 	return body, nil
 }
 
 func systemWorkerEnabledForHTTPS() bool {
 	return system_setting.EnableWorker()
+}
+
+func truncateFeishuErrorBody(body []byte) string {
+	msg := strings.TrimSpace(string(body))
+	msg = common.MaskSensitiveInfo(msg)
+	if msg == "" {
+		return "<empty>"
+	}
+	if len(msg) > 512 {
+		return msg[:512] + "..."
+	}
+	return msg
 }
 
 func buildTopupFeishuCardContent(topUp *model.TopUp, user *model.User, callerIP string, callbackSource string) (string, error) {

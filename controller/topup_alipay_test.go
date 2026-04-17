@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -40,4 +41,25 @@ func TestBuildAlipaySignContentForNotifyVerify(t *testing.T) {
 		`notify_time=2026-04-18 12:00:00&out_trade_no=A1&trade_status=TRADE_SUCCESS`,
 		content,
 	)
+}
+
+func TestGetAlipayVerifyHash(t *testing.T) {
+	hashType, err := getAlipayVerifyHash("RSA2")
+	require.NoError(t, err)
+	require.Equal(t, "SHA-256", hashType.String())
+
+	hashType, err = getAlipayVerifyHash("RSA")
+	require.NoError(t, err)
+	require.Equal(t, "SHA-1", hashType.String())
+}
+
+func TestCollectAlipayNotifyParamsUsesFirstValue(t *testing.T) {
+	values := url.Values{
+		"trade_status": []string{"TRADE_SUCCESS", "TRADE_FINISHED"},
+		"out_trade_no": []string{"A1"},
+	}
+
+	params := collectAlipayNotifyParams(values)
+	require.Equal(t, "TRADE_SUCCESS", params["trade_status"])
+	require.Equal(t, "A1", params["out_trade_no"])
 }

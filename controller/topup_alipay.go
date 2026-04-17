@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -190,6 +191,43 @@ func alipaySign(signContent string) (string, error) {
 	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
+func getAlipayVerifyHash(signType string) (crypto.Hash, error) {
+	switch strings.ToUpper(strings.TrimSpace(signType)) {
+	case "", "RSA2":
+		return crypto.SHA256, nil
+	case "RSA":
+		return crypto.SHA1, nil
+	default:
+		return 0, fmt.Errorf("unsupported alipay sign_type: %s", signType)
+	}
+}
+
+func verifyAlipaySignatureWithContent(publicKey *rsa.PublicKey, signature string, signType string, signContent string) error {
+	signBytes, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(signature, " ", "+"))
+	if err != nil {
+		return err
+	}
+
+	hashType, err := getAlipayVerifyHash(signType)
+	if err != nil {
+		return err
+	}
+
+	var digest []byte
+	switch hashType {
+	case crypto.SHA256:
+		hashed := sha256.Sum256([]byte(signContent))
+		digest = hashed[:]
+	case crypto.SHA1:
+		hashed := sha1.Sum([]byte(signContent))
+		digest = hashed[:]
+	default:
+		return fmt.Errorf("unsupported alipay verify hash: %v", hashType)
+	}
+
+	return rsa.VerifyPKCS1v15(publicKey, hashType, digest, signBytes)
+}
+
 func verifyAlipaySignature(params map[string]string) error {
 	signature := params["sign"]
 	if signature == "" {
@@ -199,13 +237,34 @@ func verifyAlipaySignature(params map[string]string) error {
 	if err != nil {
 		return err
 	}
-	signContent := buildAlipaySignContent(params, true)
-	signBytes, err := base64.StdEncoding.DecodeString(signature)
-	if err != nil {
-		return err
+
+	signType := params["sign_type"]
+	signContents := []struct {
+		name    string
+		content string
+	}{
+		{name: "exclude_sign_type", content: buildAlipaySignContent(params, true)},
 	}
-	hashed := sha256.Sum256([]byte(signContent))
-	return rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, hashed[:], signBytes)
+	if signType != "" {
+		signContents = append(signContents, struct {
+			name    string
+			content string
+		}{
+			name:    "include_sign_type",
+			content: buildAlipaySignContent(params, false),
+		})
+	}
+
+	errs := make([]string, 0, len(signContents))
+	for _, candidate := range signContents {
+		if err := verifyAlipaySignatureWithContent(publicKey, signature, signType, candidate.content); err == nil {
+			return nil
+		} else {
+			errs = append(errs, fmt.Sprintf("%s:%v", candidate.name, err))
+		}
+	}
+
+	return fmt.Errorf("alipay signature verification failed (sign_type=%s): %s", common.GetStringIfEmpty(signType, "RSA2"), strings.Join(errs, "; "))
 }
 
 func doAlipayGatewayRequest(method string, bizContent any, notifyURL string) ([]byte, error) {
@@ -489,7 +548,11 @@ func AlipayF2FStatus(c *gin.Context) {
 func collectAlipayNotifyParams(values url.Values) map[string]string {
 	params := make(map[string]string, len(values))
 	for key, items := range values {
-		params[key] = strings.Join(items, ",")
+		if len(items) == 0 {
+			params[key] = ""
+			continue
+		}
+		params[key] = items[0]
 	}
 	return params
 }
