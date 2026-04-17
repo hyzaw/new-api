@@ -12,6 +12,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
@@ -275,10 +276,13 @@ func fulfillOrder(event stripe.Event, referenceId string, customerId string, cal
 		return
 	}
 
-	err := model.Recharge(referenceId, customerId, callerIp)
+	completed, err := model.Recharge(referenceId, customerId, callerIp)
 	if err != nil {
 		log.Println(err.Error(), referenceId)
 		return
+	}
+	if completed {
+		service.NotifyTopupSuccessAsync(referenceId, callerIp, "stripe")
 	}
 
 	total, _ := strconv.ParseFloat(event.GetObjectValue("amount_total"), 64)

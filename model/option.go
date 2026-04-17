@@ -99,6 +99,10 @@ func InitOptionMap() {
 	common.OptionMap["AlipaySellerID"] = setting.AlipaySellerID
 	common.OptionMap["AlipayNotifyURL"] = setting.AlipayNotifyURL
 	common.OptionMap["AlipayProductCode"] = setting.AlipayProductCode
+	common.OptionMap["TopupNotifyFeishuEnabled"] = strconv.FormatBool(setting.TopupNotifyFeishuEnabled)
+	common.OptionMap["TopupNotifyFeishuAppID"] = setting.TopupNotifyFeishuAppID
+	common.OptionMap["TopupNotifyFeishuAppSecret"] = setting.TopupNotifyFeishuAppSecret
+	common.OptionMap["TopupNotifyFeishuChatID"] = setting.TopupNotifyFeishuChatID
 	common.OptionMap["WaffoEnabled"] = strconv.FormatBool(setting.WaffoEnabled)
 	common.OptionMap["WaffoApiKey"] = setting.WaffoApiKey
 	common.OptionMap["WaffoPrivateKey"] = setting.WaffoPrivateKey
@@ -404,6 +408,14 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.AlipayNotifyURL = value
 	case "AlipayProductCode":
 		setting.AlipayProductCode = value
+	case "TopupNotifyFeishuEnabled":
+		setting.TopupNotifyFeishuEnabled = value == "true"
+	case "TopupNotifyFeishuAppID":
+		setting.TopupNotifyFeishuAppID = value
+	case "TopupNotifyFeishuAppSecret":
+		setting.TopupNotifyFeishuAppSecret = value
+	case "TopupNotifyFeishuChatID":
+		setting.TopupNotifyFeishuChatID = value
 	case "WaffoEnabled":
 		setting.WaffoEnabled = value == "true"
 	case "WaffoApiKey":

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
+	"time"
 )
 
 type Log struct {
@@ -56,10 +56,11 @@ func formatUserLogs(logs []*Log, startIdx int) {
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
 		if otherMap != nil {
-			// Remove admin-only debug fields.
+			// Remove admin-only debug fields and internal upstream model details.
 			delete(otherMap, "admin_info")
-			// delete(otherMap, "reject_reason")
 			delete(otherMap, "stream_status")
+			delete(otherMap, "upstream_model_name")
+			delete(otherMap, "is_model_mapped")
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
 		logs[i].Id = startIdx + i + 1
@@ -148,13 +149,6 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	otherStr := common.MapToJsonStr(other)
-	// 判断是否需要记录 IP
-	needRecordIp := false
-	if settingMap, err := GetUserSetting(userId, false); err == nil {
-		if settingMap.RecordIpLog {
-			needRecordIp = true
-		}
-	}
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
@@ -171,14 +165,9 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 		UseTime:          useTimeSeconds,
 		IsStream:         isStream,
 		Group:            group,
-		Ip: func() string {
-			if needRecordIp {
-				return c.ClientIP()
-			}
-			return ""
-		}(),
-		RequestId: requestId,
-		Other:     otherStr,
+		Ip:               c.ClientIP(),
+		RequestId:        requestId,
+		Other:            otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {
@@ -209,13 +198,6 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	otherStr := common.MapToJsonStr(params.Other)
-	// 判断是否需要记录 IP
-	needRecordIp := false
-	if settingMap, err := GetUserSetting(userId, false); err == nil {
-		if settingMap.RecordIpLog {
-			needRecordIp = true
-		}
-	}
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
@@ -232,14 +214,9 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		UseTime:          params.UseTimeSeconds,
 		IsStream:         params.IsStream,
 		Group:            params.Group,
-		Ip: func() string {
-			if needRecordIp {
-				return c.ClientIP()
-			}
-			return ""
-		}(),
-		RequestId: requestId,
-		Other:     otherStr,
+		Ip:               c.ClientIP(),
+		RequestId:        requestId,
+		Other:            otherStr,
 	}
 	err := LOG_DB.Create(log).Error
 	if err != nil {

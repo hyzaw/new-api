@@ -153,6 +153,14 @@ func main() {
 
 	// Initialize HTTP server
 	server := gin.New()
+	server.ForwardedByClientIP = true
+	server.RemoteIPHeaders = append([]string(nil), common.RemoteIPHeaders...)
+	if err := server.SetTrustedProxies(common.TrustedProxies); err != nil {
+		common.FatalLog("failed to set trusted proxies: " + err.Error())
+		return
+	}
+	common.SysLog("trusted proxies: " + strings.Join(common.TrustedProxies, ", "))
+	common.SysLog("remote ip headers: " + strings.Join(server.RemoteIPHeaders, ", "))
 	server.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 		common.SysLog(fmt.Sprintf("panic detected: %v", err))
 		c.JSON(http.StatusInternalServerError, gin.H{

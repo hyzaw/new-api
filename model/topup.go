@@ -57,13 +57,14 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 	return topUp
 }
 
-func Recharge(referenceId string, customerId string, callerIp string) (err error) {
+func Recharge(referenceId string, customerId string, callerIp string) (completed bool, err error) {
 	if referenceId == "" {
-		return errors.New("未提供支付单号")
+		return false, errors.New("未提供支付单号")
 	}
 
 	var quota float64
 	topUp := &TopUp{}
+	completed = false
 
 	refCol := "`trade_no`"
 	if common.UsingPostgreSQL {
@@ -90,6 +91,7 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 		if err != nil {
 			return err
 		}
+		completed = true
 
 		quota = topUp.Money * common.QuotaPerUnit
 		err = tx.Model(&User{}).Where("id = ?", topUp.UserId).Updates(map[string]interface{}{"stripe_customer": customerId, "quota": gorm.Expr("quota + ?", quota)}).Error
@@ -102,12 +104,12 @@ func Recharge(referenceId string, customerId string, callerIp string) (err error
 
 	if err != nil {
 		common.SysError("topup failed: " + err.Error())
-		return errors.New("充值失败，请稍后重试")
+		return false, errors.New("充值失败，请稍后重试")
 	}
 
 	RecordTopupLog(topUp.UserId, fmt.Sprintf("使用在线充值成功，充值金额: %v，支付金额：%d", logger.FormatQuota(int(quota)), topUp.Amount), callerIp, topUp.PaymentMethod, "stripe")
 
-	return nil
+	return completed, nil
 }
 
 // topUpQueryWindowSeconds 限制充值记录查询的时间窗口（秒）。
@@ -268,9 +270,9 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 }
 
 // ManualCompleteTopUp 管理员手动完成订单并给用户充值
-func ManualCompleteTopUp(tradeNo string, callerIp string) error {
+func ManualCompleteTopUp(tradeNo string, callerIp string) (bool, error) {
 	if tradeNo == "" {
-		return errors.New("未提供订单号")
+		return false, errors.New("未提供订单号")
 	}
 
 	refCol := "`trade_no`"
@@ -282,6 +284,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	var quotaToAdd int
 	var payMoney float64
 	var paymentMethod string
+	completed := false
 
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		topUp := &TopUp{}
@@ -320,6 +323,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
+		completed = true
 
 		// 增加用户额度（立即写库，保持一致性）
 		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
@@ -333,20 +337,23 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	})
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// 事务外记录日志，避免阻塞
-	RecordTopupLog(userId, fmt.Sprintf("管理员补单成功，充值金额: %v，支付金额：%f", logger.FormatQuota(quotaToAdd), payMoney), callerIp, paymentMethod, "admin")
-	return nil
+	if completed {
+		RecordTopupLog(userId, fmt.Sprintf("管理员补单成功，充值金额: %v，支付金额：%f", logger.FormatQuota(quotaToAdd), payMoney), callerIp, paymentMethod, "admin")
+	}
+	return completed, nil
 }
-func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string) (err error) {
+func RechargeCreem(referenceId string, customerEmail string, customerName string, callerIp string) (completed bool, err error) {
 	if referenceId == "" {
-		return errors.New("未提供支付单号")
+		return false, errors.New("未提供支付单号")
 	}
 
 	var quota int64
 	topUp := &TopUp{}
+	completed = false
 
 	refCol := "`trade_no`"
 	if common.UsingPostgreSQL {
@@ -373,6 +380,7 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 		if err != nil {
 			return err
 		}
+		completed = true
 
 		// Creem 直接使用 Amount 作为充值额度（整数）
 		quota = topUp.Amount
@@ -407,21 +415,22 @@ func RechargeCreem(referenceId string, customerEmail string, customerName string
 
 	if err != nil {
 		common.SysError("creem topup failed: " + err.Error())
-		return errors.New("充值失败，请稍后重试")
+		return false, errors.New("充值失败，请稍后重试")
 	}
 
 	RecordTopupLog(topUp.UserId, fmt.Sprintf("使用Creem充值成功，充值额度: %v，支付金额：%.2f", quota, topUp.Money), callerIp, topUp.PaymentMethod, "creem")
 
-	return nil
+	return completed, nil
 }
 
-func RechargeWaffo(tradeNo string, callerIp string) (err error) {
+func RechargeWaffo(tradeNo string, callerIp string) (completed bool, err error) {
 	if tradeNo == "" {
-		return errors.New("未提供支付单号")
+		return false, errors.New("未提供支付单号")
 	}
 
 	var quotaToAdd int
 	topUp := &TopUp{}
+	completed = false
 
 	refCol := "`trade_no`"
 	if common.UsingPostgreSQL {
@@ -458,6 +467,7 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
+		completed = true
 
 		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
 			return err
@@ -468,23 +478,24 @@ func RechargeWaffo(tradeNo string, callerIp string) (err error) {
 
 	if err != nil {
 		common.SysError("waffo topup failed: " + err.Error())
-		return errors.New("充值失败，请稍后重试")
+		return false, errors.New("充值失败，请稍后重试")
 	}
 
-	if quotaToAdd > 0 {
+	if completed && quotaToAdd > 0 {
 		RecordTopupLog(topUp.UserId, fmt.Sprintf("Waffo充值成功，充值额度: %v，支付金额: %.2f", logger.FormatQuota(quotaToAdd), topUp.Money), callerIp, topUp.PaymentMethod, "waffo")
 	}
 
-	return nil
+	return completed, nil
 }
 
-func RechargeAlipayF2F(tradeNo string, callerIp string) (err error) {
+func RechargeAlipayF2F(tradeNo string, callerIp string) (completed bool, err error) {
 	if tradeNo == "" {
-		return errors.New("未提供支付单号")
+		return false, errors.New("未提供支付单号")
 	}
 
 	var quotaToAdd int
 	topUp := &TopUp{}
+	completed = false
 
 	refCol := "`trade_no`"
 	if common.UsingPostgreSQL {
@@ -521,6 +532,7 @@ func RechargeAlipayF2F(tradeNo string, callerIp string) (err error) {
 		if err := tx.Save(topUp).Error; err != nil {
 			return err
 		}
+		completed = true
 
 		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
 			return err
@@ -531,12 +543,12 @@ func RechargeAlipayF2F(tradeNo string, callerIp string) (err error) {
 
 	if err != nil {
 		common.SysError("alipay f2f topup failed: " + err.Error())
-		return errors.New("充值失败，请稍后重试")
+		return false, errors.New("充值失败，请稍后重试")
 	}
 
-	if quotaToAdd > 0 {
+	if completed && quotaToAdd > 0 {
 		RecordTopupLog(topUp.UserId, fmt.Sprintf("支付宝当面付充值成功，充值额度: %v，支付金额: %.2f", logger.FormatQuota(quotaToAdd), topUp.Money), callerIp, topUp.PaymentMethod, "alipay_f2f")
 	}
 
-	return nil
+	return completed, nil
 }

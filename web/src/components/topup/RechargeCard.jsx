@@ -119,6 +119,20 @@ const RechargeCard = ({
       setActiveTab('topup');
     }
   }, [shouldShowSubscription, activeTab]);
+
+  const visiblePayMethods = (payMethods || []).filter((payMethod) => {
+    if (payMethod.type === 'waffo') {
+      return false;
+    }
+    if (payMethod.type === 'stripe') {
+      return enableStripeTopUp;
+    }
+    if (payMethod.type === 'alipay_f2f') {
+      return enableAlipayF2FTopUp;
+    }
+    return enableOnlineTopUp;
+  });
+
   const topupContent = (
     <Space vertical style={{ width: '100%' }}>
       {/* 统计数据 */}
@@ -304,25 +318,14 @@ const RechargeCard = ({
                       style={{ width: '100%' }}
                     />
                   </Col>
-                  {payMethods &&
-                    payMethods.filter((m) => m.type !== 'waffo').length > 0 && (
+                  {visiblePayMethods.length > 0 && (
                       <Col xs={24} sm={24} md={24} lg={14} xl={14}>
                         <Form.Slot label={t('选择支付方式')}>
                           <Space wrap>
-                            {payMethods
-                              .filter((m) => m.type !== 'waffo')
-                              .map((payMethod) => {
+                            {visiblePayMethods.map((payMethod) => {
                                 const minTopupVal =
                                   Number(payMethod.min_topup) || 0;
-                                const isStripe = payMethod.type === 'stripe';
-                                const isAlipayF2F =
-                                  payMethod.type === 'alipay_f2f';
                                 const disabled =
-                                  (!enableOnlineTopUp &&
-                                    !isStripe &&
-                                    !isAlipayF2F) ||
-                                  (!enableStripeTopUp && isStripe) ||
-                                  (!enableAlipayF2FTopUp && isAlipayF2F) ||
                                   minTopupVal > Number(topUpCount || 0);
 
                                 const buttonEl = (

@@ -64,10 +64,12 @@ const UsersTable = (usersData) => {
   const [showResetTwoFAModal, setShowResetTwoFAModal] = useState(false);
   const [showUserSubscriptionsModal, setShowUserSubscriptionsModal] =
     useState(false);
+  const [promoteAction, setPromoteAction] = useState('promote');
 
   // Modal handlers
-  const showPromoteUserModal = (user) => {
+  const showPromoteUserModal = (user, action = 'promote') => {
     setModalUser(user);
+    setPromoteAction(action);
     setShowPromoteModal(true);
   };
 
@@ -104,7 +106,7 @@ const UsersTable = (usersData) => {
 
   // Modal confirm handlers
   const handlePromoteConfirm = () => {
-    manageUser(modalUser.id, 'promote', modalUser);
+    manageUser(modalUser.id, promoteAction, modalUser);
     setShowPromoteModal(false);
   };
 
@@ -206,6 +208,16 @@ const UsersTable = (usersData) => {
         onCancel={() => setShowPromoteModal(false)}
         onConfirm={handlePromoteConfirm}
         user={modalUser}
+        title={
+          promoteAction === 'promote_root'
+            ? t('确定要将此用户提升为超级管理员吗？')
+            : t('确定要将此用户提升为管理员吗？')
+        }
+        content={
+          promoteAction === 'promote_root'
+            ? t('此操作将把该用户提升为超级管理员，请谨慎操作。')
+            : t('此操作将把该用户提升为管理员。')
+        }
         t={t}
       />
 

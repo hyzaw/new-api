@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"io"
 	"log"
@@ -353,11 +354,14 @@ func handleCheckoutCompleted(c *gin.Context, event *CreemWebhookEvent) {
 		log.Printf("警告：Creem回调中客户姓名为空 - 订单号: %s", referenceId)
 	}
 
-	err := model.RechargeCreem(referenceId, customerEmail, customerName, c.ClientIP())
+	completed, err := model.RechargeCreem(referenceId, customerEmail, customerName, c.ClientIP())
 	if err != nil {
 		log.Printf("Creem充值处理失败: %s, 订单号: %s", err.Error(), referenceId)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
+	}
+	if completed {
+		service.NotifyTopupSuccessAsync(referenceId, c.ClientIP(), "creem")
 	}
 
 	log.Printf("Creem充值成功 - 订单号: %s, 充值额度: %d, 支付金额: %.2f",

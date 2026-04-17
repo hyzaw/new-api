@@ -425,10 +425,10 @@ func markAlipayTopUpFailedIfPending(tradeNo string) {
 	_ = topUp.Update()
 }
 
-func syncAlipayTradeStatus(tradeNo string, callerIP string) (string, error) {
+func syncAlipayTradeStatus(tradeNo string, callerIP string) (string, bool, error) {
 	queryResp, err := queryAlipayTrade(tradeNo)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if queryResp.Code != "10000" {
 		errMsg := queryResp.SubMsg
@@ -438,18 +438,23 @@ func syncAlipayTradeStatus(tradeNo string, callerIP string) (string, error) {
 		if errMsg == "" {
 			errMsg = "支付宝查询失败"
 		}
-		return queryResp.TradeStatus, errors.New(errMsg)
+		return queryResp.TradeStatus, false, errors.New(errMsg)
 	}
 
+	completed := false
 	switch queryResp.TradeStatus {
 	case "TRADE_SUCCESS", "TRADE_FINISHED":
-		if err := model.RechargeAlipayF2F(tradeNo, callerIP); err != nil {
-			return queryResp.TradeStatus, err
+		completed, err = model.RechargeAlipayF2F(tradeNo, callerIP)
+		if err != nil {
+			return queryResp.TradeStatus, false, err
+		}
+		if completed {
+			service.NotifyTopupSuccessAsync(tradeNo, callerIP, "alipay_f2f")
 		}
 	case "TRADE_CLOSED":
 		markAlipayTopUpFailedIfPending(tradeNo)
 	}
-	return queryResp.TradeStatus, nil
+	return queryResp.TradeStatus, completed, nil
 }
 
 func AlipayF2FStatus(c *gin.Context) {
@@ -468,7 +473,7 @@ func AlipayF2FStatus(c *gin.Context) {
 	tradeStatus := ""
 	if topUp.Status == common.TopUpStatusPending {
 		LockOrder(tradeNo)
-		tradeStatus, _ = syncAlipayTradeStatus(tradeNo, c.ClientIP())
+		tradeStatus, _, _ = syncAlipayTradeStatus(tradeNo, c.ClientIP())
 		UnlockOrder(tradeNo)
 		topUp = model.GetTopUpByTradeNo(tradeNo)
 	}
@@ -514,7 +519,7 @@ func AlipayF2FNotify(c *gin.Context) {
 	LockOrder(outTradeNo)
 	defer UnlockOrder(outTradeNo)
 
-	tradeStatus, err := syncAlipayTradeStatus(outTradeNo, c.ClientIP())
+	tradeStatus, _, err := syncAlipayTradeStatus(outTradeNo, c.ClientIP())
 	if err != nil {
 		log.Printf("支付宝回调同步订单状态失败: tradeNo=%s status=%s err=%v", outTradeNo, tradeStatus, err)
 		_, _ = c.Writer.Write([]byte("fail"))

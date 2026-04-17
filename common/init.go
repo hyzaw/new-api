@@ -104,6 +104,12 @@ func InitEnv() {
 	RelayTimeout = GetEnvOrDefault("RELAY_TIMEOUT", 0)
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
+	if trustedProxies := parseCSVEnv("TRUSTED_PROXIES"); len(trustedProxies) > 0 {
+		TrustedProxies = trustedProxies
+	}
+	if remoteIPHeaders := parseCSVEnv("REMOTE_IP_HEADERS"); len(remoteIPHeaders) > 0 {
+		RemoteIPHeaders = remoteIPHeaders
+	}
 
 	// Initialize string variables with GetEnvOrDefaultString
 	GeminiSafetySetting = GetEnvOrDefaultString("GEMINI_SAFETY_SETTING", "BLOCK_NONE")
@@ -126,6 +132,24 @@ func InitEnv() {
 	SearchRateLimitNum = GetEnvOrDefault("SEARCH_RATE_LIMIT", 10)
 	SearchRateLimitDuration = int64(GetEnvOrDefault("SEARCH_RATE_LIMIT_DURATION", 60))
 	initConstantEnv()
+}
+
+func parseCSVEnv(env string) []string {
+	value := GetEnvOrDefaultString(env, "")
+	if value == "" {
+		return nil
+	}
+
+	items := strings.Split(value, ",")
+	parsed := make([]string, 0, len(items))
+	for _, item := range items {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		parsed = append(parsed, trimmed)
+	}
+	return parsed
 }
 
 func initConstantEnv() {

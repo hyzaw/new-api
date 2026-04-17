@@ -29,7 +29,12 @@ import {
   Dropdown,
 } from '@douyinfe/semi-ui';
 import { IconMore } from '@douyinfe/semi-icons';
-import { renderGroup, renderNumber, renderQuota } from '../../../helpers';
+import {
+  isRoot,
+  renderGroup,
+  renderNumber,
+  renderQuota,
+} from '../../../helpers';
 
 /**
  * Render user role
@@ -216,7 +221,24 @@ const renderOperations = (
     return <></>;
   }
 
+  const currentUserIsRoot = isRoot();
+  const canPromoteToAdmin = record.role < 10;
+  const canPromoteToRoot = currentUserIsRoot && record.role < 100;
+  const canDemote = record.role > 1 && record.role < 100;
+
   const moreMenu = [
+    ...(canPromoteToRoot
+      ? [
+          {
+            node: 'item',
+            name: t('提升为超级管理员'),
+            onClick: () => showPromoteModal(record, 'promote_root'),
+          },
+          {
+            node: 'divider',
+          },
+        ]
+      : []),
     {
       node: 'item',
       name: t('订阅管理'),
@@ -274,20 +296,24 @@ const renderOperations = (
       >
         {t('编辑')}
       </Button>
-      <Button
-        type='warning'
-        size='small'
-        onClick={() => showPromoteModal(record)}
-      >
-        {t('提升')}
-      </Button>
-      <Button
-        type='secondary'
-        size='small'
-        onClick={() => showDemoteModal(record)}
-      >
-        {t('降级')}
-      </Button>
+      {canPromoteToAdmin && (
+        <Button
+          type='warning'
+          size='small'
+          onClick={() => showPromoteModal(record, 'promote')}
+        >
+          {t('提升为管理员')}
+        </Button>
+      )}
+      {canDemote && (
+        <Button
+          type='secondary'
+          size='small'
+          onClick={() => showDemoteModal(record)}
+        >
+          {t('降级')}
+        </Button>
+      )}
       <Dropdown menu={moreMenu} trigger='click' position='bottomRight'>
         <Button type='tertiary' size='small' icon={<IconMore />} />
       </Dropdown>

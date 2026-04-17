@@ -387,6 +387,7 @@ func EpayNotify(c *gin.Context) {
 			}
 			log.Printf("易支付回调更新用户成功 %v", topUp)
 			model.RecordTopupLog(topUp.UserId, fmt.Sprintf("使用在线充值成功，充值金额: %v，支付金额：%f", logger.LogQuota(quotaToAdd), topUp.Money), c.ClientIP(), topUp.PaymentMethod, "epay")
+			service.NotifyTopupSuccessAsync(topUp.TradeNo, c.ClientIP(), "epay")
 		}
 	} else {
 		log.Printf("易支付异常回调: %v", verifyInfo)
@@ -485,9 +486,13 @@ func AdminCompleteTopUp(c *gin.Context) {
 	LockOrder(req.TradeNo)
 	defer UnlockOrder(req.TradeNo)
 
-	if err := model.ManualCompleteTopUp(req.TradeNo, c.ClientIP()); err != nil {
+	completed, err := model.ManualCompleteTopUp(req.TradeNo, c.ClientIP())
+	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if completed {
+		service.NotifyTopupSuccessAsync(req.TradeNo, c.ClientIP(), "admin_manual")
 	}
 	common.ApiSuccess(c, nil)
 }

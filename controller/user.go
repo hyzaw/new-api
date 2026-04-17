@@ -906,6 +906,16 @@ func ManageUser(c *gin.Context) {
 			return
 		}
 		user.Role = common.RoleAdminUser
+	case "promote_root":
+		if myRole != common.RoleRootUser {
+			common.ApiErrorI18n(c, i18n.MsgUserAdminCannotPromoteRoot)
+			return
+		}
+		if user.Role >= common.RoleRootUser {
+			common.ApiErrorI18n(c, i18n.MsgUserAlreadyRoot)
+			return
+		}
+		user.Role = common.RoleRootUser
 	case "demote":
 		if user.Role == common.RoleRootUser {
 			common.ApiErrorI18n(c, i18n.MsgUserCannotDemoteRootUser)
@@ -973,7 +983,7 @@ func ManageUser(c *gin.Context) {
 	// 避免在 Redis TTL 过期前仍使用旧状态（尤其是禁用后仍可发起请求的问题）。
 	// InvalidateUserCache 会让下一次 GetUserCache 从数据库重新加载，
 	// InvalidateUserTokensCache 则确保令牌侧的缓存也同步刷新。
-	if req.Action == "disable" || req.Action == "promote" || req.Action == "demote" {
+	if req.Action == "disable" || req.Action == "promote" || req.Action == "promote_root" || req.Action == "demote" {
 		if err := model.InvalidateUserCache(user.Id); err != nil {
 			common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", user.Id, err.Error()))
 		}
@@ -1121,7 +1131,7 @@ type UpdateUserSettingRequest struct {
 	GotifyPriority                   int     `json:"gotify_priority,omitempty"`
 	UpstreamModelUpdateNotifyEnabled *bool   `json:"upstream_model_update_notify_enabled,omitempty"`
 	AcceptUnsetModelRatioModel       bool    `json:"accept_unset_model_ratio_model"`
-	RecordIpLog                      bool    `json:"record_ip_log"`
+	RecordIpLog                      bool    `json:"record_ip_log"` // 兼容旧前端入参，后端始终强制开启
 }
 
 func UpdateUserSetting(c *gin.Context) {
@@ -1217,14 +1227,13 @@ func UpdateUserSetting(c *gin.Context) {
 		upstreamModelUpdateNotifyEnabled = *req.UpstreamModelUpdateNotifyEnabled
 	}
 
-	// 构建设置
-	settings := dto.UserSetting{
-		NotifyType:                       req.QuotaWarningType,
-		QuotaWarningThreshold:            req.QuotaWarningThreshold,
-		UpstreamModelUpdateNotifyEnabled: upstreamModelUpdateNotifyEnabled,
-		AcceptUnsetRatioModel:            req.AcceptUnsetModelRatioModel,
-		RecordIpLog:                      req.RecordIpLog,
-	}
+	// 以现有设置为基础更新，避免覆盖与本次请求无关的用户偏好。
+	settings := existingSettings
+	settings.NotifyType = req.QuotaWarningType
+	settings.QuotaWarningThreshold = req.QuotaWarningThreshold
+	settings.UpstreamModelUpdateNotifyEnabled = upstreamModelUpdateNotifyEnabled
+	settings.AcceptUnsetRatioModel = req.AcceptUnsetModelRatioModel
+	settings.RecordIpLog = true
 
 	// 如果是webhook类型,添加webhook相关设置
 	if req.QuotaWarningType == dto.NotifyTypeWebhook {

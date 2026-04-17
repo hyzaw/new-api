@@ -180,6 +180,14 @@ func UpdateOption(c *gin.Context) {
 
 			return
 		}
+	case "TopupNotifyFeishuEnabled":
+		if option.Value == "true" && (setting.TopupNotifyFeishuAppID == "" || setting.TopupNotifyFeishuAppSecret == "" || setting.TopupNotifyFeishuChatID == "") {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "无法启用飞书充值通知，请先填写飞书 App ID、App Secret 和群 Chat ID！",
+			})
+			return
+		}
 	case "TelegramOAuthEnabled":
 		if option.Value == "true" && common.TelegramBotToken == "" {
 			c.JSON(http.StatusOK, gin.H{

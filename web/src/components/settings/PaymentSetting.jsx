@@ -24,6 +24,7 @@ import SettingsPaymentGateway from '../../pages/Setting/Payment/SettingsPaymentG
 import SettingsPaymentGatewayStripe from '../../pages/Setting/Payment/SettingsPaymentGatewayStripe';
 import SettingsPaymentGatewayCreem from '../../pages/Setting/Payment/SettingsPaymentGatewayCreem';
 import SettingsPaymentGatewayAlipay from '../../pages/Setting/Payment/SettingsPaymentGatewayAlipay';
+import SettingsPaymentTopupNotifyFeishu from '../../pages/Setting/Payment/SettingsPaymentTopupNotifyFeishu';
 import SettingsPaymentGatewayWaffo from '../../pages/Setting/Payment/SettingsPaymentGatewayWaffo';
 import { API, showError, toBoolean } from '../../helpers';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +50,9 @@ const PaymentSetting = () => {
     StripeUnitPrice: 8.0,
     StripeMinTopUp: 1,
     StripePromotionCodesEnabled: false,
+    TopupNotifyFeishuEnabled: false,
+    TopupNotifyFeishuAppID: '',
+    TopupNotifyFeishuChatID: '',
   });
 
   let [loading, setLoading] = useState(false);
@@ -147,6 +151,12 @@ const PaymentSetting = () => {
         </Card>
         <Card style={{ marginTop: '10px' }}>
           <SettingsPaymentGatewayAlipay options={inputs} refresh={onRefresh} />
+        </Card>
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsPaymentTopupNotifyFeishu
+            options={inputs}
+            refresh={onRefresh}
+          />
         </Card>
         <Card style={{ marginTop: '10px' }}>
           <SettingsPaymentGatewayWaffo options={inputs} refresh={onRefresh} />

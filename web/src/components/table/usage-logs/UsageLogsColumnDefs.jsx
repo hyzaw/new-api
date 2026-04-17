@@ -268,9 +268,10 @@ function renderBillingTag(record, t) {
   return null;
 }
 
-function renderModelName(record, copyText, t) {
+function renderModelName(record, copyText, t, isAdminUser) {
   let other = getLogOther(record.other);
   let modelMapped =
+    isAdminUser &&
     other?.is_model_mapped &&
     other?.upstream_model_name &&
     other?.upstream_model_name !== '';
@@ -719,7 +720,7 @@ export const getLogsColumns = ({
           record.type === 2 ||
           record.type === 5 ||
           record.type === 6 ? (
-          <>{renderModelName(record, copyText, t)}</>
+          <>{renderModelName(record, copyText, t, isAdminUser)}</>
         ) : (
           <></>
         );
@@ -866,9 +867,7 @@ export const getLogsColumns = ({
         <div className='flex items-center gap-1'>
           {t('IP')}
           <Tooltip
-            content={t(
-              '只有当用户设置开启IP记录时，才会进行请求和错误类型日志的IP记录',
-            )}
+            content={t('请求与错误日志的 IP 会始终记录，用于审计与风控。')}
           >
             <IconHelpCircle className='text-gray-400 cursor-help' />
           </Tooltip>

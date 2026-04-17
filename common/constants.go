@@ -133,6 +133,21 @@ var RelayTimeout int // unit is second
 var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int
 
+// TrustedProxies 控制 Gin 在解析客户端真实 IP 时信任的反向代理列表。
+// 默认仅信任本地回环和常见私网网段，适合 Nginx / Docker / K8s 等内网代理场景。
+var TrustedProxies = []string{
+	"127.0.0.1/32",
+	"::1/128",
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+	"fc00::/7",
+}
+
+// RemoteIPHeaders 控制 Gin 从哪些头中解析客户端真实 IP。
+// Cloudflare -> Nginx -> new-api 场景下，建议由 Nginx 统一回填到 X-Forwarded-For / X-Real-IP。
+var RemoteIPHeaders = []string{"X-Forwarded-For", "X-Real-IP"}
+
 var GeminiSafetySetting string
 
 // https://docs.cohere.com/docs/safety-modes Type; NONE/CONTEXTUAL/STRICT

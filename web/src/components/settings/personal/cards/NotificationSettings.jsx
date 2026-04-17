@@ -784,16 +784,24 @@ const NotificationSettings = ({
               itemKey='privacy'
             >
               <div className='py-4'>
-                <Form.Switch
-                  field='recordIpLog'
-                  label={t('记录请求与错误日志IP')}
-                  checkedText={t('开')}
-                  uncheckedText={t('关')}
-                  onChange={(value) => handleFormChange('recordIpLog', value)}
-                  extraText={t(
-                    '开启后，仅"消费"和"错误"日志将记录您的客户端IP地址',
-                  )}
-                />
+                <div className='flex items-start justify-between gap-4 rounded-xl border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] p-4'>
+                  <div className='min-w-0'>
+                    <div className='font-medium text-sm'>
+                      {t('记录请求与错误日志IP')}
+                    </div>
+                    <Typography.Text type='tertiary' size='small'>
+                      {t(
+                        '该站点已强制开启此审计项，消费与错误日志会始终记录您的客户端IP地址，且不可关闭。',
+                      )}
+                    </Typography.Text>
+                  </div>
+                  <Switch
+                    checked
+                    disabled
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                  />
+                </div>
               </div>
             </TabPane>
 

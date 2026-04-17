@@ -357,10 +357,14 @@ func handleWaffoPayment(c *gin.Context, wh *core.WebhookHandler, result *core.Pa
 	LockOrder(merchantOrderId)
 	defer UnlockOrder(merchantOrderId)
 
-	if err := model.RechargeWaffo(merchantOrderId, c.ClientIP()); err != nil {
+	completed, err := model.RechargeWaffo(merchantOrderId, c.ClientIP())
+	if err != nil {
 		log.Printf("Waffo 充值处理失败: %v, 订单: %s", err, merchantOrderId)
 		sendWaffoWebhookResponse(c, wh, false, err.Error())
 		return
+	}
+	if completed {
+		service.NotifyTopupSuccessAsync(merchantOrderId, c.ClientIP(), "waffo")
 	}
 
 	log.Printf("Waffo 充值成功 - 订单: %s", merchantOrderId)
