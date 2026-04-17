@@ -979,6 +979,16 @@ func ManageUser(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if c.GetInt("id") == user.Id {
+		session := sessions.Default(c)
+		session.Set("role", user.Role)
+		session.Set("status", user.Status)
+		session.Set("group", user.Group)
+		if err := session.Save(); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+	}
 	// 禁用 / 角色调整后，强制失效用户缓存与其全部令牌缓存，
 	// 避免在 Redis TTL 过期前仍使用旧状态（尤其是禁用后仍可发起请求的问题）。
 	// InvalidateUserCache 会让下一次 GetUserCache 从数据库重新加载，

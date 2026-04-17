@@ -39,6 +39,7 @@ func authHelper(c *gin.Context, minRole int) {
 	role := session.Get("role")
 	id := session.Get("id")
 	status := session.Get("status")
+	group := session.Get("group")
 	useAccessToken := false
 	if username == nil {
 		// Check access token
@@ -82,6 +83,7 @@ func authHelper(c *gin.Context, minRole int) {
 			role = user.Role
 			id = user.Id
 			status = user.Status
+			group = user.Group
 			useAccessToken = true
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -90,6 +92,45 @@ func authHelper(c *gin.Context, minRole int) {
 			})
 			c.Abort()
 			return
+		}
+	}
+	if !useAccessToken {
+		userId, ok := id.(int)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"message": common.TranslateMessage(c, i18n.MsgAuthNotLoggedIn),
+			})
+			c.Abort()
+			return
+		}
+
+		// Keep session role/status/group in sync with the latest user record so
+		// privilege changes like promote_root take effect immediately.
+		userCache, cacheErr := model.GetUserCache(userId)
+		if cacheErr == nil && userCache != nil {
+			username = userCache.Username
+			role = userCache.Role
+			status = userCache.Status
+			group = userCache.Group
+
+			if session.Get("username") != userCache.Username ||
+				session.Get("role") != userCache.Role ||
+				session.Get("status") != userCache.Status ||
+				session.Get("group") != userCache.Group {
+				session.Set("username", userCache.Username)
+				session.Set("role", userCache.Role)
+				session.Set("status", userCache.Status)
+				session.Set("group", userCache.Group)
+				if err := session.Save(); err != nil {
+					c.JSON(http.StatusOK, gin.H{
+						"success": false,
+						"message": common.TranslateMessage(c, i18n.MsgUserSessionSaveFailed),
+					})
+					c.Abort()
+					return
+				}
+			}
 		}
 	}
 	// get header New-Api-User
@@ -149,8 +190,8 @@ func authHelper(c *gin.Context, minRole int) {
 	c.Set("username", username)
 	c.Set("role", role)
 	c.Set("id", id)
-	c.Set("group", session.Get("group"))
-	c.Set("user_group", session.Get("group"))
+	c.Set("group", group)
+	c.Set("user_group", group)
 	c.Set("use_access_token", useAccessToken)
 
 	c.Next()
