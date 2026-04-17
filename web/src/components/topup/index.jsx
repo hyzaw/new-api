@@ -59,8 +59,6 @@ const TopUp = () => {
   const [enableOnlineTopUp, setEnableOnlineTopUp] = useState(
     statusState?.status?.enable_online_topup || false,
   );
-  const [priceRatio, setPriceRatio] = useState(statusState?.status?.price || 1);
-
   const [enableStripeTopUp, setEnableStripeTopUp] = useState(
     statusState?.status?.enable_stripe_topup || false,
   );
@@ -110,6 +108,7 @@ const TopUp = () => {
   // 预设充值额度选项
   const [presetAmounts, setPresetAmounts] = useState([]);
   const [selectedPreset, setSelectedPreset] = useState(null);
+  const [presetPayAmounts, setPresetPayAmounts] = useState({});
 
   // 充值配置信息
   const [topupInfo, setTopupInfo] = useState({
@@ -628,7 +627,6 @@ const TopUp = () => {
       // setMinTopUp(minTopUpValue);
       // setTopUpCount(minTopUpValue);
       setTopUpLink(statusState.status.top_up_link || '');
-      setPriceRatio(statusState.status.price || 1);
 
       setStatusLoading(false);
     }
@@ -662,6 +660,46 @@ const TopUp = () => {
       // amount fetch failed silently
     }
     setAmountLoading(false);
+  };
+
+  const getPresetPayAmounts = async (presets) => {
+    if (!presets || presets.length === 0) {
+      setPresetPayAmounts({});
+      return;
+    }
+
+    try {
+      const responses = await Promise.all(
+        presets.map(async (preset) => {
+          const presetValue = Number(preset?.value);
+          if (!Number.isFinite(presetValue) || presetValue <= 0) {
+            return null;
+          }
+
+          const res = await API.post('/api/user/amount', {
+            amount: presetValue,
+          });
+          if (res?.data?.message !== 'success') {
+            return null;
+          }
+
+          return {
+            value: presetValue,
+            payAmount: parseFloat(res.data.data),
+          };
+        }),
+      );
+
+      const nextPresetPayAmounts = {};
+      responses.forEach((item) => {
+        if (item && Number.isFinite(item.payAmount)) {
+          nextPresetPayAmounts[item.value] = item.payAmount;
+        }
+      });
+      setPresetPayAmounts(nextPresetPayAmounts);
+    } catch (error) {
+      setPresetPayAmounts({});
+    }
   };
 
   const getStripeAmount = async (value) => {
@@ -722,16 +760,7 @@ const TopUp = () => {
   const selectPresetAmount = (preset) => {
     setTopUpCount(preset.value);
     setSelectedPreset(preset.value);
-
-    // 计算实际支付金额，考虑折扣
-    const discount = preset.discount || topupInfo.discount[preset.value] || 1.0;
-    const discountedAmount = preset.value * priceRatio * discount;
-    setAmount(discountedAmount);
-  };
-
-  // 格式化大数字显示
-  const formatLargeNumber = (num) => {
-    return num.toString();
+    getAmount(preset.value);
   };
 
   // 根据最小充值金额生成预设充值额度选项
@@ -780,6 +809,10 @@ const TopUp = () => {
       window.clearInterval(timer);
     };
   }, [alipayQRVisible, alipayQRData?.trade_no]);
+
+  useEffect(() => {
+    getPresetPayAmounts(presetAmounts).then();
+  }, [presetAmounts]);
 
   return (
     <div className='w-full max-w-7xl mx-auto relative min-h-screen lg:min-h-0 mt-[60px] px-2'>
@@ -874,10 +907,9 @@ const TopUp = () => {
           presetAmounts={presetAmounts}
           selectedPreset={selectedPreset}
           selectPresetAmount={selectPresetAmount}
-          formatLargeNumber={formatLargeNumber}
-          priceRatio={priceRatio}
           topUpCount={topUpCount}
           minTopUp={minTopUp}
+          presetPayAmounts={presetPayAmounts}
           renderQuotaWithAmount={renderQuotaWithAmount}
           getAmount={getAmount}
           setTopUpCount={setTopUpCount}
