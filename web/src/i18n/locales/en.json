@@ -3783,5 +3783,21 @@
     "音频补全倍率": "",
     "音频输入倍率": "",
     "预计结果": "Estimated result"
+    ,"企业级 AI 网关": "Enterprise AI Gateway"
+    ,"统一入口兼容现有 SDK、脚本与第三方客户端。": "One unified entry compatible with existing SDKs, scripts, and third-party clients."
+    ,"统一接入 OpenAI、Claude、Gemini 兼容生态": "One gateway for OpenAI, Claude, and Gemini compatible ecosystems"
+    ,"供应商接入": "Provider Access"
+    ,"兼容协议": "Compatible Protocols"
+    ,"复制地址": "Copy Address"
+    ,"当前端点": "Current Endpoint"
+    ,"将多供应商模型接入、鉴权、计费与运维能力收敛到一个稳定入口。": "Consolidate multi-provider model access, auth, billing, and operations into one stable entry point."
+    ,"支持的模型生态": "Supported Model Ecosystem"
+    ,"按需接入公有云、国产模型与自托管推理服务。": "Connect public cloud, domestic providers, and self-hosted inference services on demand."
+    ,"运营能力": "Operational Controls"
+    ,"覆盖主流供应商与企业部署场景": "Built for mainstream providers and enterprise deployment scenarios"
+    ,"更换基址后即可兼容现有 SDK 与客户端": "Switch the base URL and keep your existing SDKs and clients working"
+    ,"默认接入地址": "Default Base URL"
+    ,"鉴权、限流、计费、日志": "Auth, Rate Limits, Billing, Logs"
+    ,"30+ 供应商生态": "30+ Provider Ecosystem"
   }
 }
