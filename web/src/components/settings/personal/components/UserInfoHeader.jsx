@@ -29,16 +29,16 @@ import {
 import {
   isRoot,
   isAdmin,
-  quotaToApproxUsdByTopupRatio,
+  quotaToApproxUsdByGroupRatio,
   renderQuota,
   stringToColor,
 } from '../../../../helpers';
 import { Coins, BarChart2, Users } from 'lucide-react';
 
 const UserInfoHeader = ({ t, userState }) => {
-  const approxBalanceUsd = quotaToApproxUsdByTopupRatio(
+  const approxBalanceUsd = quotaToApproxUsdByGroupRatio(
     userState?.user?.quota,
-    userState?.user?.topup_group_ratio,
+    userState?.user?.group_ratio,
   );
 
   const getUsername = () => {

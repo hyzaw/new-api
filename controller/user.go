@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -401,8 +402,8 @@ func GetSelf(c *gin.Context) {
 		"wechat_id":         user.WeChatId,
 		"telegram_id":       user.TelegramId,
 		"group":             user.Group,
-		"topup_group_ratio": func() float64 {
-			ratio := common.GetTopupGroupRatio(user.Group)
+		"group_ratio": func() float64 {
+			ratio := ratio_setting.GetGroupRatio(user.Group)
 			if ratio <= 0 {
 				return 1
 			}

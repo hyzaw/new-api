@@ -29,7 +29,7 @@ import {
   IconTypograph,
   IconSend,
 } from '@douyinfe/semi-icons';
-import { quotaToApproxUsdByTopupRatio, renderQuota } from '../../helpers';
+import { quotaToApproxUsdByGroupRatio, renderQuota } from '../../helpers';
 import { createSectionTitle } from '../../helpers/dashboard';
 
 export const useDashboardStats = (
@@ -44,9 +44,9 @@ export const useDashboardStats = (
 ) => {
   const formatApproxUsdText = (quota) =>
     t('≈{{amount}}美元', {
-      amount: quotaToApproxUsdByTopupRatio(
+      amount: quotaToApproxUsdByGroupRatio(
         quota,
-        userState?.user?.topup_group_ratio,
+        userState?.user?.group_ratio,
       ).toFixed(2),
     });
 
@@ -144,7 +144,7 @@ export const useDashboardStats = (
     ],
     [
       userState?.user?.quota,
-      userState?.user?.topup_group_ratio,
+      userState?.user?.group_ratio,
       userState?.user?.used_quota,
       userState?.user?.request_count,
       times,

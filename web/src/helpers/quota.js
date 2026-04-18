@@ -46,16 +46,14 @@ export const displayAmountToQuota = (amount) => {
   return sign * Math.round(usd * getQuotaPerUnitValue());
 };
 
-export const getTopupGroupRatio = (ratio) => {
+export const getGroupRatio = (ratio) => {
   const parsed = Number(ratio);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 };
 
-export const quotaToApproxUsdByTopupRatio = (quota, topupGroupRatio) => {
+export const quotaToApproxUsdByGroupRatio = (quota, groupRatio) => {
   const q = Number(quota || 0);
   if (!Number.isFinite(q) || q === 0) return 0;
-  const sign = Math.sign(q);
-  const abs = Math.abs(q);
-  const usd = abs / getQuotaPerUnitValue();
-  return sign * (usd / getTopupGroupRatio(topupGroupRatio));
+  const displayAmount = quotaToDisplayAmount(q);
+  return displayAmount / getGroupRatio(groupRatio);
 };
