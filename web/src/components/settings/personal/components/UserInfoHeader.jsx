@@ -29,12 +29,18 @@ import {
 import {
   isRoot,
   isAdmin,
+  quotaToApproxUsdByTopupRatio,
   renderQuota,
   stringToColor,
 } from '../../../../helpers';
 import { Coins, BarChart2, Users } from 'lucide-react';
 
 const UserInfoHeader = ({ t, userState }) => {
+  const approxBalanceUsd = quotaToApproxUsdByTopupRatio(
+    userState?.user?.quota,
+    userState?.user?.topup_group_ratio,
+  );
+
   const getUsername = () => {
     if (userState.user) {
       return userState.user.username;
@@ -120,8 +126,19 @@ const UserInfoHeader = ({ t, userState }) => {
       <div className='flex items-start justify-between gap-6'>
         {/* 当前余额显示 */}
         <Badge count={t('当前余额')} position='rightTop' type='danger'>
-          <div className='text-2xl sm:text-3xl md:text-4xl font-bold tracking-wide'>
-            {renderQuota(userState?.user?.quota)}
+          <div className='flex items-end gap-2'>
+            <div className='text-2xl sm:text-3xl md:text-4xl font-bold tracking-wide'>
+              {renderQuota(userState?.user?.quota)}
+            </div>
+            <Typography.Text
+              size='small'
+              type='tertiary'
+              className='!mb-1 !block'
+            >
+              {t('≈{{amount}}美元', {
+                amount: approxBalanceUsd.toFixed(2),
+              })}
+            </Typography.Text>
           </div>
         </Badge>
 

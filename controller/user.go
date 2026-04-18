@@ -401,6 +401,13 @@ func GetSelf(c *gin.Context) {
 		"wechat_id":         user.WeChatId,
 		"telegram_id":       user.TelegramId,
 		"group":             user.Group,
+		"topup_group_ratio": func() float64 {
+			ratio := common.GetTopupGroupRatio(user.Group)
+			if ratio <= 0 {
+				return 1
+			}
+			return ratio
+		}(),
 		"quota":             user.Quota,
 		"used_quota":        user.UsedQuota,
 		"request_count":     user.RequestCount,

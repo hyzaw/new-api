@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { getCurrencyConfig } from './render';
 
-export const getQuotaPerUnit = () => {
+const getQuotaPerUnitValue = () => {
   const raw = parseFloat(localStorage.getItem('quota_per_unit') || '1');
   return Number.isFinite(raw) && raw > 0 ? raw : 1;
 };
@@ -30,7 +30,7 @@ export const quotaToDisplayAmount = (quota) => {
   const abs = Math.abs(q);
   const { type, rate } = getCurrencyConfig();
   if (type === 'TOKENS') return q;
-  const usd = abs / getQuotaPerUnit();
+  const usd = abs / getQuotaPerUnitValue();
   if (type === 'USD') return sign * usd;
   return sign * usd * (rate || 1);
 };
@@ -43,5 +43,19 @@ export const displayAmountToQuota = (amount) => {
   const { type, rate } = getCurrencyConfig();
   if (type === 'TOKENS') return Math.round(val);
   const usd = type === 'USD' ? abs : abs / (rate || 1);
-  return sign * Math.round(usd * getQuotaPerUnit());
+  return sign * Math.round(usd * getQuotaPerUnitValue());
+};
+
+export const getTopupGroupRatio = (ratio) => {
+  const parsed = Number(ratio);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
+export const quotaToApproxUsdByTopupRatio = (quota, topupGroupRatio) => {
+  const q = Number(quota || 0);
+  if (!Number.isFinite(q) || q === 0) return 0;
+  const sign = Math.sign(q);
+  const abs = Math.abs(q);
+  const usd = abs / getQuotaPerUnitValue();
+  return sign * (usd / getTopupGroupRatio(topupGroupRatio));
 };

@@ -29,7 +29,7 @@ import {
   IconTypograph,
   IconSend,
 } from '@douyinfe/semi-icons';
-import { renderQuota } from '../../helpers';
+import { quotaToApproxUsdByTopupRatio, renderQuota } from '../../helpers';
 import { createSectionTitle } from '../../helpers/dashboard';
 
 export const useDashboardStats = (
@@ -42,6 +42,14 @@ export const useDashboardStats = (
   navigate,
   t,
 ) => {
+  const formatApproxUsdText = (quota) =>
+    t('≈{{amount}}美元', {
+      amount: quotaToApproxUsdByTopupRatio(
+        quota,
+        userState?.user?.topup_group_ratio,
+      ).toFixed(2),
+    });
+
   const groupedStatsData = useMemo(
     () => [
       {
@@ -51,6 +59,7 @@ export const useDashboardStats = (
           {
             title: t('当前余额'),
             value: renderQuota(userState?.user?.quota),
+            subValue: formatApproxUsdText(userState?.user?.quota),
             icon: <IconMoneyExchangeStroked />,
             avatarColor: 'blue',
             trendData: [],
@@ -135,6 +144,7 @@ export const useDashboardStats = (
     ],
     [
       userState?.user?.quota,
+      userState?.user?.topup_group_ratio,
       userState?.user?.used_quota,
       userState?.user?.request_count,
       times,

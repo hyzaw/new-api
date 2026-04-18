@@ -59,24 +59,31 @@ const StatsCards = ({
                     </Avatar>
                     <div>
                       <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-lg font-semibold'>
-                        <Skeleton
-                          loading={loading}
-                          active
-                          placeholder={
-                            <Skeleton.Paragraph
-                              active
-                              rows={1}
-                              style={{
-                                width: '65px',
-                                height: '24px',
-                                marginTop: '4px',
-                              }}
-                            />
-                          }
-                        >
-                          {item.value}
-                        </Skeleton>
+                      <div className='flex items-end gap-1.5'>
+                        <div className='text-lg font-semibold'>
+                          <Skeleton
+                            loading={loading}
+                            active
+                            placeholder={
+                              <Skeleton.Paragraph
+                                active
+                                rows={1}
+                                style={{
+                                  width: '65px',
+                                  height: '24px',
+                                  marginTop: '4px',
+                                }}
+                              />
+                            }
+                          >
+                            {item.value}
+                          </Skeleton>
+                        </div>
+                        {item.subValue ? (
+                          <div className='pb-0.5 text-xs text-gray-500'>
+                            {item.subValue}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
