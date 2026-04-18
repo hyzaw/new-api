@@ -30,7 +30,6 @@ import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
 import { useTranslation } from 'react-i18next';
 import {
   API,
-  getLogo,
   getSystemName,
   showError,
   setStatusData,
@@ -108,12 +107,9 @@ const PageLayout = () => {
     if (systemName) {
       document.title = systemName;
     }
-    let logo = getLogo();
-    if (logo) {
-      let linkElement = document.querySelector("link[rel~='icon']");
-      if (linkElement) {
-        linkElement.href = logo;
-      }
+    let linkElement = document.querySelector("link[rel~='icon']");
+    if (linkElement) {
+      linkElement.href = '/favicon.svg?v=boxying-mark';
     }
   }, []);
 
