@@ -863,6 +863,154 @@ html.dark .home-provider-count {
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+/* ==================== 认证页商务风 ==================== */
+.auth-business-shell {
+  position: relative;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(180, 138, 76, 0.14), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(15, 23, 42, 0.06), transparent 24%),
+    linear-gradient(180deg, var(--semi-color-bg-0) 0%, var(--semi-color-bg-1) 100%);
+}
+
+.auth-business-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 92%);
+}
+
+.auth-business-title {
+  font-size: clamp(40px, 4vw, 60px) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.04em;
+  color: var(--semi-color-text-0) !important;
+}
+
+.auth-business-description {
+  max-width: 640px;
+  font-size: 17px;
+  line-height: 1.9;
+  color: var(--semi-color-text-1) !important;
+}
+
+.auth-business-feature {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 12px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.auth-business-feature-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--semi-color-text-0) !important;
+}
+
+.auth-business-feature-text {
+  display: block;
+  margin-top: 8px;
+  line-height: 1.75;
+  color: var(--semi-color-text-1) !important;
+}
+
+.auth-business-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.78) !important;
+  backdrop-filter: blur(18px);
+  box-shadow:
+    0 18px 50px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.auth-business-card-title {
+  color: var(--semi-color-text-0) !important;
+}
+
+.auth-business-card-subtitle {
+  line-height: 1.75;
+  color: var(--semi-color-text-1) !important;
+}
+
+.auth-option-button {
+  height: 48px;
+  justify-content: center;
+  border-radius: 999px !important;
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease !important;
+}
+
+.auth-option-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(180, 138, 76, 0.4) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.auth-primary-button {
+  height: 48px;
+  border-radius: 999px !important;
+  background: #111827 !important;
+}
+
+.auth-primary-button:hover {
+  background: #0f172a !important;
+}
+
+.auth-link {
+  color: #8a6a36;
+  font-weight: 600;
+}
+
+html.dark .auth-business-shell {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(180, 138, 76, 0.18), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.05), transparent 24%),
+    linear-gradient(180deg, #0b0d12 0%, #11151d 100%);
+}
+
+html.dark .auth-business-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+html.dark .auth-business-feature,
+html.dark .auth-business-card,
+html.dark .auth-option-button {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(17, 21, 29, 0.74) !important;
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html.dark .auth-link {
+  color: #d1b17a;
+}
+
+@media (max-width: 1023px) {
+  .auth-business-shell {
+    background:
+      linear-gradient(180deg, var(--semi-color-bg-0) 0%, var(--semi-color-bg-1) 100%);
+  }
+
+  .auth-business-grid {
+    opacity: 0.55;
+  }
+}
+
 /* ==================== Banner 背景模糊球 ==================== */
 .blur-ball {
   position: absolute;
