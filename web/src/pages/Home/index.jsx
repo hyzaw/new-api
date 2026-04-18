@@ -92,18 +92,18 @@ const Home = () => {
   const businessHighlights = [
     {
       eyebrow: t('兼容协议'),
-      title: 'OpenAI / Claude / Gemini',
-      description: t('统一入口兼容现有 SDK、脚本与第三方客户端。'),
+      title: t('兼容 OpenAI 协议的调用方式'),
+      description: t('客户替换基址后即可继续使用现有 SDK、脚本与第三方客户端。'),
     },
     {
       eyebrow: t('供应商接入'),
-      title: t('30+ 供应商生态'),
-      description: t('按需接入公有云、国产模型与自托管推理服务。'),
+      title: t('热门模型与多供应商 Token'),
+      description: t('按需售卖公有云、国产模型与自托管模型额度。'),
     },
     {
-      eyebrow: t('运营能力'),
-      title: t('鉴权、限流、计费、日志'),
-      description: t('把模型调用治理、团队分级与充值能力收拢到一个后台。'),
+      eyebrow: t('销售能力'),
+      title: t('充值、分组、倍率、日志'),
+      description: t('把客户充值、令牌发放、分组定价与调用审计集中在一个后台。'),
     },
   ];
 
@@ -187,7 +187,7 @@ const Home = () => {
               <div className='flex flex-col gap-6 lg:gap-8'>
                 <div className='home-business-badge'>
                   <span className='home-business-badge-dot' />
-                  <span>{t('企业级 AI 网关')}</span>
+                  <span>{t('模型 Token 销售平台')}</span>
                 </div>
 
                 <div className='max-w-4xl'>
@@ -195,12 +195,10 @@ const Home = () => {
                     {systemName}
                   </Text>
                   <h1 className='mt-4 text-4xl font-semibold leading-tight tracking-[-0.03em] text-semi-color-text-0 md:text-5xl lg:text-6xl'>
-                    {t('统一接入 OpenAI、Claude、Gemini 兼容生态')}
+                    {t('统一售卖 OpenAI、Claude、Gemini 等模型 Token')}
                   </h1>
                   <p className='mt-5 max-w-2xl text-base leading-7 text-semi-color-text-1 md:text-lg'>
-                    {t(
-                      '将多供应商模型接入、鉴权、计费与运维能力收敛到一个稳定入口。',
-                    )}
+                    {t('为客户提供充值、额度分发、API 调用与账单管理的一站式入口。')}
                   </p>
                 </div>
 
@@ -213,7 +211,7 @@ const Home = () => {
                       className='!rounded-full !px-7'
                       icon={<IconPlay />}
                     >
-                      {t('获取密钥')}
+                      {t('获取 Token')}
                     </Button>
                   </Link>
                   {isDemoSiteMode && statusState?.status?.version ? (
@@ -248,7 +246,7 @@ const Home = () => {
                   <div className='flex flex-col gap-4 md:flex-row md:items-start md:justify-between'>
                     <div className='min-w-0 flex-1'>
                       <p className='text-xs font-medium uppercase tracking-[0.24em] text-semi-color-text-2'>
-                        {t('默认接入地址')}
+                        {t('默认 API 地址')}
                       </p>
                       <div className='mt-3 break-all font-mono text-sm text-semi-color-text-0 md:text-base'>
                         {serverAddress}
@@ -273,7 +271,7 @@ const Home = () => {
                       </span>
                     </div>
                     <Text type='tertiary'>
-                      {t('更换基址后即可兼容现有 SDK 与客户端')}
+                      {t('客户只需替换基址即可开始调用模型')}
                     </Text>
                   </div>
                 </div>
@@ -300,13 +298,15 @@ const Home = () => {
               <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
                 <div>
                   <p className='text-xs font-medium uppercase tracking-[0.24em] text-semi-color-text-2'>
-                    {t('支持的模型生态')}
+                    {t('可售卖的模型生态')}
                   </p>
                   <h2 className='mt-3 text-2xl font-semibold tracking-[-0.03em] text-semi-color-text-0 md:text-3xl'>
-                    {t('覆盖主流供应商与企业部署场景')}
+                    {t('覆盖主流供应商与客户接入场景')}
                   </h2>
                 </div>
-                <Text type='tertiary'>{t('支持众多的大模型供应商')}</Text>
+                <Text type='tertiary'>
+                  {t('支持 OpenAI、Claude、Gemini、DeepSeek、Qwen 等热门模型')}
+                </Text>
               </div>
               <div className='mt-6 flex flex-wrap items-center gap-3 md:gap-4'>
                 {PROVIDER_ICONS.map((ProviderIcon, index) => (

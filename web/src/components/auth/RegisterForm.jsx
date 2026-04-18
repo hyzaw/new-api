@@ -143,12 +143,12 @@ const RegisterForm = () => {
   const [showEmailVerification, setShowEmailVerification] = useState(false);
   const authHighlights = [
     {
-      title: t('创建账户后即可开始接入模型网关'),
-      description: t('为团队成员、渠道用户与业务系统建立统一账号'),
+      title: t('注册后即可购买与管理模型 Token'),
+      description: t('支持客户自助充值、创建令牌并接入 API'),
     },
     {
-      title: t('支持邮箱、OAuth、Passkey 等多种方式接入'),
-      description: t('集中管理密钥、配额与调用日志'),
+      title: t('适配客户后台、脚本与第三方客户端'),
+      description: t('支持多种登录方式，降低客户接入模型的门槛'),
     },
   ];
 
@@ -406,7 +406,7 @@ const RegisterForm = () => {
         brandLogo={logo}
         systemName={systemName}
         title={t('注 册')}
-        subtitle={t('先创建账户，再按你的接入方式继续。')}
+        subtitle={t('创建账户后即可开始充值、购买额度并生成 API Token。')}
       >
         <div className='space-y-3'>
                 {status.wechat_login && (
@@ -553,7 +553,7 @@ const RegisterForm = () => {
         brandLogo={logo}
         systemName={systemName}
         title={t('注 册')}
-        subtitle={t('填写基础信息，创建你的统一访问账户。')}
+        subtitle={t('填写基础信息，开通模型额度充值与 Token 管理账户。')}
       >
               <Form className='space-y-3'>
                 <Form.Input
@@ -750,9 +750,9 @@ const RegisterForm = () => {
     <AuthShell
       brandLogo={logo}
       systemName={systemName}
-      panelEyebrow={t('账户创建')}
-      panelTitle={t('为团队与业务系统建立统一账号')}
-      panelDescription={t('注册后即可进入控制台，配置模型接入、密钥与配额策略。')}
+      panelEyebrow={t('客户开户')}
+      panelTitle={t('为客户开通模型 Token 与充值能力')}
+      panelDescription={t('注册后即可进入控制台，充值额度、创建令牌并开始调用模型。')}
       highlights={authHighlights}
       turnstile={
         turnstileEnabled ? (

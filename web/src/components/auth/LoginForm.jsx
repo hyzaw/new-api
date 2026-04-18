@@ -112,12 +112,12 @@ const LoginForm = () => {
   const [customOAuthLoading, setCustomOAuthLoading] = useState({});
   const authHighlights = [
     {
-      title: t('统一账号体系与 OAuth 登录'),
-      description: t('支持邮箱、OAuth、Passkey 等多种方式接入'),
+      title: t('多模型统一接入与售卖'),
+      description: t('支持 OpenAI、Claude、Gemini 等模型额度与 Token 分发'),
     },
     {
-      title: t('集中管理密钥、配额与调用日志'),
-      description: t('适用于内部工具、客户门户与开放平台'),
+      title: t('充值、配额与调用日志集中管理'),
+      description: t('适用于客户充值、额度交付与 API 调用管理'),
     },
   ];
 
@@ -513,7 +513,7 @@ const LoginForm = () => {
         brandLogo={logo}
         systemName={systemName}
         title={t('登 录')}
-        subtitle={t('请选择一种身份验证方式继续进入控制台。')}
+        subtitle={t('选择登录方式后即可进入充值与令牌管理中心。')}
       >
         <div className='space-y-3'>
                 {status.wechat_login && (
@@ -713,7 +713,7 @@ const LoginForm = () => {
         brandLogo={logo}
         systemName={systemName}
         title={t('登 录')}
-        subtitle={t('输入用户名或邮箱与密码，继续访问工作台。')}
+        subtitle={t('输入用户名或邮箱与密码，继续管理模型 Token 与充值订单。')}
       >
               {status.passkey_login && passkeySupported && (
                 <Button
@@ -927,9 +927,9 @@ const LoginForm = () => {
     <AuthShell
       brandLogo={logo}
       systemName={systemName}
-      panelEyebrow={t('安全认证')}
-      panelTitle={t('稳定、审计、可控的模型入口')}
-      panelDescription={t('面向团队与业务系统的统一认证入口。')}
+      panelEyebrow={t('模型服务平台')}
+      panelTitle={t('稳定的模型 Token 供应与调用入口')}
+      panelDescription={t('面向客户提供模型额度充值、Token 分发与统一调用。')}
       highlights={authHighlights}
       turnstile={
         turnstileEnabled ? (
