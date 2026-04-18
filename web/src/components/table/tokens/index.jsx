@@ -253,7 +253,7 @@ function TokensPage() {
     }
 
     const payload = {
-      id: 'new-api',
+      id: 'Boxying',
       baseUrl: serverAddress,
       apiKey: apiKeyToUse,
       model: chosenModel,
