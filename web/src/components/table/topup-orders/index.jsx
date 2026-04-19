@@ -56,7 +56,7 @@ const ORDER_STATUS_CONFIG = {
   success: { type: 'success', label: '成功' },
   pending: { type: 'warning', label: '待支付' },
   failed: { type: 'danger', label: '失败' },
-  expired: { type: 'danger', label: '已过期' },
+  expired: { type: 'danger', label: '已关闭' },
 };
 
 const REFUND_STATUS_CONFIG = {
@@ -153,12 +153,12 @@ const renderPaymentMethod = (value, t) => {
   return <Text>{label ? t(label) : value || '-'}</Text>;
 };
 
-const truncateTradeNo = (value, maxLength = 20) => {
+const truncateTradeNo = (value, maxLength = 15) => {
   const text = String(value || '');
   if (text.length <= maxLength) {
     return text;
   }
-  return text.slice(0, maxLength);
+  return `${text.slice(0, maxLength)}...`;
 };
 
 const RefundModalContent = ({
@@ -185,8 +185,11 @@ const RefundModalContent = ({
       >
         <div style={statCardStyle}>
           <span style={statLabelStyle}>{t('订单号')}</span>
-          <Text copyable ellipsis={{ showTooltip: true }}>
-            {truncateTradeNo(currentOrder.trade_no, 20)}
+          <Text
+            copyable={{ content: currentOrder.trade_no }}
+            ellipsis={{ showTooltip: true }}
+          >
+            {truncateTradeNo(currentOrder.trade_no, 15)}
           </Text>
         </div>
         <div style={statCardStyle}>

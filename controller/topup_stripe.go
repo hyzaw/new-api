@@ -319,18 +319,12 @@ func sessionExpired(event stripe.Event) {
 		return
 	}
 
-	if topUp.Status != common.TopUpStatusPending {
-		log.Println("充值订单状态错误", referenceId)
-	}
-
-	topUp.Status = common.TopUpStatusExpired
-	err := topUp.Update()
-	if err != nil {
+	if err := model.ExpireTopUpOrder(referenceId); err != nil {
 		log.Println("过期充值订单失败", referenceId, ", err:", err.Error())
 		return
 	}
 
-	log.Println("充值订单已过期", referenceId)
+	log.Println("充值订单已关闭", referenceId)
 }
 
 // genStripeLink generates a Stripe Checkout session URL for payment.

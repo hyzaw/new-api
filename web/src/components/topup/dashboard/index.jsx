@@ -52,7 +52,7 @@ const ORDER_STATUS_LABELS = {
   success: '成功',
   pending: '待支付',
   failed: '失败',
-  expired: '已过期',
+  expired: '已关闭',
 };
 
 const REFUND_STATUS_LABELS = {
@@ -102,17 +102,6 @@ const statValueStyle = {
   fontSize: '24px',
   fontWeight: 700,
   color: 'var(--semi-color-text-0)',
-};
-
-const chartGridStyle = (isMobile) => ({
-  display: 'grid',
-  gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 2fr) minmax(360px, 1fr)',
-  gap: 16,
-});
-
-const chartStackStyle = {
-  display: 'grid',
-  gap: 16,
 };
 
 const threeColumnGridStyle = (isMobile) => ({
@@ -782,33 +771,32 @@ const TopUpDashboard = ({
             ))}
           </div>
 
-          <div style={chartGridStyle(isMobile)}>
+          <div style={chartCardStyle}>
+            <div style={chartTitleStyle}>{t('充值与退款趋势')}</div>
+            {trendHasData ? (
+              <VChart spec={trendSpec} />
+            ) : (
+              emptyNode(t, '所选时间范围暂无充值趋势数据', 150)
+            )}
+          </div>
+
+          <div style={twoColumnGridStyle(isMobile)}>
             <div style={chartCardStyle}>
-              <div style={chartTitleStyle}>{t('充值与退款趋势')}</div>
-              {trendHasData ? (
-                <VChart spec={trendSpec} />
+              <div style={chartTitleStyle}>{t('成功支付方式分布')}</div>
+              {paymentMethodHasData ? (
+                <VChart spec={paymentMethodSpec} />
               ) : (
-                emptyNode(t, '所选时间范围暂无充值趋势数据', 150)
+                emptyNode(t, '暂无支付方式分布数据', 120)
               )}
             </div>
 
-            <div style={chartStackStyle}>
-              <div style={chartCardStyle}>
-                <div style={chartTitleStyle}>{t('成功支付方式分布')}</div>
-                {paymentMethodHasData ? (
-                  <VChart spec={paymentMethodSpec} />
-                ) : (
-                  emptyNode(t, '暂无支付方式分布数据', 120)
-                )}
-              </div>
-              <div style={chartCardStyle}>
-                <div style={chartTitleStyle}>{t('订单状态分布')}</div>
-                {statusHasData ? (
-                  <VChart spec={statusSpec} />
-                ) : (
-                  emptyNode(t, '暂无订单状态分布数据', 120)
-                )}
-              </div>
+            <div style={chartCardStyle}>
+              <div style={chartTitleStyle}>{t('订单状态分布')}</div>
+              {statusHasData ? (
+                <VChart spec={statusSpec} />
+              ) : (
+                emptyNode(t, '暂无订单状态分布数据', 120)
+              )}
             </div>
           </div>
 

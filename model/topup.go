@@ -12,6 +12,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const defaultPendingTopUpExpireAfterSeconds int64 = 2 * 60 * 60
+
 type TopUp struct {
 	Id            int     `json:"id"`
 	UserId        int     `json:"user_id" gorm:"index"`
@@ -56,6 +58,64 @@ func GetTopUpByTradeNo(tradeNo string) *TopUp {
 		return nil
 	}
 	return topUp
+}
+
+func ExpireTopUpOrder(tradeNo string) error {
+	if tradeNo == "" {
+		return errors.New("tradeNo is empty")
+	}
+
+	refCol := "`trade_no`"
+	if common.UsingPostgreSQL {
+		refCol = `"trade_no"`
+	}
+
+	return DB.Transaction(func(tx *gorm.DB) error {
+		topUp := &TopUp{}
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error; err != nil {
+			return errors.New("充值订单不存在")
+		}
+		if topUp.Status != common.TopUpStatusPending {
+			return nil
+		}
+		topUp.Status = common.TopUpStatusExpired
+		topUp.CompleteTime = common.GetTimestamp()
+		return tx.Save(topUp).Error
+	})
+}
+
+func ExpirePendingTopUps(batchSize int, maxPendingSeconds int64) (int, error) {
+	if batchSize <= 0 {
+		batchSize = 200
+	}
+	if maxPendingSeconds <= 0 {
+		maxPendingSeconds = defaultPendingTopUpExpireAfterSeconds
+	}
+
+	cutoff := common.GetTimestamp() - maxPendingSeconds
+	var ids []int
+	if err := DB.Model(&TopUp{}).
+		Where("status = ? AND create_time <= ?", common.TopUpStatusPending, cutoff).
+		Order("id asc").
+		Limit(batchSize).
+		Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	now := common.GetTimestamp()
+	res := DB.Model(&TopUp{}).
+		Where("id IN ? AND status = ?", ids, common.TopUpStatusPending).
+		Updates(map[string]any{
+			"status":        common.TopUpStatusExpired,
+			"complete_time": now,
+		})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return int(res.RowsAffected), nil
 }
 
 func Recharge(referenceId string, customerId string, callerIp string) (completed bool, err error) {
