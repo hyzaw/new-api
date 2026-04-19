@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -39,6 +40,8 @@ type Log struct {
 	Other            string `json:"other"`
 }
 
+const edgeOneClientIPCountryHeader = "EO-Client-IPCountry12"
+
 // don't use iota, avoid change log type value
 const (
 	LogTypeUnknown = 0
@@ -49,6 +52,37 @@ const (
 	LogTypeError   = 5
 	LogTypeRefund  = 6
 )
+
+func normalizeClientIPCountryCode(raw string) string {
+	code := strings.ToUpper(strings.TrimSpace(raw))
+	if len(code) != 2 {
+		return ""
+	}
+	for _, ch := range code {
+		if ch < 'A' || ch > 'Z' {
+			return ""
+		}
+	}
+	return code
+}
+
+func getRequestClientIPCountry(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return normalizeClientIPCountryCode(c.GetHeader(edgeOneClientIPCountryHeader))
+}
+
+func cloneLogOther(other map[string]interface{}) map[string]interface{} {
+	if len(other) == 0 {
+		return map[string]interface{}{}
+	}
+	cloned := make(map[string]interface{}, len(other))
+	for k, v := range other {
+		cloned[k] = v
+	}
+	return cloned
+}
 
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
@@ -175,7 +209,11 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, content))
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
-	otherStr := common.MapToJsonStr(other)
+	logOther := cloneLogOther(other)
+	if countryCode := getRequestClientIPCountry(c); countryCode != "" {
+		logOther["client_ip_country"] = countryCode
+	}
+	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
@@ -224,7 +262,11 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	logger.LogInfo(c, fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
-	otherStr := common.MapToJsonStr(params.Other)
+	logOther := cloneLogOther(params.Other)
+	if countryCode := getRequestClientIPCountry(c); countryCode != "" {
+		logOther["client_ip_country"] = countryCode
+	}
+	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
 		Username:         username,

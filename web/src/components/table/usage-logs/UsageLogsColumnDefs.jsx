@@ -66,6 +66,39 @@ function formatRatio(ratio) {
   return String(ratio);
 }
 
+function normalizeCountryCode(value) {
+  const code = String(value || '')
+    .trim()
+    .toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : '';
+}
+
+function getCountryFlagEmoji(countryCode) {
+  const code = normalizeCountryCode(countryCode);
+  if (!code) {
+    return '';
+  }
+  return String.fromCodePoint(
+    ...code.split('').map((char) => 127397 + char.charCodeAt(0)),
+  );
+}
+
+function getCountryDisplayName(countryCode) {
+  const code = normalizeCountryCode(countryCode);
+  if (!code || typeof Intl === 'undefined' || !Intl.DisplayNames) {
+    return code;
+  }
+
+  try {
+    const displayNames = new Intl.DisplayNames(['zh-CN', 'en'], {
+      type: 'region',
+    });
+    return displayNames.of(code) || code;
+  } catch (error) {
+    return code;
+  }
+}
+
 function buildChannelAffinityTooltip(affinity, t) {
   if (!affinity) {
     return null;
@@ -849,18 +882,41 @@ export const getLogsColumns = ({
             record.type === 5 ||
             (isAdminUser && record.type === 1)) &&
           text;
+        const other = getLogOther(record.other);
+        const countryCode = normalizeCountryCode(
+          other?.client_ip_country || other?.admin_info?.client_ip_country,
+        );
+        const countryFlag = getCountryFlagEmoji(countryCode);
+        const countryLabel = getCountryDisplayName(countryCode);
+        const countryText =
+          countryCode && countryLabel
+            ? `${countryFlag ? `${countryFlag} ` : ''}${countryLabel}`
+            : '';
         return showIp ? (
-          <Tooltip content={text}>
+          <Tooltip
+            content={
+              countryCode && countryLabel
+                ? `${text} · ${countryText} (${countryCode})`
+                : text
+            }
+          >
             <span>
-              <Tag
-                color='orange'
-                shape='circle'
-                onClick={(event) => {
-                  copyText(event, text);
-                }}
-              >
-                {text}
-              </Tag>
+              <Space wrap spacing={6}>
+                <Tag
+                  color='orange'
+                  shape='circle'
+                  onClick={(event) => {
+                    copyText(event, text);
+                  }}
+                >
+                  {text}
+                </Tag>
+                {countryCode ? (
+                  <Tag color='cyan' shape='circle' size='small'>
+                    {countryText || countryCode}
+                  </Tag>
+                ) : null}
+              </Space>
             </span>
           </Tooltip>
         ) : (
