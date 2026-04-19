@@ -36,6 +36,8 @@ const routerMap = {
   token: '/console/token',
   redemption: '/console/redemption',
   topup: '/console/topup',
+  topup_dashboard: '/console/topup-dashboard',
+  topup_orders: '/console/topup-orders',
   user: '/console/user',
   subscription: '/console/subscription',
   log: '/console/log',
@@ -157,6 +159,18 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('订阅管理'),
         itemKey: 'subscription',
         to: '/subscription',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('充值金额大屏'),
+        itemKey: 'topup_dashboard',
+        to: '/topup-dashboard',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('充值订单管理'),
+        itemKey: 'topup_orders',
+        to: '/topup-orders',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

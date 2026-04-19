@@ -52,6 +52,8 @@ export const DEFAULT_ADMIN_CONFIG = {
     redemption: true,
     user: true,
     subscription: true,
+    topup_dashboard: true,
+    topup_orders: true,
     setting: true,
   },
 };

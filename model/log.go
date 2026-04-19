@@ -143,6 +143,33 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 	}
 }
 
+func RecordRefundLog(userId int, content string, callerIp string, paymentMethod string, operatorId int) {
+	username, _ := GetUsernameById(userId, false)
+	adminInfo := map[string]interface{}{
+		"server_ip":      common.GetIp(),
+		"node_name":      common.NodeName,
+		"caller_ip":      callerIp,
+		"payment_method": paymentMethod,
+		"operator_id":    operatorId,
+		"version":        common.Version,
+	}
+	other := map[string]interface{}{
+		"admin_info": adminInfo,
+	}
+	log := &Log{
+		UserId:    userId,
+		Username:  username,
+		CreatedAt: common.GetTimestamp(),
+		Type:      LogTypeRefund,
+		Content:   content,
+		Ip:        callerIp,
+		Other:     common.MapToJsonStr(other),
+	}
+	if err := LOG_DB.Create(log).Error; err != nil {
+		common.SysLog("failed to record refund log: " + err.Error())
+	}
+}
+
 func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
 	isStream bool, group string, other map[string]interface{}) {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, content))

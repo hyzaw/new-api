@@ -130,12 +130,14 @@ export function getLucideIcon(key, selected = false) {
     case 'token':
       return <Key {...commonProps} color={iconColor} />;
     case 'log':
+    case 'topup_dashboard':
       return <BarChart3 {...commonProps} color={iconColor} />;
     case 'midjourney':
       return <ImageIcon {...commonProps} color={iconColor} />;
     case 'task':
       return <CheckSquare {...commonProps} color={iconColor} />;
     case 'topup':
+    case 'topup_orders':
       return <CreditCard {...commonProps} color={iconColor} />;
     case 'channel':
       return <Layers {...commonProps} color={iconColor} />;

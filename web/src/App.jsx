@@ -35,6 +35,8 @@ import Channel from './pages/Channel';
 import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
+import TopUpDashboardPage from './pages/TopUpDashboard';
+import TopUpOrders from './pages/TopUpOrders';
 import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
@@ -275,6 +277,26 @@ function App() {
                 <TopUp />
               </Suspense>
             </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/topup-orders'
+          element={
+            <AdminRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <TopUpOrders />
+              </Suspense>
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/topup-dashboard'
+          element={
+            <AdminRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <TopUpDashboardPage />
+              </Suspense>
+            </AdminRoute>
           }
         />
         <Route

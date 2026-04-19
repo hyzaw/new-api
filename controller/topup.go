@@ -465,8 +465,14 @@ func GetAllTopUps(c *gin.Context) {
 		return
 	}
 
+	items, err := model.BuildAdminTopUpItems(topups)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(topups)
+	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
 }
 
