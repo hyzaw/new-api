@@ -153,6 +153,14 @@ const renderPaymentMethod = (value, t) => {
   return <Text>{label ? t(label) : value || '-'}</Text>;
 };
 
+const truncateTradeNo = (value, maxLength = 20) => {
+  const text = String(value || '');
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return text.slice(0, maxLength);
+};
+
 const RefundModalContent = ({
   currentOrder,
   refundAmount,
@@ -178,7 +186,7 @@ const RefundModalContent = ({
         <div style={statCardStyle}>
           <span style={statLabelStyle}>{t('订单号')}</span>
           <Text copyable ellipsis={{ showTooltip: true }}>
-            {currentOrder.trade_no}
+            {truncateTradeNo(currentOrder.trade_no, 20)}
           </Text>
         </div>
         <div style={statCardStyle}>
