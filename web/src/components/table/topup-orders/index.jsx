@@ -140,6 +140,7 @@ const RefundModalContent = ({
   currentOrder,
   refundAmount,
   refundReason,
+  refundMode,
   setRefundAmount,
   setRefundReason,
   t,
@@ -203,9 +204,11 @@ const RefundModalContent = ({
       </div>
 
       <Text type='tertiary'>
-        {t(
-          '同一笔订单退款至少间隔 3 秒，且累计退款金额不能超过原支付金额。若接口返回待确认状态，请稍后查看退款记录。',
-        )}
+        {refundMode === 'manual'
+          ? t('手动标记退款会直接记录为已退款，并按退款比例扣回用户额度，请确认已经在线下完成退款。')
+          : t(
+              '同一笔订单退款至少间隔 3 秒，且累计退款金额不能超过原支付金额。若接口返回待确认状态，请稍后查看退款记录。',
+            )}
       </Text>
     </div>
   );
@@ -228,6 +231,7 @@ const TopUpOrdersPage = () => {
   const [currentOrder, setCurrentOrder] = useState(null);
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
+  const [refundMode, setRefundMode] = useState('online');
   const [refundRecordsVisible, setRefundRecordsVisible] = useState(false);
   const [refundRecordsLoading, setRefundRecordsLoading] = useState(false);
   const [refundRecords, setRefundRecords] = useState([]);
@@ -331,10 +335,11 @@ const TopUpOrdersPage = () => {
     });
   };
 
-  const openRefundModal = (order) => {
+  const openRefundModal = (order, mode = 'online') => {
     setCurrentOrder(order);
     setRefundAmount('');
     setRefundReason('');
+    setRefundMode(mode);
     setRefundModalVisible(true);
   };
 
@@ -346,6 +351,7 @@ const TopUpOrdersPage = () => {
     setCurrentOrder(null);
     setRefundAmount('');
     setRefundReason('');
+    setRefundMode('online');
   };
 
   const handleSubmitRefund = async () => {
@@ -366,7 +372,11 @@ const TopUpOrdersPage = () => {
     setRefundSubmitting(true);
     setActionTradeNo(currentOrder.trade_no);
     try {
-      const res = await API.post('/api/user/topup/refund', {
+      const endpoint =
+        refundMode === 'manual'
+          ? '/api/user/topup/refund/manual'
+          : '/api/user/topup/refund';
+      const res = await API.post(endpoint, {
         top_up_id: currentOrder.id,
         refund_amount: amount.toFixed(2),
         refund_reason: refundReason.trim(),
@@ -377,7 +387,11 @@ const TopUpOrdersPage = () => {
         return;
       }
 
-      showSuccess(data?.message || message || t('退款请求已提交'));
+      showSuccess(
+        data?.message ||
+          message ||
+          (refundMode === 'manual' ? t('已手动标记退款成功') : t('退款请求已提交')),
+      );
       setRefundModalVisible(false);
       await loadOrders();
       if (refundRecordsVisible && refundRecordsOrder?.id === currentOrder.id) {
@@ -490,7 +504,7 @@ const TopUpOrdersPage = () => {
         title: t('操作'),
         key: 'operate',
         fixed: 'right',
-        width: 240,
+        width: 320,
         render: (_, record) => (
           <div className='flex flex-wrap justify-end gap-2'>
             {record.status === 'pending' && (
@@ -517,9 +531,20 @@ const TopUpOrdersPage = () => {
                 type='danger'
                 theme='solid'
                 loading={actionTradeNo === record.trade_no && refundSubmitting}
-                onClick={() => openRefundModal(record)}
+                onClick={() => openRefundModal(record, 'online')}
               >
                 {t('退款')}
+              </Button>
+            )}
+            {record.can_manual_refund && (
+              <Button
+                size='small'
+                theme='outline'
+                type='warning'
+                loading={actionTradeNo === record.trade_no && refundSubmitting}
+                onClick={() => openRefundModal(record, 'manual')}
+              >
+                {t('手动标记退款')}
               </Button>
             )}
           </div>
@@ -679,7 +704,7 @@ const TopUpOrdersPage = () => {
       </CardPro>
 
       <Modal
-        title={t('发起退款')}
+        title={refundMode === 'manual' ? t('手动标记退款') : t('发起退款')}
         visible={refundModalVisible}
         onCancel={closeRefundModal}
         footer={null}
@@ -689,6 +714,7 @@ const TopUpOrdersPage = () => {
           currentOrder={currentOrder}
           refundAmount={refundAmount}
           refundReason={refundReason}
+          refundMode={refundMode}
           setRefundAmount={setRefundAmount}
           setRefundReason={setRefundReason}
           t={t}
@@ -698,12 +724,12 @@ const TopUpOrdersPage = () => {
             {t('取消')}
           </Button>
           <Button
-            type='danger'
+            type={refundMode === 'manual' ? 'warning' : 'danger'}
             theme='solid'
             loading={refundSubmitting}
             onClick={handleSubmitRefund}
           >
-            {t('确认退款')}
+            {refundMode === 'manual' ? t('确认标记') : t('确认退款')}
           </Button>
         </div>
       </Modal>

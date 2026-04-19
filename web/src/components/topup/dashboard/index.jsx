@@ -451,27 +451,36 @@ const TopUpDashboard = ({
       })) || [];
 
     return {
-      type: 'pie',
+      type: 'bar',
       height: compact ? 280 : 320,
       data: [{ id: 'topup-dashboard-payment-count', values }],
-      categoryField: 'type',
-      valueField: 'count',
-      legends: {
-        orient: 'right',
+      xField: 'type',
+      yField: 'count',
+      padding: {
+        top: 20,
+        right: 20,
+        bottom: 36,
+        left: 52,
       },
+      bar: {
+        style: {
+          cornerRadius: [8, 8, 0, 0],
+        },
+      },
+      axes: [
+        {
+          orient: 'bottom',
+          label: { visible: true },
+        },
+        {
+          orient: 'left',
+          label: { visible: true },
+        },
+      ],
       tooltip: {
         visible: true,
       },
-      pie: {
-        style: {
-          outerRadius: 0.74,
-          innerRadius: 0.42,
-          cornerRadius: 8,
-        },
-      },
-      label: {
-        visible: true,
-      },
+      color: ['#2563eb'],
     };
   }, [compact, stats, t]);
 
@@ -542,25 +551,33 @@ const TopUpDashboard = ({
     ].filter((item) => item.value > 0);
 
     return {
-      type: 'pie',
+      type: 'bar',
       height: compact ? 280 : 320,
       data: [{ id: 'topup-dashboard-refund-composition', values }],
-      categoryField: 'type',
-      valueField: 'value',
-      legends: {
-        orient: 'right',
+      xField: 'type',
+      yField: 'value',
+      padding: {
+        top: 20,
+        right: 20,
+        bottom: 36,
+        left: 52,
       },
-      tooltip: {
-        visible: true,
-      },
-      pie: {
+      bar: {
         style: {
-          outerRadius: 0.76,
-          innerRadius: 0.46,
-          cornerRadius: 8,
+          cornerRadius: [8, 8, 0, 0],
         },
       },
-      label: {
+      axes: [
+        {
+          orient: 'bottom',
+          label: { visible: true },
+        },
+        {
+          orient: 'left',
+          label: { visible: true },
+        },
+      ],
+      tooltip: {
         visible: true,
       },
       color: {

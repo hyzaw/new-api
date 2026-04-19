@@ -128,3 +128,30 @@ func AdminRefundTopUp(c *gin.Context) {
 		"refund":  finalized,
 	})
 }
+
+func AdminManualRefundTopUp(c *gin.Context) {
+	var req AdminRefundTopUpRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiErrorMsg(c, "参数错误")
+		return
+	}
+	if req.TopUpId <= 0 {
+		common.ApiErrorMsg(c, "订单参数错误")
+		return
+	}
+	if strings.TrimSpace(req.RefundAmount) == "" {
+		common.ApiErrorMsg(c, "退款金额不能为空")
+		return
+	}
+
+	refund, err := model.MarkTopUpRefundManual(req.TopUpId, req.RefundAmount, req.RefundReason, c.GetInt("id"), c.ClientIP())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	common.ApiSuccess(c, gin.H{
+		"message": "已手动标记退款成功",
+		"refund":  refund,
+	})
+}

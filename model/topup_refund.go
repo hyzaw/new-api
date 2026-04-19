@@ -52,23 +52,24 @@ type TopUpRefundSummary struct {
 }
 
 type AdminTopUpItem struct {
-	Id                    int     `json:"id"`
-	UserId                int     `json:"user_id"`
-	Username              string  `json:"username"`
-	Amount                int64   `json:"amount"`
-	Money                 float64 `json:"money"`
-	TradeNo               string  `json:"trade_no"`
-	PaymentMethod         string  `json:"payment_method"`
-	CreateTime            int64   `json:"create_time"`
-	CompleteTime          int64   `json:"complete_time"`
-	Status                string  `json:"status"`
-	RefundCount           int     `json:"refund_count"`
-	RequestedRefundAmount float64 `json:"requested_refund_amount"`
+	Id                     int     `json:"id"`
+	UserId                 int     `json:"user_id"`
+	Username               string  `json:"username"`
+	Amount                 int64   `json:"amount"`
+	Money                  float64 `json:"money"`
+	TradeNo                string  `json:"trade_no"`
+	PaymentMethod          string  `json:"payment_method"`
+	CreateTime             int64   `json:"create_time"`
+	CompleteTime           int64   `json:"complete_time"`
+	Status                 string  `json:"status"`
+	RefundCount            int     `json:"refund_count"`
+	RequestedRefundAmount  float64 `json:"requested_refund_amount"`
 	SuccessfulRefundAmount float64 `json:"successful_refund_amount"`
-	PendingRefundAmount   float64 `json:"pending_refund_amount"`
-	RefundableAmount      float64 `json:"refundable_amount"`
-	RefundStatus          string  `json:"refund_status"`
-	CanRefund             bool    `json:"can_refund"`
+	PendingRefundAmount    float64 `json:"pending_refund_amount"`
+	RefundableAmount       float64 `json:"refundable_amount"`
+	RefundStatus           string  `json:"refund_status"`
+	CanRefund              bool    `json:"can_refund"`
+	CanManualRefund        bool    `json:"can_manual_refund"`
 }
 
 type TopUpRefundFinalizePayload struct {
@@ -113,8 +114,61 @@ func decimalFromFloatMoney(value float64) decimal.Decimal {
 	return decimal.NewFromFloat(value).Round(2)
 }
 
+func applySuccessfulTopUpRefundQuota(tx *gorm.DB, topUp *TopUp, refund *TopUpRefund) error {
+	if tx == nil || topUp == nil || refund == nil {
+		return errors.New("退款参数错误")
+	}
+
+	totalQuota := getTopUpQuota(topUp)
+	totalMoney := decimalFromFloatMoney(topUp.Money)
+
+	var successfulRefunds []*TopUpRefund
+	if err := tx.Where("top_up_id = ? AND status = ? AND id <> ?", topUp.Id, TopUpRefundStatusSuccess, refund.Id).Find(&successfulRefunds).Error; err != nil {
+		return err
+	}
+
+	successAmountBefore := decimal.Zero
+	quotaDeductedBefore := 0
+	for _, item := range successfulRefunds {
+		successAmountBefore = successAmountBefore.Add(decimalFromFloatMoney(item.RefundAmount))
+		quotaDeductedBefore += item.QuotaDelta
+	}
+
+	successAmountAfter := successAmountBefore.Add(decimalFromFloatMoney(refund.RefundAmount))
+	targetQuotaDeducted := quotaDeductedBefore
+	if !totalMoney.IsZero() && totalQuota > 0 {
+		if successAmountAfter.GreaterThanOrEqual(totalMoney) {
+			targetQuotaDeducted = totalQuota
+		} else {
+			targetQuotaDeducted = int(decimal.NewFromInt(int64(totalQuota)).
+				Mul(successAmountAfter).
+				Div(totalMoney).
+				IntPart())
+		}
+	}
+	quotaDelta := targetQuotaDeducted - quotaDeductedBefore
+	if quotaDelta < 0 {
+		quotaDelta = 0
+	}
+
+	if quotaDelta > 0 {
+		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota - ?", quotaDelta)).Error; err != nil {
+			return err
+		}
+	}
+
+	refund.QuotaDelta = quotaDelta
+	refund.CompleteTime = common.GetTimestamp()
+	refund.Status = TopUpRefundStatusSuccess
+	return nil
+}
+
 func generateTopUpRefundNo(topUpId int) string {
 	return fmt.Sprintf("ALIRF_%d_%d", topUpId, time.Now().UnixNano())
+}
+
+func generateManualTopUpRefundNo(topUpId int) string {
+	return fmt.Sprintf("MANUALRF_%d_%d", topUpId, time.Now().UnixNano())
 }
 
 func GetTopUpRefundsByTopUpId(topUpId int) ([]*TopUpRefund, error) {
@@ -175,11 +229,14 @@ func BuildAdminTopUpItems(topups []*TopUp) ([]*AdminTopUpItem, error) {
 		}
 		username, _ := GetUsernameById(topUp.UserId, false)
 		summary := summaries[topUp.TradeNo]
-		refundableAmount := decimalFromFloatMoney(topUp.Money).
-			Sub(decimalFromFloatMoney(summary.RequestedAmount)).
-			Round(2)
-		if refundableAmount.IsNegative() {
-			refundableAmount = decimal.Zero
+		refundableAmount := decimal.Zero
+		if topUp.Status == common.TopUpStatusSuccess {
+			refundableAmount = decimalFromFloatMoney(topUp.Money).
+				Sub(decimalFromFloatMoney(summary.RequestedAmount)).
+				Round(2)
+			if refundableAmount.IsNegative() {
+				refundableAmount = decimal.Zero
+			}
 		}
 
 		refundStatus := "none"
@@ -210,6 +267,8 @@ func BuildAdminTopUpItems(topups []*TopUp) ([]*AdminTopUpItem, error) {
 			RefundStatus:           refundStatus,
 			CanRefund: topUp.PaymentMethod == "alipay_f2f" &&
 				topUp.Status == common.TopUpStatusSuccess &&
+				refundableAmount.GreaterThan(decimal.Zero),
+			CanManualRefund: topUp.Status == common.TopUpStatusSuccess &&
 				refundableAmount.GreaterThan(decimal.Zero),
 		})
 	}
@@ -355,47 +414,9 @@ func FinalizeTopUpRefund(refundId int, payload TopUpRefundFinalizePayload, calle
 		}
 
 		if nextStatus == TopUpRefundStatusSuccess && refund.Status != TopUpRefundStatusSuccess {
-			totalQuota := getTopUpQuota(&topUp)
-			totalMoney := decimalFromFloatMoney(topUp.Money)
-
-			var successfulRefunds []*TopUpRefund
-			if err := tx.Where("top_up_id = ? AND status = ? AND id <> ?", topUp.Id, TopUpRefundStatusSuccess, refund.Id).Find(&successfulRefunds).Error; err != nil {
+			if err := applySuccessfulTopUpRefundQuota(tx, &topUp, &refund); err != nil {
 				return err
 			}
-
-			successAmountBefore := decimal.Zero
-			quotaDeductedBefore := 0
-			for _, item := range successfulRefunds {
-				successAmountBefore = successAmountBefore.Add(decimalFromFloatMoney(item.RefundAmount))
-				quotaDeductedBefore += item.QuotaDelta
-			}
-
-			successAmountAfter := successAmountBefore.Add(decimalFromFloatMoney(refund.RefundAmount))
-			targetQuotaDeducted := quotaDeductedBefore
-			if !totalMoney.IsZero() && totalQuota > 0 {
-				if successAmountAfter.GreaterThanOrEqual(totalMoney) {
-					targetQuotaDeducted = totalQuota
-				} else {
-					targetQuotaDeducted = int(decimal.NewFromInt(int64(totalQuota)).
-						Mul(successAmountAfter).
-						Div(totalMoney).
-						IntPart())
-				}
-			}
-			quotaDelta := targetQuotaDeducted - quotaDeductedBefore
-			if quotaDelta < 0 {
-				quotaDelta = 0
-			}
-
-			if quotaDelta > 0 {
-				if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota - ?", quotaDelta)).Error; err != nil {
-					return err
-				}
-			}
-
-			refund.QuotaDelta = quotaDelta
-			refund.CompleteTime = now
-			refund.Status = TopUpRefundStatusSuccess
 		} else {
 			refund.Status = nextStatus
 			if nextStatus == TopUpRefundStatusFailed {
@@ -417,5 +438,76 @@ func FinalizeTopUpRefund(refundId int, payload TopUpRefundFinalizePayload, calle
 		RecordRefundLog(refund.UserId, content, callerIp, "alipay_f2f", refund.OperatorId)
 	}
 
+	return &refund, nil
+}
+
+func MarkTopUpRefundManual(topUpId int, refundAmount string, refundReason string, operatorId int, callerIp string) (*TopUpRefund, error) {
+	amountDecimal, err := parseMoneyDecimal(refundAmount)
+	if err != nil {
+		return nil, err
+	}
+
+	var refund TopUpRefund
+	now := common.GetTimestamp()
+
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		var topUp TopUp
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where("id = ?", topUpId).First(&topUp).Error; err != nil {
+			return errors.New("充值订单不存在")
+		}
+		if topUp.Status != common.TopUpStatusSuccess {
+			return errors.New("仅支付成功的订单可以手动标记退款")
+		}
+
+		totalMoney := decimalFromFloatMoney(topUp.Money)
+		if amountDecimal.GreaterThan(totalMoney) {
+			return errors.New("退款金额不能大于原支付金额")
+		}
+
+		var refunds []*TopUpRefund
+		if err := tx.Where("top_up_id = ?", topUp.Id).Find(&refunds).Error; err != nil {
+			return err
+		}
+
+		reservedAmount := decimal.Zero
+		for _, item := range refunds {
+			if item.Status == TopUpRefundStatusFailed {
+				continue
+			}
+			reservedAmount = reservedAmount.Add(decimalFromFloatMoney(item.RefundAmount))
+		}
+		if reservedAmount.Add(amountDecimal).GreaterThan(totalMoney) {
+			return errors.New("累计退款金额不能大于原支付金额")
+		}
+
+		refund = TopUpRefund{
+			TopUpId:         topUp.Id,
+			UserId:          topUp.UserId,
+			TradeNo:         topUp.TradeNo,
+			RefundNo:        generateManualTopUpRefundNo(topUp.Id),
+			RefundAmount:    amountDecimal.InexactFloat64(),
+			RefundReason:    strings.TrimSpace(refundReason),
+			Status:          TopUpRefundStatusPending,
+			FundChange:      "MANUAL",
+			ResponseCode:    "MANUAL",
+			ResponseMsg:     "管理员手动标记退款",
+			ResponseSubCode: "MANUAL_REFUND",
+			ResponseSubMsg:  "管理员手动标记退款",
+			OperatorId:      operatorId,
+			CreateTime:      now,
+			UpdateTime:      now,
+		}
+		if err := tx.Create(&refund).Error; err != nil {
+			return err
+		}
+
+		return applySuccessfulTopUpRefundQuota(tx, &topUp, &refund)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	content := fmt.Sprintf("管理员手动标记充值退款成功，订单号: %s，退款金额: %.2f，扣回额度: %s", refund.TradeNo, refund.RefundAmount, logger.FormatQuota(refund.QuotaDelta))
+	RecordRefundLog(refund.UserId, content, callerIp, "manual", refund.OperatorId)
 	return &refund, nil
 }
