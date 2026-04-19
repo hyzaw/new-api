@@ -37,7 +37,6 @@ import { Coins } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CardPro from '../../common/ui/CardPro';
 import CardTable from '../../common/ui/CardTable';
-import TopUpDashboard from '../../topup/dashboard';
 import { API, showError, showSuccess, timestamp2string } from '../../../helpers';
 import { createCardProPagination } from '../../../helpers/utils';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
@@ -606,7 +605,6 @@ const TopUpOrdersPage = () => {
                 )}
               </Text>
             </div>
-            <TopUpDashboard compact showToolbar={false} />
           </div>
         }
         actionsArea={
@@ -618,7 +616,7 @@ const TopUpOrdersPage = () => {
                 onEnterPress={handleSearch}
                 prefix={<IconSearch />}
                 showClear
-                placeholder={t('搜索订单号')}
+                placeholder={t('搜索订单号、用户名或用户 ID')}
                 style={{ width: isMobile ? '100%' : 260 }}
               />
               <Button type='primary' onClick={handleSearch}>

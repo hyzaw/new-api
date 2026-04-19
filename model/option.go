@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -12,12 +14,16 @@ import (
 	"github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
+
+	"gorm.io/gorm"
 )
 
 type Option struct {
 	Key   string `json:"key" gorm:"primaryKey"`
 	Value string `json:"value"`
 }
+
+const sessionSecretOptionKey = "SessionSecret"
 
 func AllOption() ([]*Option, error) {
 	var options []*Option
@@ -223,6 +229,32 @@ func UpdateOption(key string, value string) error {
 	return updateOptionMap(key, value)
 }
 
+// EnsureSessionSecret 保证会话密钥可跨容器重启复用，避免 Docker 更新后所有用户被强制下线。
+// 优先级：
+// 1. 环境变量 SESSION_SECRET
+// 2. 数据库 Option(SessionSecret)
+// 3. 当前进程启动时生成的随机值（首次启动时写入数据库）
+func EnsureSessionSecret() error {
+	envSecret := strings.TrimSpace(os.Getenv("SESSION_SECRET"))
+	if envSecret != "" {
+		return UpdateOption(sessionSecretOptionKey, envSecret)
+	}
+
+	var option Option
+	err := DB.Where("key = ?", sessionSecretOptionKey).First(&option).Error
+	if err == nil {
+		persistedSecret := strings.TrimSpace(option.Value)
+		if persistedSecret != "" {
+			return updateOptionMap(sessionSecretOptionKey, persistedSecret)
+		}
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	return UpdateOption(sessionSecretOptionKey, common.SessionSecret)
+}
+
 func updateOptionMap(key string, value string) (err error) {
 	common.OptionMapRWMutex.Lock()
 	defer common.OptionMapRWMutex.Unlock()
@@ -352,6 +384,8 @@ func updateOptionMap(key string, value string) (err error) {
 		system_setting.WorkerUrl = value
 	case "WorkerValidKey":
 		system_setting.WorkerValidKey = value
+	case "SessionSecret":
+		common.SessionSecret = value
 	case "PayAddress":
 		operation_setting.PayAddress = value
 	case "Chats":

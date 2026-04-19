@@ -280,6 +280,10 @@ func InitResources() error {
 
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()
+	if err = model.EnsureSessionSecret(); err != nil {
+		common.FatalLog("failed to initialize session secret: " + err.Error())
+		return err
+	}
 
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()

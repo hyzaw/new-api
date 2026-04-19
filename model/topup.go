@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -229,7 +230,7 @@ func SearchUserTopUps(userId int, keyword string, pageInfo *common.PageInfo) (to
 	return topups, total, nil
 }
 
-// SearchAllTopUps 按订单号搜索全平台充值记录（管理员使用，不限制时间窗口）
+// SearchAllTopUps 按订单号、用户名、显示名、邮箱或用户 ID 搜索全平台充值记录（管理员使用，不限制时间窗口）
 func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -248,7 +249,17 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 			tx.Rollback()
 			return nil, 0, perr
 		}
-		query = query.Where("trade_no LIKE ? ESCAPE '!'", pattern)
+		query = query.Joins("LEFT JOIN users ON users.id = top_ups.user_id")
+
+		searchExpr := "(top_ups.trade_no LIKE ? ESCAPE '!' OR users.username LIKE ? ESCAPE '!' OR users.display_name LIKE ? ESCAPE '!' OR users.email LIKE ? ESCAPE '!')"
+		searchArgs := []interface{}{pattern, pattern, pattern, pattern}
+
+		if keywordInt, convErr := strconv.Atoi(keyword); convErr == nil {
+			searchExpr = "(top_ups.user_id = ? OR users.id = ? OR " + searchExpr[1:]
+			searchArgs = append([]interface{}{keywordInt, keywordInt}, searchArgs...)
+		}
+
+		query = query.Where(searchExpr, searchArgs...)
 	}
 
 	if err = query.Limit(searchTopUpCountHardLimit).Count(&total).Error; err != nil {
