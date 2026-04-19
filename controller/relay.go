@@ -624,18 +624,7 @@ func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError,
 		return true
 	}
 	if taskErr.StatusCode/100 == 5 {
-		// 超时不重试
-		if operation_setting.IsAlwaysSkipRetryStatusCode(taskErr.StatusCode) {
-			return false
-		}
 		return true
-	}
-	if taskErr.StatusCode == http.StatusBadRequest {
-		return false
-	}
-	if taskErr.StatusCode == 408 {
-		// azure处理超时不重试
-		return false
 	}
 	if taskErr.LocalError {
 		return false
@@ -643,5 +632,5 @@ func shouldRetryTaskRelay(c *gin.Context, channelId int, taskErr *dto.TaskError,
 	if taskErr.StatusCode/100 == 2 {
 		return false
 	}
-	return true
+	return operation_setting.ShouldRetryByStatusCode(taskErr.StatusCode)
 }
