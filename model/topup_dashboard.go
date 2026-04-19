@@ -93,6 +93,7 @@ func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
 	stats.Overview.PendingRefundMoney = decimalFromFloatMoney(stats.Overview.PendingRefundMoney).InexactFloat64()
 	stats.Overview.NetMoney = decimalFromFloatMoney(stats.Overview.SuccessMoney).
 		Sub(decimalFromFloatMoney(stats.Overview.RefundedMoney)).
+		Sub(decimalFromFloatMoney(stats.Overview.PendingRefundMoney)).
 		InexactFloat64()
 
 	cutoff := common.GetTimestamp() - int64(days-1)*24*60*60

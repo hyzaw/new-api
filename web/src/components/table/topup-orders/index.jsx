@@ -94,6 +94,23 @@ const statValueStyle = {
   color: 'var(--semi-color-text-0)',
 };
 
+const refundModalFooterStyle = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: 8,
+  marginTop: 20,
+  paddingTop: 16,
+  borderTop: '1px solid var(--semi-color-border)',
+  background: 'var(--semi-color-bg-1)',
+};
+
+const refundModalNoteStyle = {
+  padding: '12px 14px',
+  borderRadius: '12px',
+  background: 'var(--semi-color-fill-0)',
+  lineHeight: 1.7,
+};
+
 const renderStatusBadge = (status, t) => {
   const config = ORDER_STATUS_CONFIG[status] || {
     type: 'primary',
@@ -203,7 +220,7 @@ const RefundModalContent = ({
         />
       </div>
 
-      <Text type='tertiary'>
+      <Text type='tertiary' style={refundModalNoteStyle}>
         {refundMode === 'manual'
           ? t('手动标记退款会直接记录为已退款，并按退款比例扣回用户额度，请确认已经在线下完成退款。')
           : t(
@@ -709,6 +726,7 @@ const TopUpOrdersPage = () => {
         onCancel={closeRefundModal}
         footer={null}
         size={isMobile ? 'full-width' : 'medium'}
+        bodyStyle={{ paddingBottom: 20 }}
       >
         <RefundModalContent
           currentOrder={currentOrder}
@@ -719,7 +737,7 @@ const TopUpOrdersPage = () => {
           setRefundReason={setRefundReason}
           t={t}
         />
-        <div className='flex justify-end gap-2 mt-5'>
+        <div style={refundModalFooterStyle}>
           <Button onClick={closeRefundModal} disabled={refundSubmitting}>
             {t('取消')}
           </Button>

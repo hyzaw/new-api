@@ -314,27 +314,36 @@ const TopUpDashboard = ({
       })) || [];
 
     return {
-      type: 'pie',
+      type: 'bar',
       height: compact ? 280 : 320,
       data: [{ id: 'topup-dashboard-payment-methods', values }],
-      categoryField: 'type',
-      valueField: 'value',
-      legends: {
-        orient: 'right',
+      xField: 'type',
+      yField: 'value',
+      padding: {
+        top: 20,
+        right: 20,
+        bottom: 36,
+        left: 52,
       },
+      bar: {
+        style: {
+          cornerRadius: [8, 8, 0, 0],
+        },
+      },
+      axes: [
+        {
+          orient: 'bottom',
+          label: { visible: true },
+        },
+        {
+          orient: 'left',
+          label: { visible: true },
+        },
+      ],
       tooltip: {
         visible: true,
       },
-      pie: {
-        style: {
-          outerRadius: 0.74,
-          innerRadius: 0.42,
-          cornerRadius: 8,
-        },
-      },
-      label: {
-        visible: true,
-      },
+      color: ['#16a34a'],
     };
   }, [compact, stats, t]);
 
