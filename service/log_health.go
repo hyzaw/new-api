@@ -14,7 +14,6 @@ import (
 const (
 	requestStatusMonitorCacheNamespace = "new-api:request_status_monitor:v1"
 	requestStatusMonitorCacheTTL       = 365 * 24 * time.Hour
-	requestStatusMonitorCacheKey       = "latest"
 )
 
 var (
@@ -46,14 +45,17 @@ func alignRequestStatusWindowEnd(now int64) int64 {
 	return now - now%model.RequestStatusIntervalSeconds
 }
 
+func requestStatusMonitorCacheKey(windowEnd int64) string {
+	return fmt.Sprintf("snapshot:%d", windowEnd)
+}
+
 func GetRequestStatusMonitor() (*model.RequestStatusMonitor, error) {
 	windowEnd := alignRequestStatusWindowEnd(time.Now().Unix())
 	cache := getRequestStatusMonitorCache()
 
-	if cached, found, err := cache.Get(requestStatusMonitorCacheKey); err == nil && found {
-		if cached.WindowEnd == windowEnd {
-			return &cached, nil
-		}
+	cacheKey := requestStatusMonitorCacheKey(windowEnd)
+	if cached, found, err := cache.Get(cacheKey); err == nil && found {
+		return &cached, nil
 	} else if err != nil {
 		common.SysError(fmt.Sprintf("request status monitor cache get failed: %v", err))
 	}
@@ -63,7 +65,7 @@ func GetRequestStatusMonitor() (*model.RequestStatusMonitor, error) {
 		return nil, err
 	}
 
-	if err := cache.SetWithTTL(requestStatusMonitorCacheKey, *monitor, requestStatusMonitorCacheTTL); err != nil {
+	if err := cache.SetWithTTL(cacheKey, *monitor, requestStatusMonitorCacheTTL); err != nil {
 		common.SysError(fmt.Sprintf("request status monitor cache set failed: %v", err))
 	}
 
