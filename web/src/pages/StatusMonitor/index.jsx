@@ -38,14 +38,7 @@ const formatDateTime = (timestamp) => {
 
 const StatusDotsRow = ({ title, points }) => {
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '220px minmax(620px, 1fr)',
-        gap: 16,
-        alignItems: 'center',
-      }}
-    >
+    <div className='grid grid-cols-1 items-center gap-3 md:grid-cols-[180px_minmax(0,1fr)] md:gap-4'>
       <div style={{ minWidth: 0 }}>
         <div
           style={{
@@ -61,13 +54,16 @@ const StatusDotsRow = ({ title, points }) => {
         </div>
       </div>
 
-      <div className='overflow-x-auto'>
+      <div style={{ minWidth: 0, overflow: 'hidden' }}>
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${points.length || 1}, minmax(6px, 1fr))`,
-            gap: 4,
-            minWidth: 620,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 3,
+            width: 'max-content',
+            maxWidth: '100%',
+            marginLeft: 'auto',
           }}
         >
           {points.map((point) => {
@@ -85,7 +81,8 @@ const StatusDotsRow = ({ title, points }) => {
               >
                 <div
                   style={{
-                    width: '100%',
+                    flex: '0 0 auto',
+                    width: 6,
                     minHeight: 18,
                     height: 18,
                     borderRadius: 999,
