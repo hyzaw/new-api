@@ -155,7 +155,11 @@ func GetRequestStatusMonitor(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	c.Header("Cache-Control", "public, max-age=600, stale-while-revalidate=60")
+	// Disable browser/CDN caching. We only rely on server-side snapshot cache here.
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("Surrogate-Control", "no-store")
 	common.ApiSuccess(c, monitor)
 }
 
