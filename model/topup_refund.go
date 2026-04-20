@@ -20,28 +20,29 @@ const (
 )
 
 type TopUpRefund struct {
-	Id              int     `json:"id"`
-	TopUpId         int     `json:"top_up_id" gorm:"index"`
-	UserId          int     `json:"user_id" gorm:"index"`
-	TradeNo         string  `json:"trade_no" gorm:"type:varchar(255);index"`
-	RefundNo        string  `json:"refund_no" gorm:"type:varchar(64);uniqueIndex"`
-	RefundAmount    float64 `json:"refund_amount"`
-	RefundReason    string  `json:"refund_reason" gorm:"type:varchar(255)"`
-	Status          string  `json:"status" gorm:"type:varchar(32);index"`
-	FundChange      string  `json:"fund_change" gorm:"type:varchar(8)"`
-	AlipayTradeNo   string  `json:"alipay_trade_no" gorm:"type:varchar(64);index"`
-	BuyerLogonID    string  `json:"buyer_logon_id" gorm:"type:varchar(100)"`
-	ResponseCode    string  `json:"response_code" gorm:"type:varchar(32)"`
-	ResponseMsg     string  `json:"response_msg" gorm:"type:varchar(255)"`
-	ResponseSubCode string  `json:"response_sub_code" gorm:"type:varchar(64)"`
-	ResponseSubMsg  string  `json:"response_sub_msg" gorm:"type:varchar(255)"`
-	RefundFee       float64 `json:"refund_fee"`
-	SendBackFee     float64 `json:"send_back_fee"`
-	QuotaDelta      int     `json:"quota_delta"`
-	OperatorId      int     `json:"operator_id" gorm:"index"`
-	CreateTime      int64   `json:"create_time" gorm:"index"`
-	UpdateTime      int64   `json:"update_time"`
-	CompleteTime    int64   `json:"complete_time"`
+	Id                int     `json:"id"`
+	TopUpId           int     `json:"top_up_id" gorm:"index"`
+	UserId            int     `json:"user_id" gorm:"index"`
+	TradeNo           string  `json:"trade_no" gorm:"type:varchar(255);index"`
+	RefundNo          string  `json:"refund_no" gorm:"type:varchar(64);uniqueIndex"`
+	RefundAmount      float64 `json:"refund_amount"`
+	RefundReason      string  `json:"refund_reason" gorm:"type:varchar(255)"`
+	Status            string  `json:"status" gorm:"type:varchar(32);index"`
+	FundChange        string  `json:"fund_change" gorm:"type:varchar(8)"`
+	AlipayTradeNo     string  `json:"alipay_trade_no" gorm:"type:varchar(64);index"`
+	BuyerLogonID      string  `json:"buyer_logon_id" gorm:"type:varchar(100)"`
+	ResponseCode      string  `json:"response_code" gorm:"type:varchar(32)"`
+	ResponseMsg       string  `json:"response_msg" gorm:"type:varchar(255)"`
+	ResponseSubCode   string  `json:"response_sub_code" gorm:"type:varchar(64)"`
+	ResponseSubMsg    string  `json:"response_sub_msg" gorm:"type:varchar(255)"`
+	RefundFee         float64 `json:"refund_fee"`
+	SendBackFee       float64 `json:"send_back_fee"`
+	QuotaDelta        int     `json:"quota_delta"`
+	InviteRebateDelta int     `json:"invite_rebate_delta"`
+	OperatorId        int     `json:"operator_id" gorm:"index"`
+	CreateTime        int64   `json:"create_time" gorm:"index"`
+	UpdateTime        int64   `json:"update_time"`
+	CompleteTime      int64   `json:"complete_time"`
 }
 
 type TopUpRefundSummary struct {
@@ -73,25 +74,20 @@ type AdminTopUpItem struct {
 }
 
 type TopUpRefundFinalizePayload struct {
-	Code          string
-	Msg           string
-	SubCode       string
-	SubMsg        string
-	TradeNo       string
-	OutTradeNo    string
-	BuyerLogonID  string
-	RefundFee     string
-	SendBackFee   string
-	FundChange    string
+	Code         string
+	Msg          string
+	SubCode      string
+	SubMsg       string
+	TradeNo      string
+	OutTradeNo   string
+	BuyerLogonID string
+	RefundFee    string
+	SendBackFee  string
+	FundChange   string
 }
 
 func getTopUpQuota(topUp *TopUp) int {
-	if topUp == nil {
-		return 0
-	}
-	dAmount := decimal.NewFromInt(topUp.Amount)
-	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
-	return int(dAmount.Mul(dQuotaPerUnit).IntPart())
+	return getTopUpGrantedQuota(topUp)
 }
 
 func parseMoneyDecimal(raw string) (decimal.Decimal, error) {
@@ -158,6 +154,9 @@ func applySuccessfulTopUpRefundQuota(tx *gorm.DB, topUp *TopUp, refund *TopUpRef
 	}
 
 	refund.QuotaDelta = quotaDelta
+	if err := applyTopUpInviteRebateRefundTx(tx, topUp, successAmountAfter, refund); err != nil {
+		return err
+	}
 	refund.CompleteTime = common.GetTimestamp()
 	refund.Status = TopUpRefundStatusSuccess
 	return nil
@@ -435,7 +434,13 @@ func FinalizeTopUpRefund(refundId int, payload TopUpRefundFinalizePayload, calle
 
 	if refund.Status == TopUpRefundStatusSuccess {
 		content := fmt.Sprintf("支付宝充值退款成功，订单号: %s，退款金额: %.2f，扣回额度: %s", refund.TradeNo, refund.RefundAmount, logger.FormatQuota(refund.QuotaDelta))
+		if refund.InviteRebateDelta > 0 {
+			content = fmt.Sprintf("%s，回退邀请返利: %s", content, logger.FormatQuota(refund.InviteRebateDelta))
+		}
 		RecordRefundLog(refund.UserId, content, callerIp, "alipay_f2f", refund.OperatorId)
+		if topUp := GetTopUpById(refund.TopUpId); topUp != nil && topUp.InviteRebateUserId > 0 && refund.InviteRebateDelta > 0 {
+			RecordLog(topUp.InviteRebateUserId, LogTypeSystem, fmt.Sprintf("邀请充值返利回退 %s，订单号: %s", logger.LogQuota(refund.InviteRebateDelta), refund.TradeNo))
+		}
 	}
 
 	return &refund, nil
@@ -508,6 +513,12 @@ func MarkTopUpRefundManual(topUpId int, refundAmount string, refundReason string
 	}
 
 	content := fmt.Sprintf("管理员手动标记充值退款成功，订单号: %s，退款金额: %.2f，扣回额度: %s", refund.TradeNo, refund.RefundAmount, logger.FormatQuota(refund.QuotaDelta))
+	if refund.InviteRebateDelta > 0 {
+		content = fmt.Sprintf("%s，回退邀请返利: %s", content, logger.FormatQuota(refund.InviteRebateDelta))
+	}
 	RecordRefundLog(refund.UserId, content, callerIp, "manual", refund.OperatorId)
+	if topUp := GetTopUpById(refund.TopUpId); topUp != nil && topUp.InviteRebateUserId > 0 && refund.InviteRebateDelta > 0 {
+		RecordLog(topUp.InviteRebateUserId, LogTypeSystem, fmt.Sprintf("邀请充值返利回退 %s，订单号: %s", logger.LogQuota(refund.InviteRebateDelta), refund.TradeNo))
+	}
 	return &refund, nil
 }

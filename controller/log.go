@@ -6,6 +6,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -146,6 +147,16 @@ func GetLogsSelfStat(c *gin.Context) {
 		},
 	})
 	return
+}
+
+func GetRequestStatusMonitor(c *gin.Context) {
+	monitor, err := service.GetRequestStatusMonitor()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=600, stale-while-revalidate=60")
+	common.ApiSuccess(c, monitor)
 }
 
 func DeleteHistoryLogs(c *gin.Context) {
