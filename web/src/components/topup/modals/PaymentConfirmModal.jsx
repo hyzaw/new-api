@@ -44,6 +44,12 @@ const PaymentConfirmModal = ({
     discountRate && discountRate > 0 && discountRate < 1 && amountNumber > 0;
   const originalAmount = hasDiscount ? amountNumber / discountRate : 0;
   const discountAmount = hasDiscount ? originalAmount - amountNumber : 0;
+  const getPayMethodDisplayName = (payMethod) => {
+    if (payMethod?.type === 'alipay_f2f') {
+      return t('支付宝');
+    }
+    return payMethod?.name || '-';
+  };
   return (
     <Modal
       title={
@@ -151,7 +157,7 @@ const PaymentConfirmModal = ({
                           />
                         )}
                         <Text className='text-slate-900 dark:text-slate-100'>
-                          {payMethod.name}
+                          {getPayMethodDisplayName(payMethod)}
                         </Text>
                       </>
                     );

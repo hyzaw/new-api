@@ -1092,11 +1092,9 @@ const TopUp = () => {
           rebateRecords={inviteDetails.rebate_records}
           walletRecords={inviteDetails.wallet_records}
           inviteDetailsLoading={inviteDetailsLoading}
-          inviteDetailsFetched={inviteDetailsFetched}
           onOpenInviteDetails={ensureInviteDetailsLoaded}
           withdrawalRecords={withdrawalRecords}
           withdrawalRecordsLoading={withdrawalRecordsLoading}
-          withdrawalRecordsFetched={withdrawalRecordsFetched}
           onOpenWithdrawalRecords={ensureInviteWithdrawalsLoaded}
         />
       </div>

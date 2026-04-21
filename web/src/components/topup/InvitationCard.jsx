@@ -49,11 +49,9 @@ const InvitationCard = ({
   rebateRecords,
   walletRecords,
   inviteDetailsLoading,
-  inviteDetailsFetched,
   onOpenInviteDetails,
   withdrawalRecords,
   withdrawalRecordsLoading,
-  withdrawalRecordsFetched,
   onOpenWithdrawalRecords,
 }) => {
   const { symbol } = getCurrencyConfig();
@@ -297,10 +295,6 @@ const InvitationCard = ({
     wallet: {
       title: t('邀请余额流水'),
       description: t('查看邀请余额的每次增加、减少和划转明细'),
-      tagColor: 'cyan',
-      countLabel: inviteDetailsFetched
-        ? String(walletRecords?.length || 0)
-        : t('按需加载'),
       columns: walletColumns,
       dataSource: walletRecords || [],
       loading: inviteDetailsLoading,
@@ -311,10 +305,6 @@ const InvitationCard = ({
     invites: {
       title: t('邀请记录'),
       description: t('查看什么时候邀请了哪些用户'),
-      tagColor: 'green',
-      countLabel: inviteDetailsFetched
-        ? String(inviteRecords?.length || 0)
-        : t('按需加载'),
       columns: inviteColumns,
       dataSource: inviteRecords || [],
       loading: inviteDetailsLoading,
@@ -325,10 +315,6 @@ const InvitationCard = ({
     rebates: {
       title: t('充值返利记录'),
       description: t('查看被邀请用户充值后产生的返利明细'),
-      tagColor: 'blue',
-      countLabel: inviteDetailsFetched
-        ? String(rebateRecords?.length || 0)
-        : t('按需加载'),
       columns: rebateColumns,
       dataSource: rebateRecords || [],
       loading: inviteDetailsLoading,
@@ -339,10 +325,6 @@ const InvitationCard = ({
     withdrawals: {
       title: t('提现申请记录'),
       description: t('查看每次提现申请状态和处理结果'),
-      tagColor: 'orange',
-      countLabel: withdrawalRecordsFetched
-        ? String(withdrawalRecords?.length || 0)
-        : t('按需加载'),
       columns: withdrawalColumns,
       dataSource: withdrawalRecords || [],
       loading: withdrawalRecordsLoading,
@@ -587,9 +569,6 @@ const InvitationCard = ({
                       {item.description}
                     </div>
                   </div>
-                  <Tag color={item.tagColor} shape='circle' size='small'>
-                    {item.countLabel}
-                  </Tag>
                 </div>
                 <Button
                   theme='light'

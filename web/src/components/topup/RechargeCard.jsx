@@ -132,6 +132,13 @@ const RechargeCard = ({
     return enableOnlineTopUp;
   });
 
+  const getPayMethodDisplayName = (payMethod) => {
+    if (payMethod?.type === 'alipay_f2f') {
+      return t('支付宝');
+    }
+    return payMethod?.name || '-';
+  };
+
   const topupContent = (
     <Space vertical style={{ width: '100%' }}>
       {/* 统计数据 */}
@@ -358,7 +365,7 @@ const RechargeCard = ({
                                     }
                                     className='!rounded-lg !px-4 !py-2'
                                   >
-                                    {payMethod.name}
+                                    {getPayMethodDisplayName(payMethod)}
                                   </Button>
                                 );
 
