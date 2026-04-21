@@ -139,6 +139,36 @@ const RechargeCard = ({
     return payMethod?.name || '-';
   };
 
+  const renderPayMethodIcon = (payMethod) => {
+    if (payMethod?.icon) {
+      return (
+        <img
+          src={payMethod.icon}
+          alt={getPayMethodDisplayName(payMethod)}
+          style={{ width: 18, height: 18, objectFit: 'contain' }}
+        />
+      );
+    }
+    if (payMethod?.type === 'alipay' || payMethod?.type === 'alipay_f2f') {
+      return <SiAlipay size={18} color='#1677FF' />;
+    }
+    if (payMethod?.type === 'wxpay') {
+      return <SiWechat size={18} color='#07C160' />;
+    }
+    if (payMethod?.type === 'stripe') {
+      return <SiStripe size={18} color='#635BFF' />;
+    }
+    if (payMethod?.type === 'usdt') {
+      return <Coins size={18} color='#26A17B' />;
+    }
+    return (
+      <CreditCard
+        size={18}
+        color={payMethod?.color || 'var(--semi-color-text-2)'}
+      />
+    );
+  };
+
   const topupContent = (
     <Space vertical style={{ width: '100%' }}>
       {/* 统计数据 */}
@@ -345,24 +375,7 @@ const RechargeCard = ({
                                       paymentLoading &&
                                       payWay === payMethod.type
                                     }
-                                    icon={
-                                      payMethod.type === 'alipay' ||
-                                      payMethod.type === 'alipay_f2f' ? (
-                                        <SiAlipay size={18} color='#1677FF' />
-                                      ) : payMethod.type === 'wxpay' ? (
-                                        <SiWechat size={18} color='#07C160' />
-                                      ) : payMethod.type === 'stripe' ? (
-                                        <SiStripe size={18} color='#635BFF' />
-                                      ) : (
-                                        <CreditCard
-                                          size={18}
-                                          color={
-                                            payMethod.color ||
-                                            'var(--semi-color-text-2)'
-                                          }
-                                        />
-                                      )
-                                    }
+                                    icon={renderPayMethodIcon(payMethod)}
                                     className='!rounded-lg !px-4 !py-2'
                                   >
                                     {getPayMethodDisplayName(payMethod)}

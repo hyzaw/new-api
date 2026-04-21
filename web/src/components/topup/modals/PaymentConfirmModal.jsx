@@ -20,7 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import { Modal, Typography, Card, Skeleton } from '@douyinfe/semi-ui';
 import { SiAlipay, SiWechat, SiStripe } from 'react-icons/si';
-import { CreditCard } from 'lucide-react';
+import { Coins, CreditCard } from 'lucide-react';
 
 const { Text } = Typography;
 
@@ -49,6 +49,37 @@ const PaymentConfirmModal = ({
       return t('支付宝');
     }
     return payMethod?.name || '-';
+  };
+  const renderPayMethodIcon = (payMethod) => {
+    if (payMethod?.icon) {
+      return (
+        <img
+          src={payMethod.icon}
+          alt={getPayMethodDisplayName(payMethod)}
+          className='mr-2'
+          style={{ width: 16, height: 16, objectFit: 'contain' }}
+        />
+      );
+    }
+    if (payMethod?.type === 'alipay' || payMethod?.type === 'alipay_f2f') {
+      return <SiAlipay className='mr-2' size={16} color='#1677FF' />;
+    }
+    if (payMethod?.type === 'wxpay') {
+      return <SiWechat className='mr-2' size={16} color='#07C160' />;
+    }
+    if (payMethod?.type === 'stripe') {
+      return <SiStripe className='mr-2' size={16} color='#635BFF' />;
+    }
+    if (payMethod?.type === 'usdt') {
+      return <Coins className='mr-2' size={16} color='#26A17B' />;
+    }
+    return (
+      <CreditCard
+        className='mr-2'
+        size={16}
+        color={payMethod?.color || 'var(--semi-color-text-2)'}
+      />
+    );
   };
   return (
     <Modal
@@ -128,34 +159,7 @@ const PaymentConfirmModal = ({
                   if (payMethod) {
                     return (
                       <>
-                        {payMethod.type === 'alipay' ||
-                        payMethod.type === 'alipay_f2f' ? (
-                          <SiAlipay
-                            className='mr-2'
-                            size={16}
-                            color='#1677FF'
-                          />
-                        ) : payMethod.type === 'wxpay' ? (
-                          <SiWechat
-                            className='mr-2'
-                            size={16}
-                            color='#07C160'
-                          />
-                        ) : payMethod.type === 'stripe' ? (
-                          <SiStripe
-                            className='mr-2'
-                            size={16}
-                            color='#635BFF'
-                          />
-                        ) : (
-                          <CreditCard
-                            className='mr-2'
-                            size={16}
-                            color={
-                              payMethod.color || 'var(--semi-color-text-2)'
-                            }
-                          />
-                        )}
+                        {renderPayMethodIcon(payMethod)}
                         <Text className='text-slate-900 dark:text-slate-100'>
                           {getPayMethodDisplayName(payMethod)}
                         </Text>
