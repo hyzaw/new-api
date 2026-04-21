@@ -506,7 +506,7 @@ export default function GeneralSettings(props) {
                       marginBottom: 12,
                     }}
                   >
-                    <Row gutter={16} align='end'>
+                    <Row gutter={16}>
                       <Col xs={24} sm={24} md={8} lg={8} xl={8}>
                         <Form.Slot label={t('分组名')}>
                           <Select
@@ -566,12 +566,12 @@ export default function GeneralSettings(props) {
                         </Form.Slot>
                       </Col>
                       <Col xs={24} sm={24} md={4} lg={4} xl={4}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'flex-end',
-                            height: '100%',
-                          }}
+                        <Form.Slot
+                          label={
+                            <span style={{ visibility: 'hidden' }}>
+                              {t('操作')}
+                            </span>
+                          }
                         >
                           <Button
                             theme='solid'
@@ -585,7 +585,7 @@ export default function GeneralSettings(props) {
                           >
                             {t('删除规则')}
                           </Button>
-                        </div>
+                        </Form.Slot>
                       </Col>
                     </Row>
                   </div>
