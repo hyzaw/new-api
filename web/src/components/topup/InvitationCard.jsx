@@ -550,21 +550,21 @@ const InvitationCard = ({
             <div className='flex items-start gap-2'>
               <Badge dot type='success' />
               <Text type='tertiary' className='text-sm'>
-                {t('邀请好友注册，好友充值后您可获得相应奖励')}
+                {t('邀请好友注册并完成充值后，您可获得好友实际充值金额 10% 的邀请奖励')}
               </Text>
             </div>
 
             <div className='flex items-start gap-2'>
               <Badge dot type='success' />
               <Text type='tertiary' className='text-sm'>
-                {t('通过划转功能将奖励额度转入到您的账户余额中')}
+                {t('邀请奖励会先进入邀请钱包，您可随时划转到主账户余额使用，也可以在满足条件后申请提现')}
               </Text>
             </div>
 
             <div className='flex items-start gap-2'>
               <Badge dot type='success' />
               <Text type='tertiary' className='text-sm'>
-                {t('邀请的好友越多，获得的奖励越多')}
+                {t('邀请人数越多、好友充值越多，您累计获得的奖励也会越多')}
               </Text>
             </div>
           </div>
