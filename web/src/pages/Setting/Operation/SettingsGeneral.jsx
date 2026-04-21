@@ -23,6 +23,7 @@ import {
   Button,
   Col,
   Form,
+  InputNumber,
   Row,
   Spin,
   Modal,
@@ -44,12 +45,14 @@ export default function GeneralSettings(props) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [showQuotaWarning, setShowQuotaWarning] = useState(false);
+  const [groupDelayRules, setGroupDelayRules] = useState([]);
   const [inputs, setInputs] = useState({
     TopUpLink: '',
     'general_setting.docs_link': '',
     'general_setting.quota_display_type': 'USD',
     'general_setting.custom_currency_symbol': '¤',
     'general_setting.custom_currency_exchange_rate': '',
+    'group_delay_setting.rules': '[]',
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -62,6 +65,75 @@ export default function GeneralSettings(props) {
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
 
+  const parseRuleSeconds = (value) => {
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) {
+      return 0;
+    }
+    return Math.max(0, Math.trunc(numberValue));
+  };
+
+  const normalizeGroupDelayRules = (rules = []) => {
+    if (!Array.isArray(rules)) {
+      return [];
+    }
+    return rules.map((rule) => ({
+      group: rule?.group ?? '',
+      min_seconds: parseRuleSeconds(rule?.min_seconds),
+      max_seconds: parseRuleSeconds(rule?.max_seconds),
+    }));
+  };
+
+  const parseGroupDelayRules = (raw) => {
+    if (!raw) {
+      return [];
+    }
+    try {
+      return normalizeGroupDelayRules(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const serializeGroupDelayRules = (rules = []) =>
+    JSON.stringify(normalizeGroupDelayRules(rules));
+
+  const updateGroupDelayRules = (rules) => {
+    const normalizedRules = normalizeGroupDelayRules(rules);
+    setGroupDelayRules(normalizedRules);
+    setInputs((prev) => ({
+      ...prev,
+      'group_delay_setting.rules': serializeGroupDelayRules(normalizedRules),
+    }));
+  };
+
+  const validateGroupDelayRules = () => {
+    const seenGroups = new Set();
+    for (let i = 0; i < groupDelayRules.length; i++) {
+      const rule = groupDelayRules[i];
+      const group = String(rule.group || '').trim();
+      const minSeconds = Number(rule.min_seconds);
+      const maxSeconds = Number(rule.max_seconds);
+      if (!group) {
+        return t(`第 ${i + 1} 条分组延迟规则的分组名不能为空`);
+      }
+      if (Number.isNaN(minSeconds) || Number.isNaN(maxSeconds)) {
+        return t(`第 ${i + 1} 条分组延迟规则的秒数格式不正确`);
+      }
+      if (minSeconds < 0 || maxSeconds < 0) {
+        return t(`第 ${i + 1} 条分组延迟规则的秒数不能小于 0`);
+      }
+      if (maxSeconds < minSeconds) {
+        return t(`第 ${i + 1} 条分组延迟规则的最大延迟不能小于最小延迟`);
+      }
+      if (seenGroups.has(group)) {
+        return t(`分组 ${group} 的延迟规则重复`);
+      }
+      seenGroups.add(group);
+    }
+    return '';
+  };
+
   function handleFieldChange(fieldName) {
     return (value) => {
       setInputs((inputs) => ({ ...inputs, [fieldName]: value }));
@@ -71,6 +143,10 @@ export default function GeneralSettings(props) {
   function onSubmit() {
     const updateArray = compareObjects(inputs, inputsRow);
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
+    const groupDelayError = validateGroupDelayRules();
+    if (groupDelayError) {
+      return showError(groupDelayError);
+    }
     const requestQueue = updateArray.map((item) => {
       let value = '';
       if (typeof inputs[item.key] === 'boolean') {
@@ -227,8 +303,15 @@ export default function GeneralSettings(props) {
       currentInputs['general_setting.custom_currency_exchange_rate'] =
         props.options['general_setting.custom_currency_exchange_rate'];
     }
+    const currentGroupDelayRules = parseGroupDelayRules(
+      props.options['group_delay_setting.rules'],
+    );
+    currentInputs['group_delay_setting.rules'] =
+      props.options['group_delay_setting.rules'] ||
+      serializeGroupDelayRules(currentGroupDelayRules);
     setInputs(currentInputs);
     setInputsRow(structuredClone(currentInputs));
+    setGroupDelayRules(currentGroupDelayRules);
     refForm.current.setValues(currentInputs);
   }, [props.options]);
 
@@ -346,6 +429,146 @@ export default function GeneralSettings(props) {
                 <Text type='tertiary' size='small'>
                   {t('预览效果')}：{previewText}
                 </Text>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 8 }}>
+              <Col span={24}>
+                <Banner
+                  type='info'
+                  bordered
+                  fullMode={false}
+                  closeIcon={null}
+                  description={t(
+                    '分组延迟会在请求真正发往上游前，按规则随机等待一段时间。这样流式首字和普通首响应都会一起变慢，营造该分组较慢的体感。',
+                  )}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <Text strong>{t('分组延迟')}</Text>
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ marginTop: 4, display: 'block' }}
+                >
+                  {t(
+                    '仅对命中的分组生效。支持配置最小秒数和最大秒数，系统会在区间内随机延迟一次；重试不会重复叠加延迟。',
+                  )}
+                </Text>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                {groupDelayRules.length === 0 && (
+                  <div
+                    style={{
+                      border: '1px dashed var(--semi-color-border)',
+                      borderRadius: 12,
+                      padding: 16,
+                      background: 'var(--semi-color-fill-0)',
+                    }}
+                  >
+                    <Text type='tertiary'>
+                      {t('暂未配置分组延迟规则')}
+                    </Text>
+                  </div>
+                )}
+                {groupDelayRules.map((rule, index) => (
+                  <div
+                    key={`${index}-${rule.group || 'group-delay-rule'}`}
+                    style={{
+                      border: '1px solid var(--semi-color-border)',
+                      borderRadius: 12,
+                      padding: 16,
+                      background: 'var(--semi-color-fill-0)',
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Row gutter={16} align='end'>
+                      <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                        <Form.Slot label={t('分组名')}>
+                          <Input
+                            value={rule.group}
+                            placeholder={t('例如 default')}
+                            onChange={(value) => {
+                              const nextRules = [...groupDelayRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                group: value,
+                              };
+                              updateGroupDelayRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                        <Form.Slot label={t('最小延迟')}>
+                          <InputNumber
+                            value={rule.min_seconds ?? 0}
+                            min={0}
+                            step={1}
+                            suffix={t('秒')}
+                            onChange={(value) => {
+                              const nextRules = [...groupDelayRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                min_seconds: parseRuleSeconds(value),
+                              };
+                              updateGroupDelayRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                        <Form.Slot label={t('最大延迟')}>
+                          <InputNumber
+                            value={rule.max_seconds ?? 0}
+                            min={0}
+                            step={1}
+                            suffix={t('秒')}
+                            onChange={(value) => {
+                              const nextRules = [...groupDelayRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                max_seconds: parseRuleSeconds(value),
+                              };
+                              updateGroupDelayRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={24} md={4} lg={4} xl={4}>
+                        <Button
+                          theme='borderless'
+                          type='danger'
+                          onClick={() => {
+                            updateGroupDelayRules(
+                              groupDelayRules.filter((_, i) => i !== index),
+                            );
+                          }}
+                        >
+                          {t('删除规则')}
+                        </Button>
+                      </Col>
+                    </Row>
+                  </div>
+                ))}
+                <Button
+                  theme='light'
+                  onClick={() =>
+                    updateGroupDelayRules([
+                      ...groupDelayRules,
+                      {
+                        group: '',
+                        min_seconds: 0,
+                        max_seconds: 0,
+                      },
+                    ])
+                  }
+                >
+                  {t('新增分组延迟规则')}
+                </Button>
               </Col>
             </Row>
             <Row gutter={16}>

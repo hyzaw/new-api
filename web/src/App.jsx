@@ -37,6 +37,7 @@ import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
 import TopUpDashboardPage from './pages/TopUpDashboard';
 import TopUpOrders from './pages/TopUpOrders';
+import InviteWithdrawals from './pages/InviteWithdrawals';
 import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
@@ -287,6 +288,16 @@ function App() {
             <AdminRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <TopUpOrders />
+              </Suspense>
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/invite-withdrawals'
+          element={
+            <AdminRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <InviteWithdrawals />
               </Suspense>
             </AdminRoute>
           }

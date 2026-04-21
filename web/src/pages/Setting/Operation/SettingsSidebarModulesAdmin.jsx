@@ -200,6 +200,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('管理员查看补单与退款'),
         },
         {
+          key: 'invite_withdrawals',
+          title: t('邀请提现管理'),
+          description: t('管理员处理邀请提现申请'),
+        },
+        {
           key: 'redemption',
           title: t('兑换码管理'),
           description: t('兑换码生成管理'),

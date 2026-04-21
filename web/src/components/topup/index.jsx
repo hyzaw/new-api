@@ -28,7 +28,9 @@ import {
   renderQuotaWithAmount,
   copy,
   getQuotaPerUnit,
+  getCurrencyConfig,
 } from '../../helpers';
+import { quotaToDisplayAmount } from '../../helpers/quota';
 import { Modal, Toast } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
@@ -40,6 +42,7 @@ import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
 import AlipayQRCodeModal from './modals/AlipayQRCodeModal';
+import WithdrawRequestModal from './modals/WithdrawRequestModal';
 
 const TopUp = () => {
   const { t } = useTranslation();
@@ -98,6 +101,13 @@ const TopUp = () => {
   const [inviteDetailsLoading, setInviteDetailsLoading] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [transferAmount, setTransferAmount] = useState(0);
+  const [openWithdraw, setOpenWithdraw] = useState(false);
+  const [withdrawalSubmitting, setWithdrawalSubmitting] = useState(false);
+  const [withdrawalAmount, setWithdrawalAmount] = useState(20);
+  const [withdrawalReceiptCode, setWithdrawalReceiptCode] = useState('');
+  const [withdrawalRemark, setWithdrawalRemark] = useState('');
+  const [withdrawalRecords, setWithdrawalRecords] = useState([]);
+  const [withdrawalRecordsLoading, setWithdrawalRecordsLoading] = useState(false);
 
   // 账单Modal状态
   const [openHistory, setOpenHistory] = useState(false);
@@ -593,6 +603,23 @@ const TopUp = () => {
     }
   };
 
+  const getInviteWithdrawals = async () => {
+    setWithdrawalRecordsLoading(true);
+    try {
+      const res = await API.get('/api/user/aff_withdrawals/self');
+      const { success, message, data } = res.data;
+      if (success) {
+        setWithdrawalRecords(data.items || []);
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(t('提现申请记录加载失败'));
+    } finally {
+      setWithdrawalRecordsLoading(false);
+    }
+  };
+
   // 划转邀请额度
   const transfer = async () => {
     if (transferAmount < getQuotaPerUnit()) {
@@ -609,6 +636,42 @@ const TopUp = () => {
       getUserQuota().then();
     } else {
       showError(message);
+    }
+  };
+
+  const submitWithdrawal = async () => {
+    if (Number(withdrawalAmount) < 20) {
+      showError(t('最低提现金额为 20'));
+      return;
+    }
+    if (!withdrawalReceiptCode) {
+      showError(t('请先上传收款码'));
+      return;
+    }
+
+    setWithdrawalSubmitting(true);
+    try {
+      const res = await API.post('/api/user/aff_withdrawals', {
+        amount: Number(withdrawalAmount || 0).toFixed(2),
+        receipt_code: withdrawalReceiptCode,
+        user_remark: withdrawalRemark,
+      });
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('提现申请已提交'));
+        setOpenWithdraw(false);
+        setWithdrawalAmount(20);
+        setWithdrawalReceiptCode('');
+        setWithdrawalRemark('');
+        getUserQuota().then();
+        getInviteWithdrawals().then();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(t('提现申请提交失败'));
+    } finally {
+      setWithdrawalSubmitting(false);
     }
   };
 
@@ -638,6 +701,7 @@ const TopUp = () => {
     affFetchedRef.current = true;
     getAffLink().then();
     getInviteDetails().then();
+    getInviteWithdrawals().then();
   }, []);
 
   // 在 statusState 可用时获取充值信息
@@ -763,6 +827,11 @@ const TopUp = () => {
     setOpenTransfer(false);
   };
 
+  const handleWithdrawCancel = () => {
+    if (withdrawalSubmitting) return;
+    setOpenWithdraw(false);
+  };
+
   const handleOpenHistory = () => {
     setOpenHistory(true);
   };
@@ -853,6 +922,24 @@ const TopUp = () => {
         getQuotaPerUnit={getQuotaPerUnit}
         transferAmount={transferAmount}
         setTransferAmount={setTransferAmount}
+      />
+
+      <WithdrawRequestModal
+        t={t}
+        visible={openWithdraw}
+        onCancel={handleWithdrawCancel}
+        onSubmit={submitWithdrawal}
+        loading={withdrawalSubmitting}
+        amount={withdrawalAmount}
+        setAmount={setWithdrawalAmount}
+        receiptCode={withdrawalReceiptCode}
+        setReceiptCode={setWithdrawalReceiptCode}
+        userRemark={withdrawalRemark}
+        setUserRemark={setWithdrawalRemark}
+        currencySymbol={getCurrencyConfig().symbol}
+        availableAmountText={`${getCurrencyConfig().symbol}${Number(
+          quotaToDisplayAmount(userState?.user?.aff_quota || 0),
+        ).toFixed(2)}`}
       />
 
       {/* 充值确认模态框 */}
@@ -970,11 +1057,14 @@ const TopUp = () => {
           userState={userState}
           renderQuota={renderQuota}
           setOpenTransfer={setOpenTransfer}
+          setOpenWithdraw={setOpenWithdraw}
           affLink={affLink}
           handleAffLinkClick={handleAffLinkClick}
           inviteRecords={inviteDetails.invite_records}
           rebateRecords={inviteDetails.rebate_records}
           inviteDetailsLoading={inviteDetailsLoading}
+          withdrawalRecords={withdrawalRecords}
+          withdrawalRecordsLoading={withdrawalRecordsLoading}
         />
       </div>
     </div>

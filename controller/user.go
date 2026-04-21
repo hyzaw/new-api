@@ -23,6 +23,7 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -390,18 +391,18 @@ func GetSelf(c *gin.Context) {
 
 	// 构建响应数据，包含用户信息和权限
 	responseData := map[string]interface{}{
-		"id":                user.Id,
-		"username":          user.Username,
-		"display_name":      user.DisplayName,
-		"role":              user.Role,
-		"status":            user.Status,
-		"email":             user.Email,
-		"github_id":         user.GitHubId,
-		"discord_id":        user.DiscordId,
-		"oidc_id":           user.OidcId,
-		"wechat_id":         user.WeChatId,
-		"telegram_id":       user.TelegramId,
-		"group":             user.Group,
+		"id":           user.Id,
+		"username":     user.Username,
+		"display_name": user.DisplayName,
+		"role":         user.Role,
+		"status":       user.Status,
+		"email":        user.Email,
+		"github_id":    user.GitHubId,
+		"discord_id":   user.DiscordId,
+		"oidc_id":      user.OidcId,
+		"wechat_id":    user.WeChatId,
+		"telegram_id":  user.TelegramId,
+		"group":        user.Group,
 		"group_ratio": func() float64 {
 			ratio := ratio_setting.GetGroupRatio(user.Group)
 			if ratio <= 0 {
@@ -972,6 +973,65 @@ func ManageUser(c *gin.Context) {
 			}
 			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
 				fmt.Sprintf("管理员覆盖用户额度从 %s 为 %s", logger.LogQuota(oldQuota), logger.LogQuota(req.Value)), adminInfo)
+		default:
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+		})
+		return
+	case "add_aff_quota":
+		adminName := c.GetString("username")
+		adminId := c.GetInt("id")
+		adminInfo := map[string]interface{}{
+			"admin_id":       adminId,
+			"admin_username": adminName,
+		}
+		switch req.Mode {
+		case "add":
+			if req.Value <= 0 {
+				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
+				return
+			}
+			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Updates(map[string]any{
+				"aff_quota":   gorm.Expr("aff_quota + ?", req.Value),
+				"aff_history": gorm.Expr("aff_history + ?", req.Value),
+			}).Error; err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
+				fmt.Sprintf("管理员增加邀请余额 %s", logger.LogQuota(req.Value)), adminInfo)
+		case "subtract":
+			if req.Value <= 0 {
+				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
+				return
+			}
+			if user.AffQuota < req.Value {
+				common.ApiErrorMsg(c, "邀请余额不足，无法减少")
+				return
+			}
+			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("aff_quota", gorm.Expr("aff_quota - ?", req.Value)).Error; err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
+				fmt.Sprintf("管理员减少邀请余额 %s", logger.LogQuota(req.Value)), adminInfo)
+		case "override":
+			updates := map[string]any{
+				"aff_quota": req.Value,
+			}
+			if req.Value > user.AffHistoryQuota {
+				updates["aff_history"] = req.Value
+			}
+			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Updates(updates).Error; err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
+				fmt.Sprintf("管理员覆盖邀请余额从 %s 为 %s", logger.LogQuota(user.AffQuota), logger.LogQuota(req.Value)), adminInfo)
 		default:
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 			return

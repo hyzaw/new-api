@@ -138,6 +138,7 @@ export function getLucideIcon(key, selected = false) {
       return <CheckSquare {...commonProps} color={iconColor} />;
     case 'topup':
     case 'topup_orders':
+    case 'invite_withdrawals':
       return <CreditCard {...commonProps} color={iconColor} />;
     case 'channel':
       return <Layers {...commonProps} color={iconColor} />;

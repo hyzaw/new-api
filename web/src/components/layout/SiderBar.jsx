@@ -38,6 +38,7 @@ const routerMap = {
   topup: '/console/topup',
   topup_dashboard: '/console/topup-dashboard',
   topup_orders: '/console/topup-orders',
+  invite_withdrawals: '/console/invite-withdrawals',
   user: '/console/user',
   subscription: '/console/subscription',
   log: '/console/log',
@@ -171,6 +172,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('充值订单管理'),
         itemKey: 'topup_orders',
         to: '/topup-orders',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('邀请提现管理'),
+        itemKey: 'invite_withdrawals',
+        to: '/invite-withdrawals',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

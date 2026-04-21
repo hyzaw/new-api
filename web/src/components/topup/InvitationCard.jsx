@@ -31,7 +31,8 @@ import {
   Tag,
 } from '@douyinfe/semi-ui';
 import { Copy, Users, BarChart2, TrendingUp, Gift, Zap } from 'lucide-react';
-import { timestamp2string } from '../../helpers';
+import { getCurrencyConfig, timestamp2string } from '../../helpers';
+import { quotaToDisplayAmount } from '../../helpers/quota';
 
 const { Text } = Typography;
 
@@ -40,12 +41,18 @@ const InvitationCard = ({
   userState,
   renderQuota,
   setOpenTransfer,
+  setOpenWithdraw,
   affLink,
   handleAffLinkClick,
   inviteRecords,
   rebateRecords,
   inviteDetailsLoading,
+  withdrawalRecords,
+  withdrawalRecordsLoading,
 }) => {
+  const { symbol } = getCurrencyConfig();
+  const canWithdraw = quotaToDisplayAmount(userState?.user?.aff_quota || 0) >= 20;
+
   const inviteColumns = [
     {
       title: t('被邀请用户'),
@@ -131,6 +138,60 @@ const InvitationCard = ({
     },
   ];
 
+  const withdrawalColumns = [
+    {
+      title: t('提现金额'),
+      dataIndex: 'amount',
+      key: 'amount',
+      render: (value) => `${symbol}${Number(value || 0).toFixed(2)}`,
+    },
+    {
+      title: t('占用邀请额度'),
+      dataIndex: 'quota',
+      key: 'quota',
+      render: (value) => renderQuota(value || 0),
+    },
+    {
+      title: t('状态'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (value) => {
+        const statusConfig = {
+          pending: { color: 'orange', label: t('待处理') },
+          paid: { color: 'green', label: t('已打款') },
+          rejected: { color: 'red', label: t('已驳回') },
+        };
+        const config = statusConfig[value] || {
+          color: 'grey',
+          label: value || '-',
+        };
+        return (
+          <Tag color={config.color} shape='circle' size='small'>
+            {config.label}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t('申请时间'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (value) => (value ? timestamp2string(value) : '-'),
+    },
+    {
+      title: t('处理时间'),
+      dataIndex: 'processed_at',
+      key: 'processed_at',
+      render: (value) => (value ? timestamp2string(value) : '-'),
+    },
+    {
+      title: t('管理员备注'),
+      dataIndex: 'admin_remark',
+      key: 'admin_remark',
+      render: (value) => value || '-',
+    },
+  ];
+
   return (
     <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
@@ -168,20 +229,32 @@ const InvitationCard = ({
                   <Text strong style={{ color: 'white', fontSize: '16px' }}>
                     {t('收益统计')}
                   </Text>
-                  <Button
-                    type='primary'
-                    theme='solid'
-                    size='small'
-                    disabled={
-                      !userState?.user?.aff_quota ||
-                      userState?.user?.aff_quota <= 0
-                    }
-                    onClick={() => setOpenTransfer(true)}
-                    className='!rounded-lg'
-                  >
-                    <Zap size={12} className='mr-1' />
-                    {t('划转到余额')}
-                  </Button>
+                  <div className='flex items-center gap-2'>
+                    <Button
+                      theme='solid'
+                      type='warning'
+                      size='small'
+                      disabled={!canWithdraw}
+                      onClick={() => setOpenWithdraw(true)}
+                      className='!rounded-lg'
+                    >
+                      {t('申请提现')}
+                    </Button>
+                    <Button
+                      type='primary'
+                      theme='solid'
+                      size='small'
+                      disabled={
+                        !userState?.user?.aff_quota ||
+                        userState?.user?.aff_quota <= 0
+                      }
+                      onClick={() => setOpenTransfer(true)}
+                      className='!rounded-lg'
+                    >
+                      <Zap size={12} className='mr-1' />
+                      {t('划转到余额')}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* 统计数据 */}
@@ -365,6 +438,34 @@ const InvitationCard = ({
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={t('暂无返利记录')}
+              />
+            }
+          />
+        </Card>
+
+        <Card
+          className='!rounded-xl w-full'
+          title={
+            <div className='flex items-center justify-between'>
+              <Text>{t('提现申请记录')}</Text>
+              <Tag color='orange' shape='circle' size='small'>
+                {withdrawalRecords?.length || 0}
+              </Tag>
+            </div>
+          }
+        >
+          <Table
+            columns={withdrawalColumns}
+            dataSource={withdrawalRecords || []}
+            loading={withdrawalRecordsLoading}
+            pagination={false}
+            rowKey='id'
+            size='small'
+            scroll={{ y: 280, x: 860 }}
+            empty={
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('暂无提现申请记录')}
               />
             }
           />

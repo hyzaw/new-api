@@ -118,3 +118,50 @@ func TestManualRefundRollsBackInviteRebate(t *testing.T) {
 	assert.Equal(t, refund.InviteRebateDelta, reloadedTopUp.InviteRebateRefundedQuota)
 	assert.Equal(t, totalRebate/2, refund.InviteRebateDelta)
 }
+
+func TestManualRefundDeductsMainQuotaWhenInviteQuotaTransferred(t *testing.T) {
+	truncateTables(t)
+
+	originalRatio := common.TopUpAffRatio
+	t.Cleanup(func() {
+		common.TopUpAffRatio = originalRatio
+	})
+	common.TopUpAffRatio = 10
+
+	inviter := &User{Username: "transfer_inviter", Password: "password123", DisplayName: "transfer_inviter", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, AffCode: "aff_inviter_3"}
+	require.NoError(t, DB.Create(inviter).Error)
+
+	invitee := &User{Username: "transfer_invitee", Password: "password123", DisplayName: "transfer_invitee", Role: common.RoleCommonUser, Status: common.UserStatusEnabled, InviterId: inviter.Id, AffCode: "aff_invitee_3"}
+	require.NoError(t, DB.Create(invitee).Error)
+
+	topUp := &TopUp{
+		UserId:        invitee.Id,
+		Amount:        10,
+		Money:         10,
+		TradeNo:       "invite_topup_transfer_refund",
+		PaymentMethod: "alipay_f2f",
+		CreateTime:    common.GetTimestamp(),
+		Status:        common.TopUpStatusPending,
+	}
+	require.NoError(t, DB.Create(topUp).Error)
+
+	completed, err := ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1")
+	require.NoError(t, err)
+	require.True(t, completed)
+
+	reloadedTopUp := GetTopUpByTradeNo(topUp.TradeNo)
+	require.NotNil(t, reloadedTopUp)
+	totalRebate := reloadedTopUp.InviteRebateQuota
+
+	var reloadedInviter User
+	require.NoError(t, DB.First(&reloadedInviter, inviter.Id).Error)
+	require.NoError(t, reloadedInviter.TransferAffQuotaToQuota(totalRebate))
+
+	refund, err := MarkTopUpRefundManual(reloadedTopUp.Id, "5.00", "test refund after transfer", 1, "127.0.0.1")
+	require.NoError(t, err)
+
+	require.NoError(t, DB.First(&reloadedInviter, inviter.Id).Error)
+	assert.Equal(t, 0, reloadedInviter.AffQuota)
+	assert.Equal(t, totalRebate-refund.InviteRebateDelta, reloadedInviter.Quota)
+	assert.Equal(t, totalRebate-refund.InviteRebateDelta, reloadedInviter.AffHistoryQuota)
+}

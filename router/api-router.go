@@ -85,6 +85,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.DELETE("/passkey", controller.PasskeyDelete)
 				selfRoute.GET("/aff", controller.GetAffCode)
 				selfRoute.GET("/aff/details", controller.GetUserInviteDetails)
+				selfRoute.GET("/aff_withdrawals/self", controller.GetUserInviteWithdrawals)
 				selfRoute.GET("/topup/info", controller.GetTopUpInfo)
 				selfRoute.GET("/topup/self", controller.GetUserTopUps)
 				selfRoute.POST("/topup", middleware.CriticalRateLimit(), controller.TopUp)
@@ -97,6 +98,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/alipay_f2f/status", controller.AlipayF2FStatus)
 				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
+				selfRoute.POST("/aff_withdrawals", controller.CreateInviteWithdrawal)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
 				// 2FA routes
@@ -121,6 +123,8 @@ func SetApiRouter(router *gin.Engine) {
 				adminRoute.GET("/", controller.GetAllUsers)
 				adminRoute.GET("/topup", controller.GetAllTopUps)
 				adminRoute.GET("/topup/stats", controller.GetTopUpDashboardStats)
+				adminRoute.GET("/aff_withdrawals", controller.GetAllInviteWithdrawals)
+				adminRoute.POST("/aff_withdrawals/:id/review", controller.ReviewInviteWithdrawal)
 				adminRoute.POST("/topup/complete", controller.AdminCompleteTopUp)
 				adminRoute.GET("/topup/:id/refunds", controller.GetTopUpRefundsByAdmin)
 				adminRoute.POST("/topup/refund", controller.AdminRefundTopUp)

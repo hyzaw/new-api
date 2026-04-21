@@ -68,6 +68,7 @@ const EditUserModal = (props) => {
   const [adjustQuotaLocal, setAdjustQuotaLocal] = useState('');
   const [adjustAmountLocal, setAdjustAmountLocal] = useState('');
   const [adjustMode, setAdjustMode] = useState('add');
+  const [adjustTarget, setAdjustTarget] = useState('quota');
   const [adjustLoading, setAdjustLoading] = useState(false);
   const isMobile = useIsMobile();
   const [groupOptions, setGroupOptions] = useState([]);
@@ -92,9 +93,41 @@ const EditUserModal = (props) => {
     email: '',
     quota: 0,
     quota_amount: 0,
+    aff_quota: 0,
+    aff_quota_amount: 0,
+    aff_history_quota: 0,
     group: 'default',
     remark: '',
   });
+
+  const hydrateUserInputs = (data) => {
+    const nextData = { ...data };
+    nextData.password = '';
+    nextData.quota_amount = Number(
+      quotaToDisplayAmount(nextData.quota || 0).toFixed(6),
+    );
+    nextData.aff_quota_amount = Number(
+      quotaToDisplayAmount(nextData.aff_quota || 0).toFixed(6),
+    );
+    return { ...getInitValues(), ...nextData };
+  };
+
+  const getAdjustMeta = () => {
+    if (adjustTarget === 'aff_quota') {
+      return {
+        field: 'aff_quota',
+        action: 'add_aff_quota',
+        title: t('调整邀请余额'),
+        label: t('邀请余额'),
+      };
+    }
+    return {
+      field: 'quota',
+      action: 'add_quota',
+      title: t('调整额度'),
+      label: t('额度'),
+    };
+  };
 
   const fetchGroups = async () => {
     try {
@@ -113,11 +146,7 @@ const EditUserModal = (props) => {
     const res = await API.get(url);
     const { success, message, data } = res.data;
     if (success) {
-      data.password = '';
-      data.quota_amount = Number(
-        quotaToDisplayAmount(data.quota || 0).toFixed(6),
-      );
-      setInputs({ ...getInitValues(), ...data });
+      setInputs(hydrateUserInputs(data));
     } else {
       showError(message);
     }
@@ -150,6 +179,9 @@ const EditUserModal = (props) => {
     let payload = { ...values };
     delete payload.quota;
     delete payload.quota_amount;
+    delete payload.aff_quota;
+    delete payload.aff_quota_amount;
+    delete payload.aff_history_quota;
     if (userId) {
       payload.id = parseInt(userId);
     }
@@ -168,6 +200,7 @@ const EditUserModal = (props) => {
 
   /* --------------------- atomic quota adjust -------------------- */
   const adjustQuota = async () => {
+    const adjustMeta = getAdjustMeta();
     const quotaVal = parseInt(adjustQuotaLocal) || 0;
     if (quotaVal <= 0 && adjustMode !== 'override') return;
     if (adjustMode === 'override' && (adjustQuotaLocal === '' || adjustQuotaLocal == null)) return;
@@ -175,7 +208,7 @@ const EditUserModal = (props) => {
     try {
       const res = await API.post('/api/user/manage', {
         id: parseInt(userId),
-        action: 'add_quota',
+        action: adjustMeta.action,
         mode: adjustMode,
         value: adjustMode === 'override' ? quotaVal : Math.abs(quotaVal),
       });
@@ -187,12 +220,7 @@ const EditUserModal = (props) => {
         setAdjustAmountLocal('');
         const userRes = await API.get(`/api/user/${userId}`);
         if (userRes.data.success) {
-          const data = userRes.data.data;
-          data.password = '';
-          data.quota_amount = Number(
-            quotaToDisplayAmount(data.quota || 0).toFixed(6),
-          );
-          setInputs({ ...getInitValues(), ...data });
+          setInputs(hydrateUserInputs(userRes.data.data));
         }
         props.refresh();
       } else {
@@ -205,18 +233,19 @@ const EditUserModal = (props) => {
   };
 
   const getPreviewText = () => {
-    const current = formApiRef.current?.getValue('quota') || 0;
+    const adjustMeta = getAdjustMeta();
+    const current = formApiRef.current?.getValue(adjustMeta.field) || 0;
     const val = parseInt(adjustQuotaLocal) || 0;
     let result;
     switch (adjustMode) {
       case 'add':
         result = current + Math.abs(val);
-        return `${t('当前额度')}：${renderQuota(current)}，+${renderQuota(Math.abs(val))} = ${renderQuota(result)}`;
+        return `${t('当前')}${adjustMeta.label}：${renderQuota(current)}，+${renderQuota(Math.abs(val))} = ${renderQuota(result)}`;
       case 'subtract':
         result = current - Math.abs(val);
-        return `${t('当前额度')}：${renderQuota(current)}，-${renderQuota(Math.abs(val))} = ${renderQuota(result)}`;
+        return `${t('当前')}${adjustMeta.label}：${renderQuota(current)}，-${renderQuota(Math.abs(val))} = ${renderQuota(result)}`;
       case 'override':
-        return `${t('当前额度')}：${renderQuota(current)} → ${renderQuota(val)}`;
+        return `${t('当前')}${adjustMeta.label}：${renderQuota(current)} → ${renderQuota(val)}`;
       default:
         return '';
     }
@@ -371,7 +400,7 @@ const EditUserModal = (props) => {
                       <Col span={10}>
                         <Form.InputNumber
                           field='quota_amount'
-                          label={t('金额')}
+                          label={t('余额金额')}
                           prefix={getCurrencyConfig().symbol}
                           precision={6}
                           step={0.000001}
@@ -381,14 +410,49 @@ const EditUserModal = (props) => {
                       </Col>
 
                       <Col span={14}>
-                        <Form.Slot label={t('调整额度')}>
+                        <Form.Slot label={t('调整余额')}>
                           <Button
                             icon={<IconEdit />}
-                            onClick={() => setAdjustModalOpen(true)}
+                            onClick={() => {
+                              setAdjustTarget('quota');
+                              setAdjustModalOpen(true);
+                            }}
                           >
-                            {t('调整额度')}
+                            {t('调整余额')}
                           </Button>
                         </Form.Slot>
+                      </Col>
+
+                      <Col span={10}>
+                        <Form.InputNumber
+                          field='aff_quota_amount'
+                          label={t('邀请余额金额')}
+                          prefix={getCurrencyConfig().symbol}
+                          precision={6}
+                          step={0.000001}
+                          style={{ width: '100%' }}
+                          readonly
+                        />
+                      </Col>
+
+                      <Col span={14}>
+                        <Form.Slot label={t('调整邀请余额')}>
+                          <Button
+                            icon={<IconEdit />}
+                            onClick={() => {
+                              setAdjustTarget('aff_quota');
+                              setAdjustModalOpen(true);
+                            }}
+                          >
+                            {t('调整邀请余额')}
+                          </Button>
+                        </Form.Slot>
+                      </Col>
+
+                      <Col span={24}>
+                        <Text type='tertiary' size='small'>
+                          {t('邀请累计收益')}：{renderQuota(values.aff_history_quota || 0)}
+                        </Text>
                       </Col>
 
                       <Col span={24}>
@@ -404,8 +468,14 @@ const EditUserModal = (props) => {
                         <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
                           <Form.InputNumber
                             field='quota'
-                            label={t('额度')}
+                            label={t('余额额度')}
                             placeholder={t('请输入额度')}
+                            style={{ width: '100%' }}
+                            readonly
+                          />
+                          <Form.InputNumber
+                            field='aff_quota'
+                            label={t('邀请余额额度')}
                             style={{ width: '100%' }}
                             readonly
                           />
@@ -470,13 +540,14 @@ const EditUserModal = (props) => {
           setAdjustQuotaLocal('');
           setAdjustAmountLocal('');
           setAdjustMode('add');
+          setAdjustTarget('quota');
         }}
         confirmLoading={adjustLoading}
         closable={null}
         title={
           <div className='flex items-center'>
             <IconEdit className='mr-2' />
-            {t('调整额度')}
+            {getAdjustMeta().title}
           </div>
         }
       >

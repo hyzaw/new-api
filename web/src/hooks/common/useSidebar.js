@@ -54,6 +54,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     subscription: true,
     topup_dashboard: true,
     topup_orders: true,
+    invite_withdrawals: true,
     setting: true,
   },
 };

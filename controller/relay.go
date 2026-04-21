@@ -31,6 +31,29 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func applyGroupDelay(c *gin.Context, group string) *types.NewAPIError {
+	delay := operation_setting.GetGroupDelayDuration(group)
+	if delay <= 0 {
+		return nil
+	}
+
+	logger.LogInfo(c, fmt.Sprintf("apply group delay before upstream request: group=%s delay=%s", group, delay))
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-c.Request.Context().Done():
+		err := c.Request.Context().Err()
+		if err == nil {
+			err = errors.New("request cancelled during group delay")
+		}
+		return types.NewErrorWithStatusCode(err, types.ErrorCodeDoRequestFailed, http.StatusRequestTimeout, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
+}
+
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
 	switch info.RelayMode {
@@ -185,6 +208,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
+	delayApplied := false
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
 		relayInfo.RetryIndex = retryParam.GetRetry()
@@ -195,7 +219,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 
-		addUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
@@ -206,6 +229,16 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			}
 			break
 		}
+
+		if !delayApplied {
+			newAPIError = applyGroupDelay(c, relayInfo.UsingGroup)
+			if newAPIError != nil {
+				break
+			}
+			delayApplied = true
+		}
+
+		addUsedChannel(c, channel.Id)
 		c.Request.Body = io.NopCloser(bodyStorage)
 
 		switch relayFormat {
@@ -506,6 +539,7 @@ func RelayTask(c *gin.Context) {
 		ModelName:  relayInfo.OriginModelName,
 		Retry:      common.GetPointer(0),
 	}
+	delayApplied := false
 
 	for ; retryParam.GetRetry() <= common.RetryTimes; retryParam.IncreaseRetry() {
 		var channel *model.Channel
@@ -528,7 +562,6 @@ func RelayTask(c *gin.Context) {
 			}
 		}
 
-		addUsedChannel(c, channel.Id)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
@@ -538,6 +571,17 @@ func RelayTask(c *gin.Context) {
 			}
 			break
 		}
+
+		if !delayApplied {
+			taskRelayErr := applyGroupDelay(c, relayInfo.UsingGroup)
+			if taskRelayErr != nil {
+				taskErr = service.TaskErrorWrapperLocal(taskRelayErr.Err, string(taskRelayErr.GetErrorCode()), taskRelayErr.StatusCode)
+				break
+			}
+			delayApplied = true
+		}
+
+		addUsedChannel(c, channel.Id)
 		c.Request.Body = io.NopCloser(bodyStorage)
 
 		result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
