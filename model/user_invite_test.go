@@ -1,0 +1,87 @@
+package model
+
+import (
+	"testing"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestInsertIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
+	truncateTables(t)
+
+	originalQuotaForNewUser := common.QuotaForNewUser
+	originalQuotaForInvitee := common.QuotaForInvitee
+	originalQuotaForInviter := common.QuotaForInviter
+	t.Cleanup(func() {
+		common.QuotaForNewUser = originalQuotaForNewUser
+		common.QuotaForInvitee = originalQuotaForInvitee
+		common.QuotaForInviter = originalQuotaForInviter
+	})
+
+	common.QuotaForNewUser = 0
+	common.QuotaForInvitee = 0
+	common.QuotaForInviter = 0
+
+	inviter := &User{
+		Username:    "inviter_count_only",
+		Password:    "password123",
+		DisplayName: "inviter_count_only",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "aff_count_only",
+	}
+	require.NoError(t, DB.Create(inviter).Error)
+
+	invitee := &User{
+		Username:    "invitee_count_only",
+		Password:    "password123",
+		DisplayName: "invitee_count_only",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+	}
+	require.NoError(t, invitee.Insert(inviter.Id))
+
+	var reloadedInviter User
+	require.NoError(t, DB.First(&reloadedInviter, inviter.Id).Error)
+	assert.Equal(t, 1, reloadedInviter.AffCount)
+	assert.Equal(t, 0, reloadedInviter.AffQuota)
+	assert.Equal(t, 0, reloadedInviter.AffHistoryQuota)
+}
+
+func TestFinalizeOAuthUserCreationIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
+	truncateTables(t)
+
+	originalQuotaForInviter := common.QuotaForInviter
+	t.Cleanup(func() {
+		common.QuotaForInviter = originalQuotaForInviter
+	})
+	common.QuotaForInviter = 0
+
+	inviter := &User{
+		Username:    "oauth_inviter_count_only",
+		Password:    "password123",
+		DisplayName: "oauth_inviter_count_only",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "oauth_aff_count_only",
+	}
+	require.NoError(t, DB.Create(inviter).Error)
+
+	user := &User{
+		Username:    "oauth_invitee_count_only",
+		DisplayName: "oauth_invitee_count_only",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+	}
+	require.NoError(t, user.InsertWithTx(DB, inviter.Id))
+
+	user.FinalizeOAuthUserCreation(inviter.Id)
+
+	var reloadedInviter User
+	require.NoError(t, DB.First(&reloadedInviter, inviter.Id).Error)
+	assert.Equal(t, 1, reloadedInviter.AffCount)
+	assert.Equal(t, 0, reloadedInviter.AffQuota)
+	assert.Equal(t, 0, reloadedInviter.AffHistoryQuota)
+}

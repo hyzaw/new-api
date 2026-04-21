@@ -26,8 +26,12 @@ import {
   Input,
   Badge,
   Space,
+  Empty,
+  Table,
+  Tag,
 } from '@douyinfe/semi-ui';
 import { Copy, Users, BarChart2, TrendingUp, Gift, Zap } from 'lucide-react';
+import { timestamp2string } from '../../helpers';
 
 const { Text } = Typography;
 
@@ -38,7 +42,95 @@ const InvitationCard = ({
   setOpenTransfer,
   affLink,
   handleAffLinkClick,
+  inviteRecords,
+  rebateRecords,
+  inviteDetailsLoading,
 }) => {
+  const inviteColumns = [
+    {
+      title: t('被邀请用户'),
+      dataIndex: 'invitee_username',
+      key: 'invitee_username',
+      render: (_, record) => (
+        <div className='flex flex-col'>
+          <Text strong>{record.invitee_display_name || record.invitee_username}</Text>
+          <Text type='tertiary' size='small'>
+            {record.invitee_username || '-'}
+          </Text>
+        </div>
+      ),
+    },
+    {
+      title: t('邀请时间'),
+      dataIndex: 'invite_time',
+      key: 'invite_time',
+      render: (value) => (value ? timestamp2string(value) : '-'),
+    },
+  ];
+
+  const rebateColumns = [
+    {
+      title: t('充值用户'),
+      dataIndex: 'invitee_username',
+      key: 'invitee_username',
+      render: (_, record) => (
+        <div className='flex flex-col'>
+          <Text strong>{record.invitee_display_name || record.invitee_username}</Text>
+          <Text type='tertiary' size='small'>
+            {record.invitee_username || '-'}
+          </Text>
+        </div>
+      ),
+    },
+    {
+      title: t('返利时间'),
+      dataIndex: 'rebate_time',
+      key: 'rebate_time',
+      render: (value) => (value ? timestamp2string(value) : '-'),
+    },
+    {
+      title: t('支付金额'),
+      dataIndex: 'top_up_money',
+      key: 'top_up_money',
+      render: (value) => `¥${Number(value || 0).toFixed(2)}`,
+    },
+    {
+      title: t('充值额度'),
+      dataIndex: 'granted_quota',
+      key: 'granted_quota',
+      render: (value) => renderQuota(value || 0),
+    },
+    {
+      title: t('返利额度'),
+      dataIndex: 'rebate_quota',
+      key: 'rebate_quota',
+      render: (value) => renderQuota(value || 0),
+    },
+    {
+      title: t('已回退款'),
+      dataIndex: 'rebate_refunded_quota',
+      key: 'rebate_refunded_quota',
+      render: (value) =>
+        value > 0 ? (
+          <Tag color='orange' shape='circle' size='small'>
+            {renderQuota(value)}
+          </Tag>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      title: t('订单号'),
+      dataIndex: 'top_up_trade_no',
+      key: 'top_up_trade_no',
+      render: (value) => (
+        <Text copyable={!!value} ellipsis={{ showTooltip: true }}>
+          {value || '-'}
+        </Text>
+      ),
+    },
+  ];
+
   return (
     <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
@@ -220,6 +312,62 @@ const InvitationCard = ({
               </Text>
             </div>
           </div>
+        </Card>
+
+        <Card
+          className='!rounded-xl w-full'
+          title={
+            <div className='flex items-center justify-between'>
+              <Text>{t('邀请记录')}</Text>
+              <Tag color='green' shape='circle' size='small'>
+                {inviteRecords?.length || 0}
+              </Tag>
+            </div>
+          }
+        >
+          <Table
+            columns={inviteColumns}
+            dataSource={inviteRecords || []}
+            loading={inviteDetailsLoading}
+            pagination={false}
+            rowKey='detail_key'
+            size='small'
+            scroll={{ y: 260 }}
+            empty={
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('暂无邀请记录')}
+              />
+            }
+          />
+        </Card>
+
+        <Card
+          className='!rounded-xl w-full'
+          title={
+            <div className='flex items-center justify-between'>
+              <Text>{t('充值返利记录')}</Text>
+              <Tag color='blue' shape='circle' size='small'>
+                {rebateRecords?.length || 0}
+              </Tag>
+            </div>
+          }
+        >
+          <Table
+            columns={rebateColumns}
+            dataSource={rebateRecords || []}
+            loading={inviteDetailsLoading}
+            pagination={false}
+            rowKey='detail_key'
+            size='small'
+            scroll={{ y: 320, x: 860 }}
+            empty={
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('暂无返利记录')}
+              />
+            }
+          />
         </Card>
       </Space>
     </Card>

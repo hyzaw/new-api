@@ -267,6 +267,7 @@ func migrateDB() error {
 		&Midjourney{},
 		&TopUp{},
 		&TopUpRefund{},
+		&InviteDetail{},
 		&QuotaData{},
 		&Task{},
 		&Model{},
@@ -294,6 +295,9 @@ func migrateDB() error {
 			return err
 		}
 	}
+	if err := BackfillInviteDetails(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -316,6 +320,7 @@ func migrateDBFast() error {
 		{&Midjourney{}, "Midjourney"},
 		{&TopUp{}, "TopUp"},
 		{&TopUpRefund{}, "TopUpRefund"},
+		{&InviteDetail{}, "InviteDetail"},
 		{&QuotaData{}, "QuotaData"},
 		{&Task{}, "Task"},
 		{&Model{}, "Model"},
@@ -362,6 +367,9 @@ func migrateDBFast() error {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
 		}
+	}
+	if err := BackfillInviteDetails(); err != nil {
+		return err
 	}
 	common.SysLog("database migrated")
 	return nil

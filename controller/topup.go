@@ -123,6 +123,24 @@ func GetTopUpInfo(c *gin.Context) {
 	common.ApiSuccess(c, data)
 }
 
+func GetUserInviteDetails(c *gin.Context) {
+	userId := c.GetInt("id")
+	inviteRecords, err := model.GetInviteRecordsByInviterId(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	rebateRecords, err := model.GetInviteRebateRecordsByInviterId(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"invite_records": inviteRecords,
+		"rebate_records": rebateRecords,
+	})
+}
+
 type EpayRequest struct {
 	Amount        int64  `json:"amount"`
 	PaymentMethod string `json:"payment_method"`

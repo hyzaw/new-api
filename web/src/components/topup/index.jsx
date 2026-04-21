@@ -91,6 +91,11 @@ const TopUp = () => {
 
   // 邀请相关状态
   const [affLink, setAffLink] = useState('');
+  const [inviteDetails, setInviteDetails] = useState({
+    invite_records: [],
+    rebate_records: [],
+  });
+  const [inviteDetailsLoading, setInviteDetailsLoading] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [transferAmount, setTransferAmount] = useState(0);
 
@@ -568,6 +573,26 @@ const TopUp = () => {
     }
   };
 
+  const getInviteDetails = async () => {
+    setInviteDetailsLoading(true);
+    try {
+      const res = await API.get('/api/user/aff/details');
+      const { success, message, data } = res.data;
+      if (success) {
+        setInviteDetails({
+          invite_records: data.invite_records || [],
+          rebate_records: data.rebate_records || [],
+        });
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(t('邀请明细加载失败'));
+    } finally {
+      setInviteDetailsLoading(false);
+    }
+  };
+
   // 划转邀请额度
   const transfer = async () => {
     if (transferAmount < getQuotaPerUnit()) {
@@ -612,6 +637,7 @@ const TopUp = () => {
     if (affFetchedRef.current) return;
     affFetchedRef.current = true;
     getAffLink().then();
+    getInviteDetails().then();
   }, []);
 
   // 在 statusState 可用时获取充值信息
@@ -946,6 +972,9 @@ const TopUp = () => {
           setOpenTransfer={setOpenTransfer}
           affLink={affLink}
           handleAffLinkClick={handleAffLinkClick}
+          inviteRecords={inviteDetails.invite_records}
+          rebateRecords={inviteDetails.rebate_records}
+          inviteDetailsLoading={inviteDetailsLoading}
         />
       </div>
     </div>

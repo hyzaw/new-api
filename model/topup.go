@@ -122,7 +122,7 @@ func applyTopUpInviteRebateTx(tx *gorm.DB, topUp *TopUp) error {
 	}
 
 	var user User
-	if err := tx.Set("gorm:query_option", "FOR UPDATE").Select("id", "inviter_id").Where("id = ?", topUp.UserId).First(&user).Error; err != nil {
+	if err := tx.Set("gorm:query_option", "FOR UPDATE").Select("id", "inviter_id", "username", "display_name").Where("id = ?", topUp.UserId).First(&user).Error; err != nil {
 		return err
 	}
 	if user.InviterId == 0 {
@@ -147,13 +147,16 @@ func applyTopUpInviteRebateTx(tx *gorm.DB, topUp *TopUp) error {
 	topUp.InviteRebateRefundedQuota = 0
 	topUp.InviteRebateTime = common.GetTimestamp()
 
-	return tx.Model(topUp).Select(
+	if err := tx.Model(topUp).Select(
 		"invite_rebate_user_id",
 		"invite_rebate_ratio",
 		"invite_rebate_quota",
 		"invite_rebate_refunded_quota",
 		"invite_rebate_time",
-	).Updates(topUp).Error
+	).Updates(topUp).Error; err != nil {
+		return err
+	}
+	return syncInviteRebateDetailTx(tx, topUp, &user)
 }
 
 func applyTopUpInviteRebateRefundTx(tx *gorm.DB, topUp *TopUp, successfulRefundAmount decimal.Decimal, refund *TopUpRefund) error {
@@ -216,7 +219,10 @@ func applyTopUpInviteRebateRefundTx(tx *gorm.DB, topUp *TopUp, successfulRefundA
 	}
 
 	topUp.InviteRebateRefundedQuota = targetRefunded
-	return tx.Model(topUp).Update("invite_rebate_refunded_quota", targetRefunded).Error
+	if err := tx.Model(topUp).Update("invite_rebate_refunded_quota", targetRefunded).Error; err != nil {
+		return err
+	}
+	return syncInviteRebateDetailTx(tx, topUp, nil)
 }
 
 func finalizeSuccessfulTopUpTx(tx *gorm.DB, topUp *TopUp, extraUserUpdates map[string]any) (int, error) {
