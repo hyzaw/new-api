@@ -17,12 +17,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { API, showError } from '../../helpers';
 import { Card, Empty, Spin, Tooltip, Typography } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 const statusColorMap = {
   healthy: '#22c55e',
@@ -34,6 +34,58 @@ const statusColorMap = {
 const formatDateTime = (timestamp) => {
   if (!timestamp) return '--';
   return new Date(timestamp * 1000).toLocaleString();
+};
+
+const parseMonitorModelName = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return { groupName: 'default', modelName: '(unknown)' };
+  }
+
+  const separatorIndex = raw.indexOf('-');
+  if (separatorIndex <= 0) {
+    return { groupName: 'default', modelName: raw };
+  }
+
+  return {
+    groupName: raw.slice(0, separatorIndex) || 'default',
+    modelName: raw.slice(separatorIndex + 1) || '(unknown)',
+  };
+};
+
+const groupMonitorModels = (models) => {
+  const groups = [];
+  const groupMap = new Map();
+
+  (models || []).forEach((item) => {
+    const fullName = item?.model_name || '';
+    const { groupName, modelName } = parseMonitorModelName(fullName);
+    let group = groupMap.get(groupName);
+
+    if (!group) {
+      group = {
+        groupName,
+        items: [],
+      };
+      groupMap.set(groupName, group);
+      groups.push(group);
+    }
+
+    group.items.push({
+      ...item,
+      groupName,
+      fullName,
+      modelName,
+    });
+  });
+
+  groups.sort((a, b) => {
+    if (a.groupName === 'default') return -1;
+    if (b.groupName === 'default') return 1;
+    return a.groupName.localeCompare(b.groupName);
+  });
+
+  return groups;
 };
 
 const StatusDotsRow = ({ title, points }) => {
@@ -106,6 +158,10 @@ const StatusMonitorPage = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [monitor, setMonitor] = useState(null);
+  const groupedModels = useMemo(
+    () => groupMonitorModels(monitor?.models),
+    [monitor?.models],
+  );
 
   const fetchMonitor = useCallback(async () => {
     setLoading(true);
@@ -156,17 +212,33 @@ const StatusMonitorPage = () => {
                   />
                 </Card>
 
-                <Card bodyStyle={{ padding: 16 }}>
-                  <div className='flex flex-col gap-4'>
-                    {monitor.models.map((item) => (
-                      <StatusDotsRow
-                        key={item.model_name}
-                        title={item.model_name}
-                        points={item.points || []}
-                      />
-                    ))}
-                  </div>
-                </Card>
+                {groupedModels.map((group) => (
+                  <Card
+                    key={group.groupName}
+                    bodyStyle={{ padding: 16 }}
+                    title={
+                      <div
+                        style={{
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: 'var(--semi-color-text-0)',
+                        }}
+                      >
+                        {group.groupName}
+                      </div>
+                    }
+                  >
+                    <div className='flex flex-col gap-4'>
+                      {group.items.map((item) => (
+                        <StatusDotsRow
+                          key={item.fullName}
+                          title={item.modelName}
+                          points={item.points || []}
+                        />
+                      ))}
+                    </div>
+                  </Card>
+                ))}
               </div>
             )}
           </Spin>
