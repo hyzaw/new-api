@@ -100,6 +100,7 @@ const TopUp = () => {
     wallet_records: [],
   });
   const [inviteDetailsLoading, setInviteDetailsLoading] = useState(false);
+  const [inviteDetailsFetched, setInviteDetailsFetched] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [transferAmount, setTransferAmount] = useState(0);
   const [openWithdraw, setOpenWithdraw] = useState(false);
@@ -109,6 +110,7 @@ const TopUp = () => {
   const [withdrawalRemark, setWithdrawalRemark] = useState('');
   const [withdrawalRecords, setWithdrawalRecords] = useState([]);
   const [withdrawalRecordsLoading, setWithdrawalRecordsLoading] = useState(false);
+  const [withdrawalRecordsFetched, setWithdrawalRecordsFetched] = useState(false);
 
   // 账单Modal状态
   const [openHistory, setOpenHistory] = useState(false);
@@ -595,6 +597,8 @@ const TopUp = () => {
           rebate_records: data.rebate_records || [],
           wallet_records: data.wallet_records || [],
         });
+        setInviteDetailsFetched(true);
+        return true;
       } else {
         showError(message);
       }
@@ -603,6 +607,14 @@ const TopUp = () => {
     } finally {
       setInviteDetailsLoading(false);
     }
+    return false;
+  };
+
+  const ensureInviteDetailsLoaded = async () => {
+    if (inviteDetailsFetched || inviteDetailsLoading) {
+      return;
+    }
+    await getInviteDetails();
   };
 
   const getInviteWithdrawals = async () => {
@@ -612,6 +624,8 @@ const TopUp = () => {
       const { success, message, data } = res.data;
       if (success) {
         setWithdrawalRecords(data.items || []);
+        setWithdrawalRecordsFetched(true);
+        return true;
       } else {
         showError(message);
       }
@@ -620,6 +634,14 @@ const TopUp = () => {
     } finally {
       setWithdrawalRecordsLoading(false);
     }
+    return false;
+  };
+
+  const ensureInviteWithdrawalsLoaded = async () => {
+    if (withdrawalRecordsFetched || withdrawalRecordsLoading) {
+      return;
+    }
+    await getInviteWithdrawals();
   };
 
   // 划转邀请额度
@@ -636,6 +658,9 @@ const TopUp = () => {
       showSuccess(message);
       setOpenTransfer(false);
       getUserQuota().then();
+      if (inviteDetailsFetched) {
+        getInviteDetails().then();
+      }
     } else {
       showError(message);
     }
@@ -667,6 +692,9 @@ const TopUp = () => {
         setWithdrawalRemark('');
         getUserQuota().then();
         getInviteWithdrawals().then();
+        if (inviteDetailsFetched) {
+          getInviteDetails().then();
+        }
       } else {
         showError(message);
       }
@@ -702,8 +730,6 @@ const TopUp = () => {
     if (affFetchedRef.current) return;
     affFetchedRef.current = true;
     getAffLink().then();
-    getInviteDetails().then();
-    getInviteWithdrawals().then();
   }, []);
 
   // 在 statusState 可用时获取充值信息
@@ -1066,8 +1092,12 @@ const TopUp = () => {
           rebateRecords={inviteDetails.rebate_records}
           walletRecords={inviteDetails.wallet_records}
           inviteDetailsLoading={inviteDetailsLoading}
+          inviteDetailsFetched={inviteDetailsFetched}
+          onOpenInviteDetails={ensureInviteDetailsLoaded}
           withdrawalRecords={withdrawalRecords}
           withdrawalRecordsLoading={withdrawalRecordsLoading}
+          withdrawalRecordsFetched={withdrawalRecordsFetched}
+          onOpenWithdrawalRecords={ensureInviteWithdrawalsLoaded}
         />
       </div>
     </div>

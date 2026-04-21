@@ -29,6 +29,7 @@ import {
   Empty,
   Table,
   Tag,
+  Modal,
 } from '@douyinfe/semi-ui';
 import { Copy, Users, BarChart2, TrendingUp, Gift, Zap } from 'lucide-react';
 import { getCurrencyConfig, timestamp2string } from '../../helpers';
@@ -48,11 +49,16 @@ const InvitationCard = ({
   rebateRecords,
   walletRecords,
   inviteDetailsLoading,
+  inviteDetailsFetched,
+  onOpenInviteDetails,
   withdrawalRecords,
   withdrawalRecordsLoading,
+  withdrawalRecordsFetched,
+  onOpenWithdrawalRecords,
 }) => {
   const { symbol } = getCurrencyConfig();
   const canWithdraw = quotaToDisplayAmount(userState?.user?.aff_quota || 0) >= 20;
+  const [activeDetailModal, setActiveDetailModal] = React.useState('');
 
   const inviteColumns = [
     {
@@ -287,6 +293,88 @@ const InvitationCard = ({
     },
   ];
 
+  const detailConfigs = {
+    wallet: {
+      title: t('邀请余额流水'),
+      description: t('查看邀请余额的每次增加、减少和划转明细'),
+      tagColor: 'cyan',
+      countLabel: inviteDetailsFetched
+        ? String(walletRecords?.length || 0)
+        : t('按需加载'),
+      columns: walletColumns,
+      dataSource: walletRecords || [],
+      loading: inviteDetailsLoading,
+      rowKey: 'record_key',
+      scroll: { y: 420, x: 980 },
+      emptyText: t('暂无邀请余额流水'),
+    },
+    invites: {
+      title: t('邀请记录'),
+      description: t('查看什么时候邀请了哪些用户'),
+      tagColor: 'green',
+      countLabel: inviteDetailsFetched
+        ? String(inviteRecords?.length || 0)
+        : t('按需加载'),
+      columns: inviteColumns,
+      dataSource: inviteRecords || [],
+      loading: inviteDetailsLoading,
+      rowKey: 'detail_key',
+      scroll: { y: 420 },
+      emptyText: t('暂无邀请记录'),
+    },
+    rebates: {
+      title: t('充值返利记录'),
+      description: t('查看被邀请用户充值后产生的返利明细'),
+      tagColor: 'blue',
+      countLabel: inviteDetailsFetched
+        ? String(rebateRecords?.length || 0)
+        : t('按需加载'),
+      columns: rebateColumns,
+      dataSource: rebateRecords || [],
+      loading: inviteDetailsLoading,
+      rowKey: 'detail_key',
+      scroll: { y: 420, x: 860 },
+      emptyText: t('暂无返利记录'),
+    },
+    withdrawals: {
+      title: t('提现申请记录'),
+      description: t('查看每次提现申请状态和处理结果'),
+      tagColor: 'orange',
+      countLabel: withdrawalRecordsFetched
+        ? String(withdrawalRecords?.length || 0)
+        : t('按需加载'),
+      columns: withdrawalColumns,
+      dataSource: withdrawalRecords || [],
+      loading: withdrawalRecordsLoading,
+      rowKey: 'id',
+      scroll: { y: 420, x: 860 },
+      emptyText: t('暂无提现申请记录'),
+    },
+  };
+
+  const detailEntries = [
+    detailConfigs.wallet,
+    detailConfigs.invites,
+    detailConfigs.rebates,
+    detailConfigs.withdrawals,
+  ].map((item, index) => ({
+    key: ['wallet', 'invites', 'rebates', 'withdrawals'][index],
+    ...item,
+  }));
+
+  const currentDetailConfig = activeDetailModal
+    ? detailConfigs[activeDetailModal]
+    : null;
+
+  const handleOpenDetailModal = async (key) => {
+    setActiveDetailModal(key);
+    if (key === 'withdrawals') {
+      await onOpenWithdrawalRecords?.();
+      return;
+    }
+    await onOpenInviteDetails?.();
+  };
+
   return (
     <Card className='!rounded-2xl shadow-sm border-0'>
       {/* 卡片头部 */}
@@ -484,116 +572,63 @@ const InvitationCard = ({
 
         <Card
           className='!rounded-xl w-full'
-          title={
-            <div className='flex items-center justify-between'>
-              <Text>{t('邀请余额流水')}</Text>
-              <Tag color='cyan' shape='circle' size='small'>
-                {walletRecords?.length || 0}
-              </Tag>
-            </div>
-          }
+          title={<Text type='tertiary'>{t('邀请明细')}</Text>}
         >
-          <Table
-            columns={walletColumns}
-            dataSource={walletRecords || []}
-            loading={inviteDetailsLoading}
-            pagination={false}
-            rowKey='record_key'
-            size='small'
-            scroll={{ y: 320, x: 980 }}
-            empty={
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('暂无邀请余额流水')}
-              />
-            }
-          />
-        </Card>
-
-        <Card
-          className='!rounded-xl w-full'
-          title={
-            <div className='flex items-center justify-between'>
-              <Text>{t('邀请记录')}</Text>
-              <Tag color='green' shape='circle' size='small'>
-                {inviteRecords?.length || 0}
-              </Tag>
-            </div>
-          }
-        >
-          <Table
-            columns={inviteColumns}
-            dataSource={inviteRecords || []}
-            loading={inviteDetailsLoading}
-            pagination={false}
-            rowKey='detail_key'
-            size='small'
-            scroll={{ y: 260 }}
-            empty={
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('暂无邀请记录')}
-              />
-            }
-          />
-        </Card>
-
-        <Card
-          className='!rounded-xl w-full'
-          title={
-            <div className='flex items-center justify-between'>
-              <Text>{t('充值返利记录')}</Text>
-              <Tag color='blue' shape='circle' size='small'>
-                {rebateRecords?.length || 0}
-              </Tag>
-            </div>
-          }
-        >
-          <Table
-            columns={rebateColumns}
-            dataSource={rebateRecords || []}
-            loading={inviteDetailsLoading}
-            pagination={false}
-            rowKey='detail_key'
-            size='small'
-            scroll={{ y: 320, x: 860 }}
-            empty={
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('暂无返利记录')}
-              />
-            }
-          />
-        </Card>
-
-        <Card
-          className='!rounded-xl w-full'
-          title={
-            <div className='flex items-center justify-between'>
-              <Text>{t('提现申请记录')}</Text>
-              <Tag color='orange' shape='circle' size='small'>
-                {withdrawalRecords?.length || 0}
-              </Tag>
-            </div>
-          }
-        >
-          <Table
-            columns={withdrawalColumns}
-            dataSource={withdrawalRecords || []}
-            loading={withdrawalRecordsLoading}
-            pagination={false}
-            rowKey='id'
-            size='small'
-            scroll={{ y: 280, x: 860 }}
-            empty={
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t('暂无提现申请记录')}
-              />
-            }
-          />
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+            {detailEntries.map((item) => (
+              <div
+                key={item.key}
+                className='rounded-2xl border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] p-4'
+              >
+                <div className='flex items-start justify-between gap-3'>
+                  <div>
+                    <Text strong>{item.title}</Text>
+                    <div className='mt-1 text-xs text-[var(--semi-color-text-2)]'>
+                      {item.description}
+                    </div>
+                  </div>
+                  <Tag color={item.tagColor} shape='circle' size='small'>
+                    {item.countLabel}
+                  </Tag>
+                </div>
+                <Button
+                  theme='light'
+                  type='primary'
+                  className='!rounded-lg mt-4'
+                  onClick={() => handleOpenDetailModal(item.key)}
+                >
+                  {t('点击查看')}
+                </Button>
+              </div>
+            ))}
+          </div>
         </Card>
       </Space>
+
+      <Modal
+        title={currentDetailConfig?.title || t('邀请明细')}
+        visible={!!activeDetailModal}
+        onCancel={() => setActiveDetailModal('')}
+        footer={null}
+        size='large'
+        centered
+      >
+        <Table
+          columns={currentDetailConfig?.columns || []}
+          dataSource={currentDetailConfig?.dataSource || []}
+          loading={currentDetailConfig?.loading}
+          pagination={false}
+          rowKey={currentDetailConfig?.rowKey || 'id'}
+          size='small'
+          scroll={currentDetailConfig?.scroll}
+          empty={
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={currentDetailConfig?.emptyText || t('暂无数据')}
+            />
+          }
+        />
+      </Modal>
     </Card>
   );
 };
