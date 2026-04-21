@@ -40,7 +40,6 @@ import {
   buildAssertionResult,
   isPasskeySupported,
 } from '../../helpers';
-import Turnstile from 'react-turnstile';
 import {
   Button,
   Checkbox,
@@ -83,9 +82,6 @@ const LoginForm = () => {
   const [searchParams] = useSearchParams();
   const [, userDispatch] = useContext(UserContext);
   const [statusState] = useContext(StatusContext);
-  const [turnstileEnabled, setTurnstileEnabled] = useState(false);
-  const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
-  const [turnstileToken, setTurnstileToken] = useState('');
   const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [wechatLoading, setWechatLoading] = useState(false);
@@ -152,11 +148,6 @@ const LoginForm = () => {
   );
 
   useEffect(() => {
-    if (status?.turnstile_check) {
-      setTurnstileEnabled(true);
-      setTurnstileSiteKey(status.turnstile_site_key);
-    }
-
     // 从 status 获取用户协议和隐私政策的启用状态
     setHasUserAgreement(status?.user_agreement_enabled || false);
     setHasPrivacyPolicy(status?.privacy_policy_enabled || false);
@@ -191,10 +182,6 @@ const LoginForm = () => {
   };
 
   const onSubmitWeChatVerificationCode = async () => {
-    if (turnstileEnabled && turnstileToken === '') {
-      showInfo('请稍后几秒重试，Turnstile 正在检查用户环境！');
-      return;
-    }
     setWechatCodeSubmitLoading(true);
     try {
       const res = await API.get(
@@ -228,20 +215,13 @@ const LoginForm = () => {
       showInfo(t('请先阅读并同意用户协议和隐私政策'));
       return;
     }
-    if (turnstileEnabled && turnstileToken === '') {
-      showInfo('请稍后几秒重试，Turnstile 正在检查用户环境！');
-      return;
-    }
     setLoginLoading(true);
     try {
       if (username && password) {
-        const res = await API.post(
-          `/api/user/login?turnstile=${turnstileToken}`,
-          {
-            username,
-            password,
-          },
-        );
+        const res = await API.post(`/api/user/login`, {
+          username,
+          password,
+        });
         const { success, message, data } = res.data;
         if (success) {
           // 检查是否需要2FA验证
@@ -931,18 +911,6 @@ const LoginForm = () => {
       panelTitle={t('稳定的模型 Token 供应与调用入口')}
       panelDescription={t('面向客户提供模型额度充值、Token 分发与统一调用。')}
       highlights={authHighlights}
-      turnstile={
-        turnstileEnabled ? (
-          <div className='flex justify-center'>
-            <Turnstile
-              sitekey={turnstileSiteKey}
-              onVerify={(token) => {
-                setTurnstileToken(token);
-              }}
-            />
-          </div>
-        ) : null
-      }
     >
       {showEmailLogin || !hasOAuthLoginOptions
         ? renderEmailLoginForm()

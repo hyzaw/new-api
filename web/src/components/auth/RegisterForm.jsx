@@ -192,10 +192,6 @@ const RegisterForm = () => {
   };
 
   const onSubmitWeChatVerificationCode = async () => {
-    if (turnstileEnabled && turnstileToken === '') {
-      showInfo('请稍后几秒重试，Turnstile 正在检查用户环境！');
-      return;
-    }
     setWechatCodeSubmitLoading(true);
     try {
       const res = await API.get(
@@ -234,20 +230,13 @@ const RegisterForm = () => {
       return;
     }
     if (username && password) {
-      if (turnstileEnabled && turnstileToken === '') {
-        showInfo('请稍后几秒重试，Turnstile 正在检查用户环境！');
-        return;
-      }
       setRegisterLoading(true);
       try {
         if (!affCode) {
           affCode = localStorage.getItem('aff');
         }
         inputs.aff_code = affCode;
-        const res = await API.post(
-          `/api/user/register?turnstile=${turnstileToken}`,
-          inputs,
-        );
+        const res = await API.post(`/api/user/register`, inputs);
         const { success, message } = res.data;
         if (success) {
           navigate('/login');
@@ -607,6 +596,7 @@ const RegisterForm = () => {
                         </Button>
                       }
                     />
+                    {renderTurnstileBlock()}
                     <Form.Input
                       field='verification_code'
                       label={t('验证码')}
@@ -746,6 +736,26 @@ const RegisterForm = () => {
     );
   };
 
+  const renderTurnstileBlock = () => {
+    if (!turnstileEnabled) {
+      return null;
+    }
+
+    return (
+      <div className='auth-turnstile-panel'>
+        <div className='auth-turnstile-label'>Turnstile</div>
+        <div className='auth-turnstile-widget'>
+          <Turnstile
+            sitekey={turnstileSiteKey}
+            onVerify={(token) => {
+              setTurnstileToken(token);
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <AuthShell
       brandLogo={logo}
@@ -754,18 +764,6 @@ const RegisterForm = () => {
       panelTitle={t('为客户开通模型 Token 与充值能力')}
       panelDescription={t('注册后即可进入控制台，充值额度、创建令牌并开始调用模型。')}
       highlights={authHighlights}
-      turnstile={
-        turnstileEnabled ? (
-          <div className='flex justify-center'>
-            <Turnstile
-              sitekey={turnstileSiteKey}
-              onVerify={(token) => {
-                setTurnstileToken(token);
-              }}
-            />
-          </div>
-        ) : null
-      }
     >
       {showEmailRegister || !hasOAuthRegisterOptions
         ? renderEmailRegisterForm()

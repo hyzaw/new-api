@@ -30,7 +30,6 @@ export function AuthShell({
   panelDescription,
   highlights,
   children,
-  turnstile,
 }) {
   return (
     <div className='auth-business-shell min-h-screen overflow-hidden px-4 py-10 sm:px-6 lg:px-8'>
@@ -65,7 +64,6 @@ export function AuthShell({
         </div>
         <div className='relative z-[1] mx-auto flex w-full max-w-md flex-col gap-5'>
           {children}
-          {turnstile}
         </div>
       </div>
     </div>
