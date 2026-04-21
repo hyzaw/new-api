@@ -53,24 +53,29 @@ type TopUpRefundSummary struct {
 }
 
 type AdminTopUpItem struct {
-	Id                     int     `json:"id"`
-	UserId                 int     `json:"user_id"`
-	Username               string  `json:"username"`
-	Amount                 int64   `json:"amount"`
-	Money                  float64 `json:"money"`
-	TradeNo                string  `json:"trade_no"`
-	PaymentMethod          string  `json:"payment_method"`
-	CreateTime             int64   `json:"create_time"`
-	CompleteTime           int64   `json:"complete_time"`
-	Status                 string  `json:"status"`
-	RefundCount            int     `json:"refund_count"`
-	RequestedRefundAmount  float64 `json:"requested_refund_amount"`
-	SuccessfulRefundAmount float64 `json:"successful_refund_amount"`
-	PendingRefundAmount    float64 `json:"pending_refund_amount"`
-	RefundableAmount       float64 `json:"refundable_amount"`
-	RefundStatus           string  `json:"refund_status"`
-	CanRefund              bool    `json:"can_refund"`
-	CanManualRefund        bool    `json:"can_manual_refund"`
+	Id                        int     `json:"id"`
+	UserId                    int     `json:"user_id"`
+	Username                  string  `json:"username"`
+	Amount                    int64   `json:"amount"`
+	GrantedQuota              int     `json:"granted_quota"`
+	Money                     float64 `json:"money"`
+	TradeNo                   string  `json:"trade_no"`
+	PaymentMethod             string  `json:"payment_method"`
+	CreateTime                int64   `json:"create_time"`
+	CompleteTime              int64   `json:"complete_time"`
+	Status                    string  `json:"status"`
+	InviteRebateUserId        int     `json:"invite_rebate_user_id"`
+	InviteRebateQuota         int     `json:"invite_rebate_quota"`
+	InviteRebateRefundedQuota int     `json:"invite_rebate_refunded_quota"`
+	InviteRebateTime          int64   `json:"invite_rebate_time"`
+	RefundCount               int     `json:"refund_count"`
+	RequestedRefundAmount     float64 `json:"requested_refund_amount"`
+	SuccessfulRefundAmount    float64 `json:"successful_refund_amount"`
+	PendingRefundAmount       float64 `json:"pending_refund_amount"`
+	RefundableAmount          float64 `json:"refundable_amount"`
+	RefundStatus              string  `json:"refund_status"`
+	CanRefund                 bool    `json:"can_refund"`
+	CanManualRefund           bool    `json:"can_manual_refund"`
 }
 
 type TopUpRefundFinalizePayload struct {
@@ -248,22 +253,27 @@ func BuildAdminTopUpItems(topups []*TopUp) ([]*AdminTopUpItem, error) {
 		}
 
 		items = append(items, &AdminTopUpItem{
-			Id:                     topUp.Id,
-			UserId:                 topUp.UserId,
-			Username:               username,
-			Amount:                 topUp.Amount,
-			Money:                  topUp.Money,
-			TradeNo:                topUp.TradeNo,
-			PaymentMethod:          topUp.PaymentMethod,
-			CreateTime:             topUp.CreateTime,
-			CompleteTime:           topUp.CompleteTime,
-			Status:                 topUp.Status,
-			RefundCount:            summary.RefundCount,
-			RequestedRefundAmount:  decimalFromFloatMoney(summary.RequestedAmount).InexactFloat64(),
-			SuccessfulRefundAmount: decimalFromFloatMoney(summary.SuccessfulAmount).InexactFloat64(),
-			PendingRefundAmount:    decimalFromFloatMoney(summary.PendingAmount).InexactFloat64(),
-			RefundableAmount:       refundableAmount.InexactFloat64(),
-			RefundStatus:           refundStatus,
+			Id:                        topUp.Id,
+			UserId:                    topUp.UserId,
+			Username:                  username,
+			Amount:                    topUp.Amount,
+			GrantedQuota:              getTopUpGrantedQuota(topUp),
+			Money:                     topUp.Money,
+			TradeNo:                   topUp.TradeNo,
+			PaymentMethod:             topUp.PaymentMethod,
+			CreateTime:                topUp.CreateTime,
+			CompleteTime:              topUp.CompleteTime,
+			Status:                    topUp.Status,
+			InviteRebateUserId:        topUp.InviteRebateUserId,
+			InviteRebateQuota:         topUp.InviteRebateQuota,
+			InviteRebateRefundedQuota: topUp.InviteRebateRefundedQuota,
+			InviteRebateTime:          topUp.InviteRebateTime,
+			RefundCount:               summary.RefundCount,
+			RequestedRefundAmount:     decimalFromFloatMoney(summary.RequestedAmount).InexactFloat64(),
+			SuccessfulRefundAmount:    decimalFromFloatMoney(summary.SuccessfulAmount).InexactFloat64(),
+			PendingRefundAmount:       decimalFromFloatMoney(summary.PendingAmount).InexactFloat64(),
+			RefundableAmount:          refundableAmount.InexactFloat64(),
+			RefundStatus:              refundStatus,
 			CanRefund: topUp.PaymentMethod == "alipay_f2f" &&
 				topUp.Status == common.TopUpStatusSuccess &&
 				refundableAmount.GreaterThan(decimal.Zero),

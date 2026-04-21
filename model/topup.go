@@ -134,9 +134,18 @@ func applyTopUpInviteRebateTx(tx *gorm.DB, topUp *TopUp) error {
 		return nil
 	}
 
-	if err := tx.Model(&User{}).Where("id = ?", user.InviterId).Updates(map[string]any{
-		"aff_quota":   gorm.Expr("aff_quota + ?", rebateQuota),
-		"aff_history": gorm.Expr("aff_history + ?", rebateQuota),
+	var inviter User
+	if err := tx.Set("gorm:query_option", "FOR UPDATE").
+		Select("id", "username", "quota", "aff_quota", "aff_history").
+		Where("id = ?", user.InviterId).
+		First(&inviter).Error; err != nil {
+		return err
+	}
+	inviter.AffQuota += rebateQuota
+	inviter.AffHistoryQuota += rebateQuota
+	if err := tx.Model(&User{}).Where("id = ?", inviter.Id).Updates(map[string]any{
+		"aff_quota":   inviter.AffQuota,
+		"aff_history": inviter.AffHistoryQuota,
 	}).Error; err != nil {
 		return err
 	}
@@ -156,7 +165,10 @@ func applyTopUpInviteRebateTx(tx *gorm.DB, topUp *TopUp) error {
 	).Updates(topUp).Error; err != nil {
 		return err
 	}
-	return syncInviteRebateDetailTx(tx, topUp, &user)
+	if err := syncInviteRebateDetailTx(tx, topUp, &user); err != nil {
+		return err
+	}
+	return syncTopUpInviteRebateWalletRecordTx(tx, topUp, &user, &inviter)
 }
 
 func applyTopUpInviteRebateRefundTx(tx *gorm.DB, topUp *TopUp, successfulRefundAmount decimal.Decimal, refund *TopUpRefund) error {
@@ -214,7 +226,11 @@ func applyTopUpInviteRebateRefundTx(tx *gorm.DB, topUp *TopUp, successfulRefundA
 		inviter.AffHistoryQuota = 0
 	}
 	inviter.Quota -= deductFromQuota
-	if err := tx.Save(&inviter).Error; err != nil {
+	if err := tx.Model(&User{}).Where("id = ?", inviter.Id).Updates(map[string]any{
+		"aff_quota":   inviter.AffQuota,
+		"aff_history": inviter.AffHistoryQuota,
+		"quota":       inviter.Quota,
+	}).Error; err != nil {
 		return err
 	}
 
@@ -222,7 +238,10 @@ func applyTopUpInviteRebateRefundTx(tx *gorm.DB, topUp *TopUp, successfulRefundA
 	if err := tx.Model(topUp).Update("invite_rebate_refunded_quota", targetRefunded).Error; err != nil {
 		return err
 	}
-	return syncInviteRebateDetailTx(tx, topUp, nil)
+	if err := syncInviteRebateDetailTx(tx, topUp, nil); err != nil {
+		return err
+	}
+	return syncTopUpInviteRebateRefundWalletRecordTx(tx, topUp, nil, refund, &inviter, deductFromAff, deductFromQuota)
 }
 
 func finalizeSuccessfulTopUpTx(tx *gorm.DB, topUp *TopUp, extraUserUpdates map[string]any) (int, error) {

@@ -46,6 +46,7 @@ const InvitationCard = ({
   handleAffLinkClick,
   inviteRecords,
   rebateRecords,
+  walletRecords,
   inviteDetailsLoading,
   withdrawalRecords,
   withdrawalRecordsLoading,
@@ -135,6 +136,100 @@ const InvitationCard = ({
           {value || '-'}
         </Text>
       ),
+    },
+  ];
+
+  const walletChangeTypeLabelMap = {
+    invite_reward: t('邀请奖励'),
+    topup_rebate: t('充值返利'),
+    topup_rebate_refund: t('返利退款回退'),
+    transfer_out: t('划转到余额'),
+    withdrawal_apply: t('申请提现'),
+    withdrawal_reject_return: t('提现驳回退回'),
+    admin_add: t('管理员增加'),
+    admin_subtract: t('管理员减少'),
+    admin_override: t('管理员覆盖'),
+  };
+
+  const renderDeltaTag = (value, positiveColor = 'green') => {
+    if (!value) {
+      return '-';
+    }
+    const isPositive = value > 0;
+    return (
+      <Tag color={isPositive ? positiveColor : 'red'} shape='circle' size='small'>
+        {(isPositive ? '+' : '') + renderQuota(value)}
+      </Tag>
+    );
+  };
+
+  const walletColumns = [
+    {
+      title: t('类型'),
+      dataIndex: 'change_type',
+      key: 'change_type',
+      render: (value) => (
+        <Tag color='blue' shape='circle' size='small'>
+          {walletChangeTypeLabelMap[value] || value || '-'}
+        </Tag>
+      ),
+    },
+    {
+      title: t('关联用户'),
+      dataIndex: 'invitee_username',
+      key: 'invitee_username',
+      render: (_, record) =>
+        record.invitee_id ? (
+          <div className='flex flex-col'>
+            <Text strong>{record.invitee_display_name || record.invitee_username}</Text>
+            <Text type='tertiary' size='small'>
+              {record.invitee_username || '-'}
+            </Text>
+          </div>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      title: t('邀请余额变动'),
+      dataIndex: 'aff_quota_delta',
+      key: 'aff_quota_delta',
+      render: (value) => renderDeltaTag(value, 'green'),
+    },
+    {
+      title: t('主余额变动'),
+      dataIndex: 'quota_delta',
+      key: 'quota_delta',
+      render: (value) => renderDeltaTag(value, 'cyan'),
+    },
+    {
+      title: t('关联单号'),
+      key: 'related_key',
+      render: (_, record) => {
+        if (record.top_up_trade_no) {
+          return (
+            <Text copyable ellipsis={{ showTooltip: true }}>
+              {record.top_up_trade_no}
+            </Text>
+          );
+        }
+        if (record.withdrawal_id) {
+          return <Text>#{record.withdrawal_id}</Text>;
+        }
+        return '-';
+      },
+    },
+    {
+      title: t('备注'),
+      dataIndex: 'remark',
+      key: 'remark',
+      render: (value) => value || '-',
+    },
+    {
+      title: t('时间'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (value) => (value ? timestamp2string(value) : '-'),
     },
   ];
 
@@ -385,6 +480,34 @@ const InvitationCard = ({
               </Text>
             </div>
           </div>
+        </Card>
+
+        <Card
+          className='!rounded-xl w-full'
+          title={
+            <div className='flex items-center justify-between'>
+              <Text>{t('邀请余额流水')}</Text>
+              <Tag color='cyan' shape='circle' size='small'>
+                {walletRecords?.length || 0}
+              </Tag>
+            </div>
+          }
+        >
+          <Table
+            columns={walletColumns}
+            dataSource={walletRecords || []}
+            loading={inviteDetailsLoading}
+            pagination={false}
+            rowKey='record_key'
+            size='small'
+            scroll={{ y: 320, x: 980 }}
+            empty={
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t('暂无邀请余额流水')}
+              />
+            }
+          />
         </Card>
 
         <Card

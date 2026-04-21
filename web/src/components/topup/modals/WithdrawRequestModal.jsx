@@ -28,7 +28,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { showError } from '../../../helpers';
 
-const MAX_RECEIPT_SIZE = 300 * 1024;
+const MAX_RECEIPT_SIZE = 5 * 1024 * 1024;
 const { Text } = Typography;
 
 const WithdrawRequestModal = ({
@@ -57,7 +57,7 @@ const WithdrawRequestModal = ({
       return;
     }
     if (file.size > MAX_RECEIPT_SIZE) {
-      showError(t('收款码图片不能超过 300KB'));
+      showError(t('收款码图片不能超过 5MB'));
       e.target.value = '';
       return;
     }
@@ -126,7 +126,7 @@ const WithdrawRequestModal = ({
           </div>
           <div className='mt-2'>
             <Text type='tertiary' size='small'>
-              {t('支持 PNG / JPG / WebP，建议控制在 300KB 内')}
+              {t('支持 PNG / JPG / WebP，单张不超过 5MB')}
             </Text>
           </div>
           {receiptCode && (

@@ -46,6 +46,7 @@ import {
   timestamp2string,
 } from '../../../helpers';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
+import InviteOverviewDetails from '../../invite/InviteOverviewDetails';
 
 const { Text, Title } = Typography;
 
@@ -85,6 +86,8 @@ const InviteWithdrawalsPage = () => {
   const [currentItem, setCurrentItem] = useState(null);
   const [reviewAction, setReviewAction] = useState('paid');
   const [adminRemark, setAdminRemark] = useState('');
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailOverview, setDetailOverview] = useState(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -127,11 +130,36 @@ const InviteWithdrawalsPage = () => {
     setActivePage(1);
   };
 
+  const loadInviteOverview = async (userId) => {
+    if (!userId) {
+      setDetailOverview(null);
+      return;
+    }
+    setDetailLoading(true);
+    try {
+      const res = await API.get(`/api/user/${userId}/invite-overview`);
+      const { success, message, data } = res.data;
+      if (success) {
+        setDetailOverview(data || null);
+      } else {
+        showError(message || t('加载邀请明细失败'));
+        setDetailOverview(null);
+      }
+    } catch (error) {
+      showError(t('加载邀请明细失败'));
+      setDetailOverview(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const openReviewModal = (item, action) => {
     setCurrentItem(item);
     setReviewAction(action);
     setAdminRemark('');
+    setDetailOverview(null);
     setReviewVisible(true);
+    loadInviteOverview(item?.user_id).then();
   };
 
   const closeReviewModal = () => {
@@ -140,6 +168,7 @@ const InviteWithdrawalsPage = () => {
     setCurrentItem(null);
     setAdminRemark('');
     setReviewAction('paid');
+    setDetailOverview(null);
   };
 
   const handleReview = async () => {
@@ -211,6 +240,12 @@ const InviteWithdrawalsPage = () => {
         title: t('管理员备注'),
         dataIndex: 'admin_remark',
         key: 'admin_remark',
+        render: (value) => value || '-',
+      },
+      {
+        title: t('处理人'),
+        dataIndex: 'operator_name',
+        key: 'operator_name',
         render: (value) => value || '-',
       },
       {
@@ -364,7 +399,7 @@ const InviteWithdrawalsPage = () => {
         confirmLoading={reviewSubmitting}
         okText={reviewAction === 'paid' ? t('确认打款') : t('确认驳回')}
         cancelText={t('取消')}
-        size={isMobile ? 'full-width' : 'medium'}
+        size='full-width'
       >
         {currentItem && (
           <div className='flex flex-col gap-4'>
@@ -403,6 +438,12 @@ const InviteWithdrawalsPage = () => {
                 placeholder={t('可选，填写处理说明')}
               />
             </div>
+
+            <InviteOverviewDetails
+              t={t}
+              loading={detailLoading}
+              overview={detailOverview}
+            />
           </div>
         )}
       </Modal>

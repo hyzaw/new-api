@@ -340,15 +340,27 @@ func HardDeleteUserById(id int) error {
 	return err
 }
 
-func inviteUser(inviterId int) (err error) {
+func inviteUser(inviterId int, invitee *User) (err error) {
 	user, err := GetUserById(inviterId, true)
 	if err != nil {
 		return err
 	}
+	now := common.GetTimestamp()
 	user.AffCount++
 	user.AffQuota += common.QuotaForInviter
 	user.AffHistoryQuota += common.QuotaForInviter
-	return DB.Save(user).Error
+	if err = DB.Save(user).Error; err != nil {
+		return err
+	}
+	if invitee != nil {
+		if err = SyncInviteRegistrationDetail(inviterId, invitee, now); err != nil {
+			return err
+		}
+		if err = syncInviteRewardWalletRecordTx(DB, inviterId, invitee, common.QuotaForInviter, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
@@ -383,9 +395,16 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 	if err := tx.Save(user).Error; err != nil {
 		return err
 	}
+	if err := createTransferInviteWalletRecordTx(tx, user, quota, common.GetTimestamp()); err != nil {
+		return err
+	}
 
 	// 提交事务
-	return tx.Commit().Error
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+	RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("划转邀请余额 %s 到账户余额", logger.LogQuota(quota)))
+	return nil
 }
 
 func (user *User) Insert(inviterId int) error {
@@ -439,8 +458,7 @@ func (user *User) Insert(inviterId int) error {
 			//_ = IncreaseUserQuota(inviterId, common.QuotaForInviter)
 			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
 		}
-		_ = inviteUser(inviterId)
-		_ = SyncInviteRegistrationDetail(inviterId, user, common.GetTimestamp())
+		_ = inviteUser(inviterId, user)
 	}
 	return nil
 }
@@ -500,8 +518,7 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 		if common.QuotaForInviter > 0 {
 			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
 		}
-		_ = inviteUser(inviterId)
-		_ = SyncInviteRegistrationDetail(inviterId, user, common.GetTimestamp())
+		_ = inviteUser(inviterId, user)
 	}
 }
 

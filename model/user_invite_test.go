@@ -48,6 +48,10 @@ func TestInsertIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
 	assert.Equal(t, 1, reloadedInviter.AffCount)
 	assert.Equal(t, 0, reloadedInviter.AffQuota)
 	assert.Equal(t, 0, reloadedInviter.AffHistoryQuota)
+
+	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
+	require.NoError(t, err)
+	assert.Len(t, records, 0)
 }
 
 func TestFinalizeOAuthUserCreationIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
@@ -84,4 +88,8 @@ func TestFinalizeOAuthUserCreationIncreasesAffCountWhenInviterRewardIsZero(t *te
 	assert.Equal(t, 1, reloadedInviter.AffCount)
 	assert.Equal(t, 0, reloadedInviter.AffQuota)
 	assert.Equal(t, 0, reloadedInviter.AffHistoryQuota)
+
+	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
+	require.NoError(t, err)
+	assert.Len(t, records, 0)
 }

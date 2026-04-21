@@ -22,23 +22,24 @@ const (
 
 const (
 	minInviteWithdrawalAmount      = 20
-	maxInviteWithdrawalReceiptSize = 512 * 1024
+	maxInviteWithdrawalReceiptSize = 5 * 1024 * 1024
 )
 
 type InviteWithdrawal struct {
-	Id          int     `json:"id"`
-	UserId      int     `json:"user_id" gorm:"index"`
-	Username    string  `json:"username" gorm:"type:varchar(64);index;default:''"`
-	Amount      float64 `json:"amount"`
-	Quota       int     `json:"quota"`
-	ReceiptCode string  `json:"receipt_code" gorm:"type:text"`
-	UserRemark  string  `json:"user_remark" gorm:"type:varchar(255);default:''"`
-	AdminRemark string  `json:"admin_remark" gorm:"type:varchar(255);default:''"`
-	Status      string  `json:"status" gorm:"type:varchar(32);index"`
-	OperatorId  int     `json:"operator_id" gorm:"index"`
-	ProcessedAt int64   `json:"processed_at" gorm:"bigint;default:0;index"`
-	CreatedAt   int64   `json:"created_at" gorm:"bigint;index"`
-	UpdatedAt   int64   `json:"updated_at" gorm:"bigint"`
+	Id           int     `json:"id"`
+	UserId       int     `json:"user_id" gorm:"index"`
+	Username     string  `json:"username" gorm:"type:varchar(64);index;default:''"`
+	Amount       float64 `json:"amount"`
+	Quota        int     `json:"quota"`
+	ReceiptCode  string  `json:"receipt_code" gorm:"type:text"`
+	UserRemark   string  `json:"user_remark" gorm:"type:varchar(255);default:''"`
+	AdminRemark  string  `json:"admin_remark" gorm:"type:varchar(255);default:''"`
+	Status       string  `json:"status" gorm:"type:varchar(32);index"`
+	OperatorId   int     `json:"operator_id" gorm:"index"`
+	OperatorName string  `json:"operator_name" gorm:"type:varchar(64);default:''"`
+	ProcessedAt  int64   `json:"processed_at" gorm:"bigint;default:0;index"`
+	CreatedAt    int64   `json:"created_at" gorm:"bigint;index"`
+	UpdatedAt    int64   `json:"updated_at" gorm:"bigint"`
 }
 
 func validateInviteWithdrawalReceiptCode(receiptCode string) (string, error) {
@@ -110,7 +111,7 @@ func CreateInviteWithdrawal(userId int, amount string, receiptCode string, userR
 	err = DB.Transaction(func(tx *gorm.DB) error {
 		var user User
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").
-			Select("id", "username", "aff_quota").
+			Select("id", "username", "quota", "aff_quota").
 			Where("id = ?", userId).
 			First(&user).Error; err != nil {
 			return err
@@ -135,7 +136,11 @@ func CreateInviteWithdrawal(userId int, amount string, receiptCode string, userR
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}
-		return tx.Create(withdrawal).Error
+		if err := tx.Create(withdrawal).Error; err != nil {
+			return err
+		}
+		user.AffQuota -= quota
+		return createInviteWithdrawalApplyWalletRecordTx(tx, &user, withdrawal)
 	})
 	if err != nil {
 		return nil, err
@@ -206,13 +211,25 @@ func ReviewInviteWithdrawal(id int, action string, adminRemark string, operatorI
 		withdrawal.Status = action
 		withdrawal.AdminRemark = adminRemark
 		withdrawal.OperatorId = operatorId
+		withdrawal.OperatorName = operatorName
 		withdrawal.ProcessedAt = now
 		withdrawal.UpdatedAt = now
 
 		if action == InviteWithdrawalStatusRejected {
+			var user User
+			if err := tx.Set("gorm:query_option", "FOR UPDATE").
+				Select("id", "username", "quota", "aff_quota").
+				Where("id = ?", withdrawal.UserId).
+				First(&user).Error; err != nil {
+				return err
+			}
 			if err := tx.Model(&User{}).
 				Where("id = ?", withdrawal.UserId).
 				Update("aff_quota", gorm.Expr("aff_quota + ?", withdrawal.Quota)).Error; err != nil {
+				return err
+			}
+			user.AffQuota += withdrawal.Quota
+			if err := createInviteWithdrawalRejectWalletRecordTx(tx, &user, &withdrawal); err != nil {
 				return err
 			}
 		}

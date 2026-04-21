@@ -97,6 +97,7 @@ const TopUp = () => {
   const [inviteDetails, setInviteDetails] = useState({
     invite_records: [],
     rebate_records: [],
+    wallet_records: [],
   });
   const [inviteDetailsLoading, setInviteDetailsLoading] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
@@ -592,6 +593,7 @@ const TopUp = () => {
         setInviteDetails({
           invite_records: data.invite_records || [],
           rebate_records: data.rebate_records || [],
+          wallet_records: data.wallet_records || [],
         });
       } else {
         showError(message);
@@ -1062,6 +1064,7 @@ const TopUp = () => {
           handleAffLinkClick={handleAffLinkClick}
           inviteRecords={inviteDetails.invite_records}
           rebateRecords={inviteDetails.rebate_records}
+          walletRecords={inviteDetails.wallet_records}
           inviteDetailsLoading={inviteDetailsLoading}
           withdrawalRecords={withdrawalRecords}
           withdrawalRecordsLoading={withdrawalRecordsLoading}

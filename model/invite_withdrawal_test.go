@@ -34,9 +34,17 @@ func TestCreateInviteWithdrawalAndRejectRestoresAffQuota(t *testing.T) {
 	reviewed, err := ReviewInviteWithdrawal(withdrawal.Id, InviteWithdrawalStatusRejected, "reject", 1, "admin")
 	require.NoError(t, err)
 	assert.Equal(t, InviteWithdrawalStatusRejected, reviewed.Status)
+	assert.Equal(t, "admin", reviewed.OperatorName)
 
 	require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
 	assert.Equal(t, user.AffQuota, reloadedUser.AffQuota)
+
+	records, err := GetInviteWalletRecordsByUserId(user.Id)
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	assert.Equal(t, InviteWalletChangeTypeWithdrawalRejectReturn, records[0].ChangeType)
+	assert.Equal(t, withdrawal.Quota, records[0].AffQuotaDelta)
+	assert.Equal(t, InviteWalletChangeTypeWithdrawalApply, records[1].ChangeType)
 }
 
 func TestCreateInviteWithdrawalAndPayKeepsAffQuotaDeducted(t *testing.T) {
@@ -64,4 +72,10 @@ func TestCreateInviteWithdrawalAndPayKeepsAffQuotaDeducted(t *testing.T) {
 	var reloadedUser User
 	require.NoError(t, DB.First(&reloadedUser, user.Id).Error)
 	assert.Equal(t, user.AffQuota-withdrawal.Quota, reloadedUser.AffQuota)
+
+	records, err := GetInviteWalletRecordsByUserId(user.Id)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Equal(t, InviteWalletChangeTypeWithdrawalApply, records[0].ChangeType)
+	assert.Equal(t, -withdrawal.Quota, records[0].AffQuotaDelta)
 }

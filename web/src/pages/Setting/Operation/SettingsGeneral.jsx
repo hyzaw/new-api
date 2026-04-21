@@ -23,6 +23,7 @@ import {
   Button,
   Col,
   Form,
+  Select,
   InputNumber,
   Row,
   Spin,
@@ -46,6 +47,7 @@ export default function GeneralSettings(props) {
   const [loading, setLoading] = useState(false);
   const [showQuotaWarning, setShowQuotaWarning] = useState(false);
   const [groupDelayRules, setGroupDelayRules] = useState([]);
+  const [groupOptions, setGroupOptions] = useState([]);
   const [inputs, setInputs] = useState({
     TopUpLink: '',
     'general_setting.docs_link': '',
@@ -132,6 +134,21 @@ export default function GeneralSettings(props) {
       seenGroups.add(group);
     }
     return '';
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const res = await API.get('/api/group/');
+      const groups = Array.isArray(res?.data?.data) ? res.data.data : [];
+      setGroupOptions(
+        groups.map((group) => ({
+          label: group,
+          value: group,
+        })),
+      );
+    } catch (error) {
+      setGroupOptions([]);
+    }
   };
 
   function handleFieldChange(fieldName) {
@@ -273,6 +290,10 @@ export default function GeneralSettings(props) {
     }
     return '';
   }, [quotaDisplayType, combinedRate, inputs, t]);
+
+  useEffect(() => {
+    fetchGroups().then();
+  }, []);
 
   useEffect(() => {
     const currentInputs = {};
@@ -476,7 +497,7 @@ export default function GeneralSettings(props) {
                 )}
                 {groupDelayRules.map((rule, index) => (
                   <div
-                    key={`${index}-${rule.group || 'group-delay-rule'}`}
+                    key={`group-delay-rule-${index}`}
                     style={{
                       border: '1px solid var(--semi-color-border)',
                       borderRadius: 12,
@@ -488,14 +509,20 @@ export default function GeneralSettings(props) {
                     <Row gutter={16} align='end'>
                       <Col xs={24} sm={24} md={8} lg={8} xl={8}>
                         <Form.Slot label={t('分组名')}>
-                          <Input
+                          <Select
                             value={rule.group}
-                            placeholder={t('例如 default')}
+                            placeholder={t('请选择分组')}
+                            optionList={groupOptions}
+                            showSearch
+                            filter
+                            allowCreate
+                            insetLabel={t('分组')}
+                            style={{ width: '100%' }}
                             onChange={(value) => {
                               const nextRules = [...groupDelayRules];
                               nextRules[index] = {
                                 ...nextRules[index],
-                                group: value,
+                                group: String(value || ''),
                               };
                               updateGroupDelayRules(nextRules);
                             }}
@@ -539,17 +566,26 @@ export default function GeneralSettings(props) {
                         </Form.Slot>
                       </Col>
                       <Col xs={24} sm={24} md={4} lg={4} xl={4}>
-                        <Button
-                          theme='borderless'
-                          type='danger'
-                          onClick={() => {
-                            updateGroupDelayRules(
-                              groupDelayRules.filter((_, i) => i !== index),
-                            );
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            height: '100%',
                           }}
                         >
-                          {t('删除规则')}
-                        </Button>
+                          <Button
+                            theme='solid'
+                            type='danger'
+                            style={{ width: '100%' }}
+                            onClick={() => {
+                              updateGroupDelayRules(
+                                groupDelayRules.filter((_, i) => i !== index),
+                              );
+                            }}
+                          >
+                            {t('删除规则')}
+                          </Button>
+                        </div>
                       </Col>
                     </Row>
                   </div>

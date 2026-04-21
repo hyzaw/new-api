@@ -124,21 +124,30 @@ func GetTopUpInfo(c *gin.Context) {
 }
 
 func GetUserInviteDetails(c *gin.Context) {
-	userId := c.GetInt("id")
-	inviteRecords, err := model.GetInviteRecordsByInviterId(userId)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
-	rebateRecords, err := model.GetInviteRebateRecordsByInviterId(userId)
+	overview, err := model.GetInviteWalletOverviewByUserId(c.GetInt("id"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, gin.H{
-		"invite_records": inviteRecords,
-		"rebate_records": rebateRecords,
+		"invite_records": overview.InviteRecords,
+		"rebate_records": overview.RebateRecords,
+		"wallet_records": overview.WalletRecords,
 	})
+}
+
+func GetAdminInviteOverview(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || userId == 0 {
+		common.ApiErrorMsg(c, "用户不存在")
+		return
+	}
+	overview, err := model.GetInviteWalletOverviewByUserId(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, overview)
 }
 
 type EpayRequest struct {

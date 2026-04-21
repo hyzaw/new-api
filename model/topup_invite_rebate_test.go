@@ -56,6 +56,14 @@ func TestManualCompleteTopUpAppliesInviteRebate(t *testing.T) {
 	assert.Equal(t, 10.0, reloadedTopUp.InviteRebateRatio)
 	assert.NotZero(t, reloadedTopUp.InviteRebateTime)
 
+	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Equal(t, InviteWalletChangeTypeTopUpRebate, records[0].ChangeType)
+	assert.Equal(t, expectedRebate, records[0].AffQuotaDelta)
+	assert.Equal(t, invitee.Id, records[0].InviteeId)
+	assert.Equal(t, reloadedTopUp.TradeNo, records[0].TopUpTradeNo)
+
 	completedAgain, err := ManualCompleteTopUp(topUp.TradeNo, "127.0.0.1")
 	require.NoError(t, err)
 	assert.False(t, completedAgain)
@@ -117,6 +125,12 @@ func TestManualRefundRollsBackInviteRebate(t *testing.T) {
 	require.NotNil(t, reloadedTopUp)
 	assert.Equal(t, refund.InviteRebateDelta, reloadedTopUp.InviteRebateRefundedQuota)
 	assert.Equal(t, totalRebate/2, refund.InviteRebateDelta)
+
+	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	assert.Equal(t, InviteWalletChangeTypeTopUpRebateRefund, records[0].ChangeType)
+	assert.Equal(t, -refund.InviteRebateDelta, records[0].AffQuotaDelta)
 }
 
 func TestManualRefundDeductsMainQuotaWhenInviteQuotaTransferred(t *testing.T) {
@@ -164,4 +178,12 @@ func TestManualRefundDeductsMainQuotaWhenInviteQuotaTransferred(t *testing.T) {
 	assert.Equal(t, 0, reloadedInviter.AffQuota)
 	assert.Equal(t, totalRebate-refund.InviteRebateDelta, reloadedInviter.Quota)
 	assert.Equal(t, totalRebate-refund.InviteRebateDelta, reloadedInviter.AffHistoryQuota)
+
+	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
+	require.NoError(t, err)
+	require.Len(t, records, 3)
+	assert.Equal(t, InviteWalletChangeTypeTopUpRebateRefund, records[0].ChangeType)
+	assert.Equal(t, 0, records[0].AffQuotaDelta)
+	assert.Equal(t, -refund.InviteRebateDelta, records[0].QuotaDelta)
+	assert.Equal(t, InviteWalletChangeTypeTransferOut, records[1].ChangeType)
 }

@@ -57,6 +57,7 @@ import {
   IconEdit,
 } from '@douyinfe/semi-icons';
 import UserBindingManagementModal from './UserBindingManagementModal';
+import AdminInviteOverviewModal from '../../../invite/AdminInviteOverviewModal';
 
 const { Text, Title } = Typography;
 
@@ -73,6 +74,7 @@ const EditUserModal = (props) => {
   const isMobile = useIsMobile();
   const [groupOptions, setGroupOptions] = useState([]);
   const [bindingModalVisible, setBindingModalVisible] = useState(false);
+  const [inviteOverviewVisible, setInviteOverviewVisible] = useState(false);
   const formApiRef = useRef(null);
   const [showAdjustQuotaRaw, setShowAdjustQuotaRaw] = useState(false);
   const [showQuotaInput, setShowQuotaInput] = useState(false);
@@ -456,6 +458,14 @@ const EditUserModal = (props) => {
                       </Col>
 
                       <Col span={24}>
+                        <Form.Slot label={t('邀请明细')}>
+                          <Button onClick={() => setInviteOverviewVisible(true)}>
+                            {t('查看邀请明细')}
+                          </Button>
+                        </Form.Slot>
+                      </Col>
+
+                      <Col span={24}>
                         <div
                           className='text-xs cursor-pointer'
                           style={{ color: 'var(--semi-color-text-2)' }}
@@ -528,6 +538,14 @@ const EditUserModal = (props) => {
         userId={userId}
         isMobile={isMobile}
         formApiRef={formApiRef}
+      />
+
+      <AdminInviteOverviewModal
+        t={t}
+        visible={inviteOverviewVisible}
+        userId={userId}
+        onCancel={() => setInviteOverviewVisible(false)}
+        title={t('用户邀请明细')}
       />
 
       {/* 调整额度模态框 */}

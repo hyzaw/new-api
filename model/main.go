@@ -268,6 +268,7 @@ func migrateDB() error {
 		&TopUp{},
 		&TopUpRefund{},
 		&InviteDetail{},
+		&InviteWalletRecord{},
 		&InviteWithdrawal{},
 		&QuotaData{},
 		&Task{},
@@ -299,6 +300,9 @@ func migrateDB() error {
 	if err := BackfillInviteDetails(); err != nil {
 		return err
 	}
+	if err := BackfillInviteWalletRecords(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -322,6 +326,7 @@ func migrateDBFast() error {
 		{&TopUp{}, "TopUp"},
 		{&TopUpRefund{}, "TopUpRefund"},
 		{&InviteDetail{}, "InviteDetail"},
+		{&InviteWalletRecord{}, "InviteWalletRecord"},
 		{&InviteWithdrawal{}, "InviteWithdrawal"},
 		{&QuotaData{}, "QuotaData"},
 		{&Task{}, "Task"},
@@ -371,6 +376,9 @@ func migrateDBFast() error {
 		}
 	}
 	if err := BackfillInviteDetails(); err != nil {
+		return err
+	}
+	if err := BackfillInviteWalletRecords(); err != nil {
 		return err
 	}
 	common.SysLog("database migrated")

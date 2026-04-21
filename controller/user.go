@@ -23,7 +23,6 @@ import (
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -989,53 +988,31 @@ func ManageUser(c *gin.Context) {
 			"admin_id":       adminId,
 			"admin_username": adminName,
 		}
+		if req.Mode != "override" && req.Value <= 0 {
+			common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
+			return
+		}
+		updatedUser, err := model.AdjustInviteQuotaByAdmin(user.Id, req.Mode, req.Value, adminId, adminName)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
 		switch req.Mode {
 		case "add":
-			if req.Value <= 0 {
-				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
-				return
-			}
-			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Updates(map[string]any{
-				"aff_quota":   gorm.Expr("aff_quota + ?", req.Value),
-				"aff_history": gorm.Expr("aff_history + ?", req.Value),
-			}).Error; err != nil {
-				common.ApiError(c, err)
-				return
-			}
 			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
 				fmt.Sprintf("管理员增加邀请余额 %s", logger.LogQuota(req.Value)), adminInfo)
 		case "subtract":
-			if req.Value <= 0 {
-				common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
-				return
-			}
-			if user.AffQuota < req.Value {
-				common.ApiErrorMsg(c, "邀请余额不足，无法减少")
-				return
-			}
-			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("aff_quota", gorm.Expr("aff_quota - ?", req.Value)).Error; err != nil {
-				common.ApiError(c, err)
-				return
-			}
 			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
 				fmt.Sprintf("管理员减少邀请余额 %s", logger.LogQuota(req.Value)), adminInfo)
 		case "override":
-			updates := map[string]any{
-				"aff_quota": req.Value,
-			}
-			if req.Value > user.AffHistoryQuota {
-				updates["aff_history"] = req.Value
-			}
-			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Updates(updates).Error; err != nil {
-				common.ApiError(c, err)
-				return
-			}
 			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
 				fmt.Sprintf("管理员覆盖邀请余额从 %s 为 %s", logger.LogQuota(user.AffQuota), logger.LogQuota(req.Value)), adminInfo)
 		default:
 			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 			return
 		}
+		user.AffQuota = updatedUser.AffQuota
+		user.AffHistoryQuota = updatedUser.AffHistoryQuota
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "",
