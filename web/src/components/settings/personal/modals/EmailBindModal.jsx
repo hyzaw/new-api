@@ -36,6 +36,8 @@ const EmailBindModal = ({
   turnstileEnabled,
   turnstileSiteKey,
   setTurnstileToken,
+  turnstileWidgetKey,
+  setTurnstileWidgetKey,
 }) => {
   return (
     <Modal
@@ -93,9 +95,18 @@ const EmailBindModal = ({
         {turnstileEnabled && (
           <div className='flex justify-center'>
             <Turnstile
+              key={turnstileWidgetKey}
               sitekey={turnstileSiteKey}
               onVerify={(token) => {
                 setTurnstileToken(token);
+              }}
+              onExpire={() => {
+                setTurnstileToken('');
+                setTurnstileWidgetKey((v) => v + 1);
+              }}
+              onError={() => {
+                setTurnstileToken('');
+                setTurnstileWidgetKey((v) => v + 1);
               }}
             />
           </div>

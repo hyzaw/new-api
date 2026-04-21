@@ -1,9 +1,9 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-contrib/sessions"
@@ -11,7 +11,8 @@ import (
 )
 
 type turnstileCheckResponse struct {
-	Success bool `json:"success"`
+	Success    bool     `json:"success"`
+	ErrorCodes []string `json:"error-codes"`
 }
 
 func TurnstileCheck() gin.HandlerFunc {
@@ -48,7 +49,7 @@ func TurnstileCheck() gin.HandlerFunc {
 			}
 			defer rawRes.Body.Close()
 			var res turnstileCheckResponse
-			err = json.NewDecoder(rawRes.Body).Decode(&res)
+			err = common.DecodeJson(rawRes.Body, &res)
 			if err != nil {
 				common.SysLog(err.Error())
 				c.JSON(http.StatusOK, gin.H{
@@ -59,9 +60,19 @@ func TurnstileCheck() gin.HandlerFunc {
 				return
 			}
 			if !res.Success {
+				errorMessage := "Turnstile 校验失败，请刷新重试！"
+				if len(res.ErrorCodes) > 0 {
+					common.SysLog("turnstile verify failed: " + strings.Join(res.ErrorCodes, ","))
+					for _, code := range res.ErrorCodes {
+						if code == "timeout-or-duplicate" {
+							errorMessage = "Turnstile 已过期或已被使用，请重新完成校验后再试！"
+							break
+						}
+					}
+				}
 				c.JSON(http.StatusOK, gin.H{
 					"success": false,
-					"message": "Turnstile 校验失败，请刷新重试！",
+					"message": errorMessage,
 				})
 				c.Abort()
 				return

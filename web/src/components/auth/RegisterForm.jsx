@@ -86,6 +86,7 @@ const RegisterForm = () => {
   const [turnstileEnabled, setTurnstileEnabled] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
   const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
   const [showEmailRegister, setShowEmailRegister] = useState(false);
   const [wechatLoading, setWechatLoading] = useState(false);
@@ -157,6 +158,10 @@ const RegisterForm = () => {
     if (status?.turnstile_check) {
       setTurnstileEnabled(true);
       setTurnstileSiteKey(status.turnstile_site_key);
+    } else {
+      setTurnstileEnabled(false);
+      setTurnstileSiteKey('');
+      setTurnstileToken('');
     }
 
     // 从 status 获取用户协议和隐私政策的启用状态
@@ -261,16 +266,24 @@ const RegisterForm = () => {
     setVerificationCodeLoading(true);
     try {
       const res = await API.get(
-        `/api/verification?email=${encodeURIComponent(inputs.email)}&turnstile=${turnstileToken}`,
+        `/api/verification?email=${encodeURIComponent(inputs.email)}&turnstile=${encodeURIComponent(turnstileToken)}`,
       );
       const { success, message } = res.data;
       if (success) {
         showSuccess('验证码发送成功，请检查你的邮箱！');
         setDisableButton(true); // 发送成功后禁用按钮，开始倒计时
       } else {
+        if (turnstileEnabled) {
+          setTurnstileToken('');
+          setTurnstileWidgetKey((v) => v + 1);
+        }
         showError(message);
       }
     } catch (error) {
+      if (turnstileEnabled) {
+        setTurnstileToken('');
+        setTurnstileWidgetKey((v) => v + 1);
+      }
       showError('发送验证码失败，请重试');
     } finally {
       setVerificationCodeLoading(false);
@@ -746,9 +759,18 @@ const RegisterForm = () => {
         <div className='auth-turnstile-label'>Turnstile</div>
         <div className='auth-turnstile-widget'>
           <Turnstile
+            key={turnstileWidgetKey}
             sitekey={turnstileSiteKey}
             onVerify={(token) => {
               setTurnstileToken(token);
+            }}
+            onExpire={() => {
+              setTurnstileToken('');
+              setTurnstileWidgetKey((v) => v + 1);
+            }}
+            onError={() => {
+              setTurnstileToken('');
+              setTurnstileWidgetKey((v) => v + 1);
             }}
           />
         </div>

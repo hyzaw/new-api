@@ -68,6 +68,7 @@ const PersonalSetting = () => {
   const [turnstileEnabled, setTurnstileEnabled] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [disableButton, setDisableButton] = useState(false);
   const [countdown, setCountdown] = useState(30);
@@ -102,6 +103,7 @@ const PersonalSetting = () => {
       } else {
         setTurnstileEnabled(false);
         setTurnstileSiteKey('');
+        setTurnstileToken('');
       }
     }
     // Always refresh status from server to avoid stale flags (e.g., admin just enabled OAuth)
@@ -118,6 +120,7 @@ const PersonalSetting = () => {
           } else {
             setTurnstileEnabled(false);
             setTurnstileSiteKey('');
+            setTurnstileToken('');
           }
         }
       } catch (e) {
@@ -354,20 +357,32 @@ const PersonalSetting = () => {
       showError(t('请输入邮箱！'));
       return;
     }
-    setDisableButton(true);
     if (turnstileEnabled && turnstileToken === '') {
       showInfo(t('请稍后几秒重试，Turnstile 正在检查用户环境！'));
       return;
     }
     setLoading(true);
-    const res = await API.get(
-      `/api/verification?email=${inputs.email}&turnstile=${turnstileToken}`,
-    );
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('验证码发送成功，请检查邮箱！'));
-    } else {
-      showError(message);
+    try {
+      const res = await API.get(
+        `/api/verification?email=${encodeURIComponent(inputs.email)}&turnstile=${encodeURIComponent(turnstileToken)}`,
+      );
+      const { success, message } = res.data;
+      if (success) {
+        setDisableButton(true);
+        showSuccess(t('验证码发送成功，请检查邮箱！'));
+      } else {
+        if (turnstileEnabled) {
+          setTurnstileToken('');
+          setTurnstileWidgetKey((v) => v + 1);
+        }
+        showError(message);
+      }
+    } catch (error) {
+      if (turnstileEnabled) {
+        setTurnstileToken('');
+        setTurnstileWidgetKey((v) => v + 1);
+      }
+      showError(t('验证码发送失败，请重试！'));
     }
     setLoading(false);
   };
@@ -516,10 +531,12 @@ const PersonalSetting = () => {
         disableButton={disableButton}
         loading={loading}
         countdown={countdown}
-        turnstileEnabled={turnstileEnabled}
-        turnstileSiteKey={turnstileSiteKey}
-        setTurnstileToken={setTurnstileToken}
-      />
+                turnstileEnabled={turnstileEnabled}
+                turnstileSiteKey={turnstileSiteKey}
+                setTurnstileToken={setTurnstileToken}
+                turnstileWidgetKey={turnstileWidgetKey}
+                setTurnstileWidgetKey={setTurnstileWidgetKey}
+              />
 
       <WeChatBindModal
         t={t}
