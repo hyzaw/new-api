@@ -925,6 +925,35 @@ export const getLogsColumns = ({
       },
     },
     {
+      key: COLUMN_KEYS.USER_AGENT,
+      title: t('用户代理'),
+      dataIndex: 'other',
+      render: (text, record) => {
+        const other = getLogOther(text);
+        const userAgent = other?.user_agent || other?.admin_info?.user_agent;
+        if (!userAgent) {
+          return <></>;
+        }
+        return (
+          <Typography.Paragraph
+            ellipsis={{
+              rows: 2,
+              showTooltip: {
+                type: 'popover',
+                opts: { style: { width: 360 } },
+              },
+            }}
+            style={{ maxWidth: 280, marginBottom: 0, cursor: 'pointer' }}
+            onClick={(event) => {
+              copyText(event, userAgent);
+            }}
+          >
+            {userAgent}
+          </Typography.Paragraph>
+        );
+      },
+    },
+    {
       key: COLUMN_KEYS.RETRY,
       title: t('重试'),
       dataIndex: 'retry',

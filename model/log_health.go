@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -11,6 +12,8 @@ import (
 const (
 	RequestStatusIntervalSeconds = int64(10 * 60)
 	RequestStatusPointCount      = 144
+	defaultGroupName             = "default"
+	redirectGroupName123Team     = "123team"
 	unknownModelName             = "(unknown)"
 )
 
@@ -36,9 +39,11 @@ type RequestStatusSummary struct {
 }
 
 type RequestStatusModelLine struct {
-	ModelName string                `json:"model_name"`
-	Summary   RequestStatusSummary  `json:"summary"`
-	Points    []*RequestStatusPoint `json:"points"`
+	GroupName   string                `json:"group_name"`
+	ModelName   string                `json:"model_name"`
+	DisplayName string                `json:"display_name"`
+	Summary     RequestStatusSummary  `json:"summary"`
+	Points      []*RequestStatusPoint `json:"points"`
 }
 
 type RequestStatusMonitor struct {
@@ -55,6 +60,7 @@ type RequestStatusMonitor struct {
 type requestStatusLogRow struct {
 	CreatedAt int64  `gorm:"column:created_at"`
 	Type      int    `gorm:"column:type"`
+	GroupName string `gorm:"column:group_name"`
 	ModelName string `gorm:"column:model_name"`
 }
 
@@ -89,6 +95,35 @@ func normalizeRequestStatusModelName(raw string) string {
 		return unknownModelName
 	}
 	return name
+}
+
+func normalizeRequestStatusGroupName(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return defaultGroupName
+	}
+	if strings.EqualFold(name, redirectGroupName123Team) {
+		return defaultGroupName
+	}
+	return name
+}
+
+func buildRequestStatusDisplayName(groupName string, modelName string) string {
+	return fmt.Sprintf("%s-%s", groupName, modelName)
+}
+
+func buildRequestStatusModelKey(groupName string, modelName string) string {
+	return groupName + "\x00" + modelName
+}
+
+func getRequestStatusLogGroupColumn() string {
+	if logGroupCol != "" {
+		return logGroupCol
+	}
+	if common.LogSqlType == common.DatabaseTypePostgreSQL || (common.LogSqlType == "" && common.UsingPostgreSQL) {
+		return `"group"`
+	}
+	return "`group`"
 }
 
 func finalizeRequestStatusSummary(points []*RequestStatusPoint) RequestStatusSummary {
@@ -140,7 +175,7 @@ func GetRequestStatusMonitorSnapshot(windowEnd int64, pointCount int, intervalSe
 
 	var rows []*requestStatusLogRow
 	if err := LOG_DB.Model(&Log{}).
-		Select("created_at, type, model_name").
+		Select(fmt.Sprintf("created_at, type, model_name, %s AS group_name", getRequestStatusLogGroupColumn())).
 		Where("created_at >= ? AND created_at < ? AND type IN ?", windowStart, windowEnd, []int{LogTypeConsume, LogTypeError}).
 		Find(&rows).Error; err != nil {
 		return nil, err
@@ -155,11 +190,13 @@ func GetRequestStatusMonitorSnapshot(windowEnd int64, pointCount int, intervalSe
 			continue
 		}
 
+		groupName := normalizeRequestStatusGroupName(row.GroupName)
 		modelName := normalizeRequestStatusModelName(row.ModelName)
-		modelPoints, ok := modelPointMap[modelName]
+		modelKey := buildRequestStatusModelKey(groupName, modelName)
+		modelPoints, ok := modelPointMap[modelKey]
 		if !ok {
 			modelPoints = cloneRequestStatusPoints(windowStart, pointCount, intervalSeconds)
-			modelPointMap[modelName] = modelPoints
+			modelPointMap[modelKey] = modelPoints
 		}
 
 		var targetPoints [][]*RequestStatusPoint
@@ -175,10 +212,21 @@ func GetRequestStatusMonitorSnapshot(windowEnd int64, pointCount int, intervalSe
 	}
 
 	models := make([]*RequestStatusModelLine, 0, len(modelPointMap))
-	for modelName, modelPoints := range modelPointMap {
+	for modelKey, modelPoints := range modelPointMap {
+		parts := strings.SplitN(modelKey, "\x00", 2)
+		groupName := defaultGroupName
+		modelName := unknownModelName
+		if len(parts) > 0 && parts[0] != "" {
+			groupName = parts[0]
+		}
+		if len(parts) > 1 && parts[1] != "" {
+			modelName = parts[1]
+		}
 		line := &RequestStatusModelLine{
-			ModelName: modelName,
-			Points:    modelPoints,
+			GroupName:   groupName,
+			ModelName:   modelName,
+			DisplayName: buildRequestStatusDisplayName(groupName, modelName),
+			Points:      modelPoints,
 		}
 		line.Summary = finalizeRequestStatusSummary(line.Points)
 		models = append(models, line)
@@ -186,7 +234,7 @@ func GetRequestStatusMonitorSnapshot(windowEnd int64, pointCount int, intervalSe
 
 	sort.Slice(models, func(i, j int) bool {
 		if models[i].Summary.TotalCount == models[j].Summary.TotalCount {
-			return models[i].ModelName < models[j].ModelName
+			return models[i].DisplayName < models[j].DisplayName
 		}
 		return models[i].Summary.TotalCount > models[j].Summary.TotalCount
 	})

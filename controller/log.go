@@ -11,6 +11,37 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type requestStatusMonitorLineResponse struct {
+	ModelName string                        `json:"model_name"`
+	Points    []*requestStatusPointResponse `json:"points"`
+}
+
+type requestStatusMonitorResponse struct {
+	Points []*requestStatusPointResponse       `json:"points"`
+	Models []*requestStatusMonitorLineResponse `json:"models"`
+}
+
+type requestStatusPointResponse struct {
+	StartTime int64  `json:"start_time"`
+	EndTime   int64  `json:"end_time"`
+	Status    string `json:"status"`
+}
+
+func newRequestStatusPointResponses(points []*model.RequestStatusPoint) []*requestStatusPointResponse {
+	resp := make([]*requestStatusPointResponse, 0, len(points))
+	for _, point := range points {
+		if point == nil {
+			continue
+		}
+		resp = append(resp, &requestStatusPointResponse{
+			StartTime: point.StartTime,
+			EndTime:   point.EndTime,
+			Status:    point.Status,
+		})
+	}
+	return resp
+}
+
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	logType, _ := strconv.Atoi(c.Query("type"))
@@ -160,7 +191,20 @@ func GetRequestStatusMonitor(c *gin.Context) {
 	c.Header("Pragma", "no-cache")
 	c.Header("Expires", "0")
 	c.Header("Surrogate-Control", "no-store")
-	common.ApiSuccess(c, monitor)
+	resp := &requestStatusMonitorResponse{
+		Points: newRequestStatusPointResponses(monitor.Points),
+		Models: make([]*requestStatusMonitorLineResponse, 0, len(monitor.Models)),
+	}
+	for _, item := range monitor.Models {
+		if item == nil {
+			continue
+		}
+		resp.Models = append(resp.Models, &requestStatusMonitorLineResponse{
+			ModelName: item.DisplayName,
+			Points:    newRequestStatusPointResponses(item.Points),
+		})
+	}
+	common.ApiSuccess(c, resp)
 }
 
 func DeleteHistoryLogs(c *gin.Context) {

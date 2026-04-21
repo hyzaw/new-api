@@ -41,6 +41,7 @@ type Log struct {
 }
 
 const edgeOneClientIPCountryHeader = "EO-Client-IPCountry12"
+const maxLoggedUserAgentLength = 1024
 
 // don't use iota, avoid change log type value
 const (
@@ -71,6 +72,20 @@ func getRequestClientIPCountry(c *gin.Context) string {
 		return ""
 	}
 	return normalizeClientIPCountryCode(c.GetHeader(edgeOneClientIPCountryHeader))
+}
+
+func getRequestUserAgent(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	userAgent := strings.TrimSpace(c.Request.UserAgent())
+	if userAgent == "" {
+		return ""
+	}
+	if len(userAgent) > maxLoggedUserAgentLength {
+		userAgent = userAgent[:maxLoggedUserAgentLength]
+	}
+	return userAgent
 }
 
 func cloneLogOther(other map[string]interface{}) map[string]interface{} {
@@ -213,6 +228,9 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	if countryCode := getRequestClientIPCountry(c); countryCode != "" {
 		logOther["client_ip_country"] = countryCode
 	}
+	if userAgent := getRequestUserAgent(c); userAgent != "" {
+		logOther["user_agent"] = userAgent
+	}
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
@@ -265,6 +283,9 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	logOther := cloneLogOther(params.Other)
 	if countryCode := getRequestClientIPCountry(c); countryCode != "" {
 		logOther["client_ip_country"] = countryCode
+	}
+	if userAgent := getRequestUserAgent(c); userAgent != "" {
+		logOther["user_agent"] = userAgent
 	}
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{

@@ -61,6 +61,7 @@ export const useLogsData = () => {
     COST: 'cost',
     RETRY: 'retry',
     IP: 'ip',
+    USER_AGENT: 'user_agent',
     DETAILS: 'details',
   };
 
@@ -124,6 +125,7 @@ export const useLogsData = () => {
       [COLUMN_KEYS.COST]: true,
       [COLUMN_KEYS.RETRY]: isAdminUser,
       [COLUMN_KEYS.IP]: true,
+      [COLUMN_KEYS.USER_AGENT]: true,
       [COLUMN_KEYS.DETAILS]: true,
     };
   };
@@ -393,6 +395,24 @@ export const useLogsData = () => {
         expandDataLocal.push({
           key: t('Request ID'),
           value: logs[i].request_id,
+        });
+      }
+      const userAgent = other?.user_agent || other?.admin_info?.user_agent;
+      if (userAgent) {
+        expandDataLocal.push({
+          key: t('用户代理'),
+          value: (
+            <div
+              style={{
+                maxWidth: 600,
+                whiteSpace: 'normal',
+                wordBreak: 'break-word',
+                lineHeight: 1.6,
+              }}
+            >
+              {userAgent}
+            </div>
+          ),
         });
       }
       if (other?.ws || other?.audio) {

@@ -3144,6 +3144,7 @@
     "Prompt cache hit tokens": "Prompt cache hit tokens",
     "Prompt tokens": "Prompt tokens",
     "Request ID": "Request ID",
+    "用户代理": "用户代理",
     "RSA 私钥 (沙盒)": "RSA 私钥 (沙盒)",
     "RSA 私钥 (生产)": "RSA 私钥 (生产)",
     "Scopes（可选）": "Scopes（可选）",
