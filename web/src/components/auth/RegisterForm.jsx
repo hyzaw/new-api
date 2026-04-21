@@ -87,6 +87,7 @@ const RegisterForm = () => {
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
+  const [turnstileTheme, setTurnstileTheme] = useState('light');
   const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
   const [showEmailRegister, setShowEmailRegister] = useState(false);
   const [wechatLoading, setWechatLoading] = useState(false);
@@ -168,6 +169,22 @@ const RegisterForm = () => {
     setHasUserAgreement(status?.user_agreement_enabled || false);
     setHasPrivacyPolicy(status?.privacy_policy_enabled || false);
   }, [status]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTurnstileTheme = () => {
+      setTurnstileTheme(root.classList.contains('dark') ? 'dark' : 'light');
+    };
+
+    syncTurnstileTheme();
+    const observer = new MutationObserver(syncTurnstileTheme);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let countdownInterval = null;
@@ -756,11 +773,26 @@ const RegisterForm = () => {
 
     return (
       <div className='auth-turnstile-panel'>
-        <div className='auth-turnstile-label'>Turnstile</div>
-        <div className='auth-turnstile-widget'>
+        <div className='auth-turnstile-head'>
+          <div className='auth-turnstile-badge'>{t('安全验证')}</div>
+          <div className='auth-turnstile-brand'>Turnstile</div>
+        </div>
+        <div className='auth-turnstile-copy'>
+          <div className='auth-turnstile-title'>{t('Cloudflare 安全校验')}</div>
+          <div className='auth-turnstile-description'>
+            {t('完成下方验证后即可发送注册验证码')}
+          </div>
+        </div>
+        <div className='auth-turnstile-widget-shell'>
+          <div className='auth-turnstile-widget'>
           <Turnstile
             key={turnstileWidgetKey}
             sitekey={turnstileSiteKey}
+            theme={turnstileTheme}
+            size='flexible'
+            retry='auto'
+            refreshExpired='auto'
+            style={{ width: '100%' }}
             onVerify={(token) => {
               setTurnstileToken(token);
             }}
@@ -773,6 +805,7 @@ const RegisterForm = () => {
               setTurnstileWidgetKey((v) => v + 1);
             }}
           />
+        </div>
         </div>
       </div>
     );
