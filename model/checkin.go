@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -23,6 +24,12 @@ type Checkin struct {
 type CheckinRecord struct {
 	CheckinDate  string `json:"checkin_date"`
 	QuotaAwarded int    `json:"quota_awarded"`
+}
+
+type CheckinEligibility struct {
+	Eligible            bool    `json:"eligible"`
+	CurrentTopUpAmount  float64 `json:"current_topup_amount"`
+	RequiredTopUpAmount float64 `json:"required_topup_amount"`
 }
 
 func (Checkin) TableName() string {
@@ -49,6 +56,43 @@ func HasCheckedInToday(userId int) (bool, error) {
 	return count > 0, err
 }
 
+func GetUserSuccessfulTopUpAmount(userId int) (float64, error) {
+	var total float64
+	err := DB.Model(&TopUp{}).
+		Where("user_id = ? AND status = ?", userId, common.TopUpStatusSuccess).
+		Select("COALESCE(SUM(money), 0)").
+		Scan(&total).Error
+	return total, err
+}
+
+func GetUserCheckinEligibility(userId int) (*CheckinEligibility, error) {
+	requiredAmount := operation_setting.GetCheckinSetting().MinTopUpAmount
+	currentAmount, err := GetUserSuccessfulTopUpAmount(userId)
+	if err != nil {
+		return nil, err
+	}
+	return &CheckinEligibility{
+		Eligible:            requiredAmount <= 0 || currentAmount >= requiredAmount,
+		CurrentTopUpAmount:  currentAmount,
+		RequiredTopUpAmount: requiredAmount,
+	}, nil
+}
+
+func ensureUserCanCheckin(userId int) error {
+	eligibility, err := GetUserCheckinEligibility(userId)
+	if err != nil {
+		return err
+	}
+	if eligibility.Eligible {
+		return nil
+	}
+	return fmt.Errorf(
+		"累计充值满 %.2f 后才可签到，当前累计充值 %.2f",
+		eligibility.RequiredTopUpAmount,
+		eligibility.CurrentTopUpAmount,
+	)
+}
+
 // UserCheckin 执行用户签到
 // MySQL 和 PostgreSQL 使用事务保证原子性
 // SQLite 不支持嵌套事务，使用顺序操作 + 手动回滚
@@ -65,6 +109,9 @@ func UserCheckin(userId int) (*Checkin, error) {
 	}
 	if hasChecked {
 		return nil, errors.New("今日已签到")
+	}
+	if err := ensureUserCanCheckin(userId); err != nil {
+		return nil, err
 	}
 
 	// 计算随机额度奖励

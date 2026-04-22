@@ -173,6 +173,14 @@ func GetCheckinStatus(c *gin.Context) {
 		})
 		return
 	}
+	eligibility, err := model.GetUserCheckinEligibility(userId)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
 	claimMeta, err := issueCheckinClaimMeta(c, userId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -185,11 +193,14 @@ func GetCheckinStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"enabled":    setting.Enabled,
-			"min_quota":  setting.MinQuota,
-			"max_quota":  setting.MaxQuota,
-			"stats":      stats,
-			"claim_meta": claimMeta,
+			"enabled":              setting.Enabled,
+			"min_quota":            setting.MinQuota,
+			"max_quota":            setting.MaxQuota,
+			"min_topup_amount":     setting.MinTopUpAmount,
+			"current_topup_amount": eligibility.CurrentTopUpAmount,
+			"can_checkin":          eligibility.Eligible,
+			"stats":                stats,
+			"claim_meta":           claimMeta,
 		},
 	})
 }

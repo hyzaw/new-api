@@ -37,7 +37,13 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import Turnstile from 'react-turnstile';
-import { API, showError, showSuccess, renderQuota } from '../../../../helpers';
+import {
+  API,
+  showError,
+  showSuccess,
+  renderQuota,
+  renderQuotaWithAmount,
+} from '../../../../helpers';
 
 const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
   const [loading, setLoading] = useState(false);
@@ -46,6 +52,9 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
   const [checkinData, setCheckinData] = useState({
     enabled: false,
+    min_topup_amount: 0,
+    current_topup_amount: 0,
+    can_checkin: true,
     claim_meta: null,
     stats: {
       checked_in_today: false,
@@ -172,6 +181,25 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     }
   }, [status?.checkin_enabled, currentMonth]);
 
+  const checkinBlockedByTopup =
+    initialLoaded &&
+    !checkinData.stats?.checked_in_today &&
+    checkinData.can_checkin === false;
+
+  const checkinHint = !initialLoaded
+    ? t('正在加载签到状态...')
+    : checkinData.stats?.checked_in_today
+      ? t('今日已签到，累计签到') +
+        ` ${checkinData.stats?.total_checkins || 0} ` +
+        t('天')
+      : checkinBlockedByTopup
+        ? t('累计充值满后才可签到，当前') +
+          ' ' +
+          renderQuotaWithAmount(checkinData.current_topup_amount || 0) +
+          ' / ' +
+          renderQuotaWithAmount(checkinData.min_topup_amount || 0)
+        : t('每日签到可获得随机赠送余额奖励');
+
   // 如果签到功能未启用，不显示组件
   if (!status?.checkin_enabled) {
     return null;
@@ -266,13 +294,7 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
               )}
             </div>
             <div className='text-xs text-gray-500 dark:text-gray-400'>
-              {!initialLoaded
-                ? t('正在加载签到状态...')
-                : checkinData.stats?.checked_in_today
-                  ? t('今日已签到，累计签到') +
-                    ` ${checkinData.stats?.total_checkins || 0} ` +
-                    t('天')
-                  : t('每日签到可获得随机赠送余额奖励')}
+              {checkinHint}
             </div>
           </div>
         </div>
@@ -282,13 +304,19 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
           icon={<Gift size={16} />}
           onClick={() => doCheckin()}
           loading={checkinLoading || !initialLoaded}
-          disabled={!initialLoaded || checkinData.stats?.checked_in_today}
+          disabled={
+            !initialLoaded ||
+            checkinData.stats?.checked_in_today ||
+            checkinBlockedByTopup
+          }
           className='!bg-green-600 hover:!bg-green-700'
         >
           {!initialLoaded
             ? t('加载中...')
             : checkinData.stats?.checked_in_today
               ? t('今日已签到')
+              : checkinBlockedByTopup
+                ? t('未达签到门槛')
               : t('立即签到')}
         </Button>
       </div>
@@ -380,6 +408,11 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
               <li>{t('每日签到可获得随机赠送余额奖励')}</li>
               <li>{t('签到奖励将直接添加到您的赠送余额')}</li>
               <li>{t('每日仅可签到一次，请勿重复签到')}</li>
+              {(checkinData.min_topup_amount || 0) > 0 && (
+                <li>
+                  {t('累计充值达到')} {renderQuotaWithAmount(checkinData.min_topup_amount || 0)} {t('后才可签到')}
+                </li>
+              )}
             </ul>
           </Typography.Text>
         </div>

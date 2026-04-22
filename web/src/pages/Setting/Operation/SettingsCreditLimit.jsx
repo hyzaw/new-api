@@ -44,7 +44,8 @@ export default function SettingsCreditLimit(props) {
   const [inputsRow, setInputsRow] = useState(inputs);
   const [giftQuotaRules, setGiftQuotaRules] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
-  const [modelOptions, setModelOptions] = useState([]);
+  const [modelOptionsByGroup, setModelOptionsByGroup] = useState({});
+  const requestedGroupsRef = useRef(new Set());
 
   const normalizeSelectValue = (item) => {
     if (typeof item === 'string' || typeof item === 'number') {
@@ -56,7 +57,7 @@ export default function SettingsCreditLimit(props) {
     return '';
   };
 
-  const buildSelectOptions = (items = []) => {
+  const buildSelectOptions = (items = [], wildcardLabel = '*') => {
     const uniqueItems = new Set(['*']);
     for (const item of items) {
       const normalized = normalizeSelectValue(item);
@@ -65,7 +66,7 @@ export default function SettingsCreditLimit(props) {
       }
     }
     return Array.from(uniqueItems).map((item) => ({
-      label: item,
+      label: item === '*' ? wildcardLabel : item,
       value: item,
     }));
   };
@@ -103,17 +104,61 @@ export default function SettingsCreditLimit(props) {
     }));
   };
 
-  const fetchOptions = async () => {
+  const fetchGroupOptions = async () => {
     try {
-      const [groupsRes, modelsRes] = await Promise.all([
-        API.get('/api/group/'),
-        API.get('/api/channel/models'),
-      ]);
-      setGroupOptions(buildSelectOptions(groupsRes?.data?.data || []));
-      setModelOptions(buildSelectOptions(modelsRes?.data?.data || []));
+      const groupsRes = await API.get('/api/group/');
+      setGroupOptions(
+        buildSelectOptions(groupsRes?.data?.data || [], t('全部分组')),
+      );
     } catch (error) {
-      showError(t('加载赠送余额规则选项失败'));
+      showError(t('加载赠送余额分组选项失败'));
     }
+  };
+
+  const fetchModelOptionsByGroup = async (group) => {
+    const normalizedGroup = String(group || '*').trim() || '*';
+    if (requestedGroupsRef.current.has(normalizedGroup)) {
+      return;
+    }
+    requestedGroupsRef.current.add(normalizedGroup);
+    try {
+      const res = await API.get('/api/group/models', {
+        params: {
+          group: normalizedGroup,
+        },
+      });
+      setModelOptionsByGroup((prev) => ({
+        ...prev,
+        [normalizedGroup]: buildSelectOptions(
+          res?.data?.data || [],
+          t('整个分组'),
+        ),
+      }));
+    } catch (error) {
+      requestedGroupsRef.current.delete(normalizedGroup);
+      showError(t('加载分组模型选项失败'));
+    }
+  };
+
+  const getModelOptions = (group, currentModel) => {
+    const normalizedGroup = String(group || '*').trim() || '*';
+    const currentOptions = modelOptionsByGroup[normalizedGroup] || [
+      { label: t('整个分组'), value: '*' },
+    ];
+    const normalizedModel = normalizeSelectValue(currentModel);
+    if (
+      normalizedModel &&
+      !currentOptions.some((option) => option.value === normalizedModel)
+    ) {
+      return [
+        ...currentOptions,
+        {
+          label: normalizedModel === '*' ? t('整个分组') : normalizedModel,
+          value: normalizedModel,
+        },
+      ];
+    }
+    return currentOptions;
   };
 
   function onSubmit() {
@@ -170,8 +215,21 @@ export default function SettingsCreditLimit(props) {
   }, [props.options]);
 
   useEffect(() => {
-    fetchOptions();
-  }, []);
+    fetchGroupOptions();
+  }, [t]);
+
+  useEffect(() => {
+    const groups = Array.from(
+      new Set(
+        giftQuotaRules.map((rule) => String(rule?.group || '*').trim() || '*'),
+      ),
+    );
+    groups.forEach((group) => {
+      if (!modelOptionsByGroup[group]) {
+        fetchModelOptionsByGroup(group);
+      }
+    });
+  }, [giftQuotaRules, modelOptionsByGroup]);
   return (
     <>
       <Spin spinning={loading}>
@@ -274,7 +332,7 @@ export default function SettingsCreditLimit(props) {
                 <Form.Slot
                   label={t('赠送余额可用范围')}
                   extraText={t(
-                    '配置赠送余额可调用的分组与模型。支持手动输入，* 表示全部；留空则赠送余额不会参与扣费。',
+                    '配置赠送余额可调用的分组与模型。选择“整个分组”表示该分组下所有模型均可使用赠送余额；留空则赠送余额不会参与扣费。',
                   )}
                 >
                   <div className='space-y-3'>
@@ -284,7 +342,7 @@ export default function SettingsCreditLimit(props) {
                           <Select
                             value={rule.group}
                             optionList={groupOptions}
-                            placeholder={t('分组，* 表示全部')}
+                            placeholder={t('选择分组')}
                             allowCreate
                             filter
                             showSearch
@@ -294,6 +352,7 @@ export default function SettingsCreditLimit(props) {
                               nextRules[index] = {
                                 ...nextRules[index],
                                 group: String(value || '*'),
+                                model: '*',
                               };
                               updateGiftQuotaRules(nextRules);
                             }}
@@ -302,8 +361,8 @@ export default function SettingsCreditLimit(props) {
                         <Col xs={24} sm={10}>
                           <Select
                             value={rule.model}
-                            optionList={modelOptions}
-                            placeholder={t('模型，* 表示全部')}
+                            optionList={getModelOptions(rule.group, rule.model)}
+                            placeholder={t('选择模型或整个分组')}
                             allowCreate
                             filter
                             showSearch

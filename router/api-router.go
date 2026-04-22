@@ -324,6 +324,7 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute.Use(middleware.AdminAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
+			groupRoute.GET("/models", controller.GetGroupModels)
 			groupRoute.POST("/migrate", middleware.RootAuth(), controller.MigrateGroupUsers)
 		}
 

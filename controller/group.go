@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -20,10 +21,29 @@ func GetGroups(c *gin.Context) {
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
 		groupNames = append(groupNames, groupName)
 	}
+	sort.Strings(groupNames)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    groupNames,
+	})
+}
+
+func GetGroupModels(c *gin.Context) {
+	groupName := strings.TrimSpace(c.Query("group"))
+
+	var models []string
+	if groupName == "" || groupName == "*" {
+		models = model.GetEnabledModels()
+	} else {
+		models = model.GetGroupEnabledModels(groupName)
+	}
+	sort.Strings(models)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    models,
 	})
 }
 
