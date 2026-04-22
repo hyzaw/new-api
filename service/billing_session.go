@@ -55,6 +55,9 @@ func (s *BillingSession) Settle(actualQuota int) error {
 			return err
 		}
 		s.fundingSettled = true
+		// 结算后钱包分配状态可能发生变化，日志生成依赖 relayInfo 上的兼容字段。
+		// 这里同步一次，避免出现 billing_source=wallet 但缺少 wallet_consume_type 的情况。
+		s.syncRelayInfo()
 	}
 	// 2) 调整令牌额度
 	var tokenErr error
