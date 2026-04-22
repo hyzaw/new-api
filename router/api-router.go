@@ -51,6 +51,7 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.POST("/creem/webhook", controller.CreemWebhook)
 		apiRouter.POST("/alipay/f2f/notify", controller.AlipayF2FNotify)
 		apiRouter.POST("/waffo/webhook", controller.WaffoWebhook)
+		apiRouter.POST("/waffo-pancake/webhook", controller.WaffoPancakeWebhook)
 
 		// Universal secure verification routes
 		apiRouter.POST("/verify", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.UniversalVerify)
@@ -96,7 +97,12 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/creem/pay", middleware.CriticalRateLimit(), controller.RequestCreemPay)
 				selfRoute.POST("/alipay_f2f/pay", middleware.CriticalRateLimit(), middleware.AlipayF2FCreateOrderRateLimit(), controller.RequestAlipayF2FPay)
 				selfRoute.GET("/alipay_f2f/status", controller.AlipayF2FStatus)
+				selfRoute.POST("/waffo/amount", controller.RequestWaffoAmount)
 				selfRoute.POST("/waffo/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPay)
+				selfRoute.POST("/waffo-pancake/amount", controller.RequestWaffoPancakeAmount)
+				selfRoute.POST("/waffo-pancake/pay", middleware.CriticalRateLimit(), controller.RequestWaffoPancakePay)
+				selfRoute.POST("/alipay_f2f/pay", middleware.CriticalRateLimit(), middleware.AlipayF2FCreateOrderRateLimit(), controller.RequestAlipayF2FPay)
+				selfRoute.GET("/alipay_f2f/status", controller.AlipayF2FStatus)
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.POST("/aff_withdrawals", controller.CreateInviteWithdrawal)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
