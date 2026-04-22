@@ -47,7 +47,10 @@ export default function GeneralSettings(props) {
   const [loading, setLoading] = useState(false);
   const [showQuotaWarning, setShowQuotaWarning] = useState(false);
   const [groupDelayRules, setGroupDelayRules] = useState([]);
+  const [largePromptRPMRules, setLargePromptRPMRules] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
+  const [groupMigrationSource, setGroupMigrationSource] = useState('');
+  const [groupMigrationTarget, setGroupMigrationTarget] = useState('');
   const [inputs, setInputs] = useState({
     TopUpLink: '',
     'general_setting.docs_link': '',
@@ -55,6 +58,7 @@ export default function GeneralSettings(props) {
     'general_setting.custom_currency_symbol': '¤',
     'general_setting.custom_currency_exchange_rate': '',
     'group_delay_setting.rules': '[]',
+    'large_prompt_rpm_setting.rules': '[]',
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -136,6 +140,73 @@ export default function GeneralSettings(props) {
     return '';
   };
 
+  const parseRuleInt = (value) => {
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) {
+      return 0;
+    }
+    return Math.max(0, Math.trunc(numberValue));
+  };
+
+  const normalizeLargePromptRPMRules = (rules = []) => {
+    if (!Array.isArray(rules)) {
+      return [];
+    }
+    return rules.map((rule) => ({
+      group: rule?.group ?? '',
+      threshold_k: parseRuleInt(rule?.threshold_k),
+      temporary_rpm: parseRuleInt(rule?.temporary_rpm),
+    }));
+  };
+
+  const parseLargePromptRPMRules = (raw) => {
+    if (!raw) {
+      return [];
+    }
+    try {
+      return normalizeLargePromptRPMRules(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const serializeLargePromptRPMRules = (rules = []) =>
+    JSON.stringify(normalizeLargePromptRPMRules(rules));
+
+  const updateLargePromptRPMRules = (rules) => {
+    const normalizedRules = normalizeLargePromptRPMRules(rules);
+    setLargePromptRPMRules(normalizedRules);
+    setInputs((prev) => ({
+      ...prev,
+      'large_prompt_rpm_setting.rules':
+        serializeLargePromptRPMRules(normalizedRules),
+    }));
+  };
+
+  const validateLargePromptRPMRules = () => {
+    const seenGroups = new Set();
+    for (let i = 0; i < largePromptRPMRules.length; i++) {
+      const rule = largePromptRPMRules[i];
+      const group = String(rule.group || '').trim();
+      const thresholdK = Number(rule.threshold_k);
+      const temporaryRPM = Number(rule.temporary_rpm);
+      if (!group) {
+        return t(`第 ${i + 1} 条大输入临时 RPM 规则的分组名不能为空`);
+      }
+      if (Number.isNaN(thresholdK) || thresholdK <= 0) {
+        return t(`第 ${i + 1} 条大输入临时 RPM 规则的输入阈值必须大于 0`);
+      }
+      if (Number.isNaN(temporaryRPM) || temporaryRPM <= 0) {
+        return t(`第 ${i + 1} 条大输入临时 RPM 规则的临时 RPM 必须大于 0`);
+      }
+      if (seenGroups.has(group)) {
+        return t(`分组 ${group} 的大输入临时 RPM 规则重复`);
+      }
+      seenGroups.add(group);
+    }
+    return '';
+  };
+
   const fetchGroups = async () => {
     try {
       const res = await API.get('/api/group/');
@@ -151,6 +222,51 @@ export default function GeneralSettings(props) {
     }
   };
 
+  const handleMigrateGroupUsers = async () => {
+    const sourceGroup = String(groupMigrationSource || '').trim();
+    const targetGroup = String(groupMigrationTarget || '').trim();
+
+    if (!sourceGroup || !targetGroup) {
+      return showError(t('请选择来源分组和目标分组'));
+    }
+    if (sourceGroup === targetGroup) {
+      return showError(t('来源分组和目标分组不能相同'));
+    }
+
+    Modal.confirm({
+      title: t('确认批量切换分组'),
+      content: t(
+        '执行后，会将当前属于来源分组的所有用户默认分组切换到目标分组，并同步切换这些用户名下的全部令牌分组。',
+      ),
+      onOk: async () => {
+        setLoading(true);
+        try {
+          const res = await API.post('/api/group/migrate', {
+            source_group: sourceGroup,
+            target_group: targetGroup,
+          });
+          const { success, message, data } = res.data;
+          if (!success) {
+            return showError(message || t('批量切换失败'));
+          }
+          showSuccess(
+            t(
+              '批量切换完成：共切换 {{userCount}} 个用户，{{tokenCount}} 个令牌',
+              {
+                userCount: data?.user_count || 0,
+                tokenCount: data?.token_count || 0,
+              },
+            ),
+          );
+        } catch (error) {
+          showError(t('批量切换失败，请重试'));
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
   function handleFieldChange(fieldName) {
     return (value) => {
       setInputs((inputs) => ({ ...inputs, [fieldName]: value }));
@@ -163,6 +279,10 @@ export default function GeneralSettings(props) {
     const groupDelayError = validateGroupDelayRules();
     if (groupDelayError) {
       return showError(groupDelayError);
+    }
+    const largePromptRPMError = validateLargePromptRPMRules();
+    if (largePromptRPMError) {
+      return showError(largePromptRPMError);
     }
     const requestQueue = updateArray.map((item) => {
       let value = '';
@@ -291,6 +411,14 @@ export default function GeneralSettings(props) {
     return '';
   }, [quotaDisplayType, combinedRate, inputs, t]);
 
+  const ruleDeleteColStyle = useMemo(
+    () => ({
+      display: 'flex',
+      alignItems: 'flex-end',
+    }),
+    [],
+  );
+
   useEffect(() => {
     fetchGroups().then();
   }, []);
@@ -327,12 +455,19 @@ export default function GeneralSettings(props) {
     const currentGroupDelayRules = parseGroupDelayRules(
       props.options['group_delay_setting.rules'],
     );
+    const currentLargePromptRPMRules = parseLargePromptRPMRules(
+      props.options['large_prompt_rpm_setting.rules'],
+    );
     currentInputs['group_delay_setting.rules'] =
       props.options['group_delay_setting.rules'] ||
       serializeGroupDelayRules(currentGroupDelayRules);
+    currentInputs['large_prompt_rpm_setting.rules'] =
+      props.options['large_prompt_rpm_setting.rules'] ||
+      serializeLargePromptRPMRules(currentLargePromptRPMRules);
     setInputs(currentInputs);
     setInputsRow(structuredClone(currentInputs));
     setGroupDelayRules(currentGroupDelayRules);
+    setLargePromptRPMRules(currentLargePromptRPMRules);
     refForm.current.setValues(currentInputs);
   }, [props.options]);
 
@@ -515,7 +650,6 @@ export default function GeneralSettings(props) {
                             optionList={groupOptions}
                             showSearch
                             filter
-                            allowCreate
                             insetLabel={t('分组')}
                             style={{ width: '100%' }}
                             onChange={(value) => {
@@ -565,7 +699,14 @@ export default function GeneralSettings(props) {
                           />
                         </Form.Slot>
                       </Col>
-                      <Col xs={24} sm={24} md={4} lg={4} xl={4}>
+                      <Col
+                        xs={24}
+                        sm={24}
+                        md={4}
+                        lg={4}
+                        xl={4}
+                        style={ruleDeleteColStyle}
+                      >
                         <Form.Slot
                           label={
                             <span style={{ visibility: 'hidden' }}>
@@ -574,7 +715,7 @@ export default function GeneralSettings(props) {
                           }
                         >
                           <Button
-                            theme='solid'
+                            theme='light'
                             type='danger'
                             style={{ width: '100%' }}
                             onClick={() => {
@@ -604,6 +745,169 @@ export default function GeneralSettings(props) {
                   }
                 >
                   {t('新增分组延迟规则')}
+                </Button>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 24 }}>
+              <Col span={24}>
+                <Banner
+                  type='warning'
+                  bordered
+                  fullMode={false}
+                  closeIcon={null}
+                  description={t(
+                    '当某个分组的单次真实输入 token 超过阈值后，系统会在该用户后续请求中临时收紧 RPM。这里严格以返回包中的真实 usage 为准，不会使用本地预估 token。',
+                  )}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <Text strong>{t('大输入临时 RPM')}</Text>
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ marginTop: 4, display: 'block' }}
+                >
+                  {t(
+                    '命中规则后，会按当前模型请求限流时长，临时把该用户在该分组下的 RPM 调整为设定值。仅在上游返回了真实 input/prompt token 时才会触发。',
+                  )}
+                </Text>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                {largePromptRPMRules.length === 0 && (
+                  <div
+                    style={{
+                      border: '1px dashed var(--semi-color-border)',
+                      borderRadius: 12,
+                      padding: 16,
+                      background: 'var(--semi-color-fill-0)',
+                    }}
+                  >
+                    <Text type='tertiary'>
+                      {t('暂未配置大输入临时 RPM 规则')}
+                    </Text>
+                  </div>
+                )}
+                {largePromptRPMRules.map((rule, index) => (
+                  <div
+                    key={`large-prompt-rpm-rule-${index}`}
+                    style={{
+                      border: '1px solid var(--semi-color-border)',
+                      borderRadius: 12,
+                      padding: 16,
+                      background: 'var(--semi-color-fill-0)',
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Row gutter={16}>
+                      <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                        <Form.Slot label={t('分组名')}>
+                          <Select
+                            value={rule.group}
+                            placeholder={t('请选择分组')}
+                            optionList={groupOptions}
+                            showSearch
+                            filter
+                            insetLabel={t('分组')}
+                            style={{ width: '100%' }}
+                            onChange={(value) => {
+                              const nextRules = [...largePromptRPMRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                group: String(value || ''),
+                              };
+                              updateLargePromptRPMRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                        <Form.Slot label={t('输入阈值')}>
+                          <InputNumber
+                            value={rule.threshold_k ?? 0}
+                            min={1}
+                            step={1}
+                            suffix='K'
+                            onChange={(value) => {
+                              const nextRules = [...largePromptRPMRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                threshold_k: parseRuleInt(value),
+                              };
+                              updateLargePromptRPMRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                        <Form.Slot label={t('临时 RPM')}>
+                          <InputNumber
+                            value={rule.temporary_rpm ?? 0}
+                            min={1}
+                            step={1}
+                            suffix='RPM'
+                            onChange={(value) => {
+                              const nextRules = [...largePromptRPMRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                temporary_rpm: parseRuleInt(value),
+                              };
+                              updateLargePromptRPMRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col
+                        xs={24}
+                        sm={24}
+                        md={4}
+                        lg={4}
+                        xl={4}
+                        style={ruleDeleteColStyle}
+                      >
+                        <Form.Slot
+                          label={
+                            <span style={{ visibility: 'hidden' }}>
+                              {t('操作')}
+                            </span>
+                          }
+                        >
+                          <Button
+                            theme='light'
+                            type='danger'
+                            style={{ width: '100%' }}
+                            onClick={() => {
+                              updateLargePromptRPMRules(
+                                largePromptRPMRules.filter(
+                                  (_, i) => i !== index,
+                                ),
+                              );
+                            }}
+                          >
+                            {t('删除规则')}
+                          </Button>
+                        </Form.Slot>
+                      </Col>
+                    </Row>
+                  </div>
+                ))}
+                <Button
+                  theme='light'
+                  onClick={() =>
+                    updateLargePromptRPMRules([
+                      ...largePromptRPMRules,
+                      {
+                        group: '',
+                        threshold_k: 32,
+                        temporary_rpm: 1,
+                      },
+                    ])
+                  }
+                >
+                  {t('新增大输入临时 RPM 规则')}
                 </Button>
               </Col>
             </Row>
@@ -661,6 +965,89 @@ export default function GeneralSettings(props) {
                   placeholder={'1000'}
                   onChange={handleFieldChange('token_setting.max_user_tokens')}
                 />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 24 }}>
+              <Col span={24}>
+                <Banner
+                  type='warning'
+                  bordered
+                  fullMode={false}
+                  closeIcon={null}
+                  description={t(
+                    '分组批量切换会立即修改用户默认分组，并把这些用户名下的全部令牌同步切换到目标分组。该操作适合套餐迁移或分组合并，请确认后执行。',
+                  )}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <Text strong>{t('分组批量切换')}</Text>
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ marginTop: 4, display: 'block' }}
+                >
+                  {t(
+                    '按用户当前所属分组筛选。命中用户后，会把用户默认分组切到目标分组，并同步切换其全部令牌分组。',
+                  )}
+                </Text>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Slot label={t('来源分组')}>
+                  <Select
+                    value={groupMigrationSource}
+                    placeholder={t('请选择来源分组')}
+                    optionList={groupOptions}
+                    showSearch
+                    filter
+                    style={{ width: '100%' }}
+                    onChange={(value) =>
+                      setGroupMigrationSource(String(value || ''))
+                    }
+                  />
+                </Form.Slot>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Slot label={t('目标分组')}>
+                  <Select
+                    value={groupMigrationTarget}
+                    placeholder={t('请选择目标分组')}
+                    optionList={groupOptions}
+                    showSearch
+                    filter
+                    style={{ width: '100%' }}
+                    onChange={(value) =>
+                      setGroupMigrationTarget(String(value || ''))
+                    }
+                  />
+                </Form.Slot>
+              </Col>
+              <Col
+                xs={24}
+                sm={24}
+                md={8}
+                lg={8}
+                xl={8}
+                style={ruleDeleteColStyle}
+              >
+                <Form.Slot
+                  label={
+                    <span style={{ visibility: 'hidden' }}>{t('操作')}</span>
+                  }
+                >
+                  <Button
+                    theme='solid'
+                    type='warning'
+                    style={{ width: '100%' }}
+                    disabled={!groupMigrationSource || !groupMigrationTarget}
+                    onClick={handleMigrateGroupUsers}
+                  >
+                    {t('一键切换用户与令牌分组')}
+                  </Button>
+                </Form.Slot>
               </Col>
             </Row>
             <Row>

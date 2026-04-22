@@ -618,6 +618,14 @@ func handleConfigUpdate(key, value string) bool {
 		performance_setting.UpdateAndSync()
 	} else if configName == "tool_price_setting" {
 		operation_setting.RebuildToolPriceIndex()
+	} else if configName == "group_delay_setting" && configKey == "rules" {
+		if err := operation_setting.UpdateGroupDelayRulesByJSONString(value); err != nil {
+			common.SysError("failed to update group delay rules: " + err.Error())
+		}
+	} else if configName == "large_prompt_rpm_setting" && configKey == "rules" {
+		if err := operation_setting.UpdateLargePromptRPMRulesByJSONString(value); err != nil {
+			common.SysError("failed to update large prompt rpm rules: " + err.Error())
+		}
 	}
 
 	return true // 已处理

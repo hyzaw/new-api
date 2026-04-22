@@ -509,3 +509,25 @@ func InvalidateUserTokensCache(userId int) error {
 	}
 	return firstErr
 }
+
+func InvalidateTokensCacheByKeys(keys []string) error {
+	if !common.RedisEnabled || len(keys) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(keys))
+	var firstErr error
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := cacheDeleteToken(key); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}

@@ -47,6 +47,7 @@ const OperationSetting = () => {
     RetryTimes: 0,
     'general_setting.quota_display_type': 'USD',
     'group_delay_setting.rules': '[]',
+    'large_prompt_rpm_setting.rules': '[]',
     DisplayTokenStatEnabled: false,
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
