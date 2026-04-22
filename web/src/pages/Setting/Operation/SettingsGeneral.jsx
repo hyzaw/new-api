@@ -150,7 +150,15 @@ export default function GeneralSettings(props) {
     return Math.max(0, Math.trunc(numberValue));
   };
 
+  const getDefaultLargePromptRPMDuration = () => {
+    const fallback = parseRuleInt(
+      props.options?.ModelRequestRateLimitDurationMinutes,
+    );
+    return fallback > 0 ? fallback : 1;
+  };
+
   const normalizeLargePromptRPMRules = (rules = []) => {
+    const defaultDurationMinutes = getDefaultLargePromptRPMDuration();
     if (!Array.isArray(rules)) {
       return [];
     }
@@ -158,6 +166,8 @@ export default function GeneralSettings(props) {
       group: rule?.group ?? '',
       threshold_k: parseRuleInt(rule?.threshold_k),
       temporary_rpm: parseRuleInt(rule?.temporary_rpm),
+      duration_minutes:
+        parseRuleInt(rule?.duration_minutes) || defaultDurationMinutes,
     }));
   };
 
@@ -192,6 +202,7 @@ export default function GeneralSettings(props) {
       const group = String(rule.group || '').trim();
       const thresholdK = Number(rule.threshold_k);
       const temporaryRPM = Number(rule.temporary_rpm);
+      const durationMinutes = Number(rule.duration_minutes);
       if (!group) {
         return t(`第 ${i + 1} 条大输入临时 RPM 规则的分组名不能为空`);
       }
@@ -200,6 +211,9 @@ export default function GeneralSettings(props) {
       }
       if (Number.isNaN(temporaryRPM) || temporaryRPM <= 0) {
         return t(`第 ${i + 1} 条大输入临时 RPM 规则的临时 RPM 必须大于 0`);
+      }
+      if (Number.isNaN(durationMinutes) || durationMinutes <= 0) {
+        return t(`第 ${i + 1} 条大输入临时 RPM 规则的限制时长必须大于 0`);
       }
       if (seenGroups.has(group)) {
         return t(`分组 ${group} 的大输入临时 RPM 规则重复`);
@@ -305,7 +319,7 @@ export default function GeneralSettings(props) {
     Modal.confirm({
       title: t('确认批量切换分组'),
       content: t(
-        '执行后，会将当前属于来源分组的所有用户默认分组切换到目标分组，并同步切换这些用户名下的全部令牌分组。',
+        '执行后，会将当前令牌分组属于来源分组的全部令牌切换到目标分组，不会修改用户默认分组。',
       ),
       onOk: async () => {
         setLoading(true);
@@ -320,9 +334,8 @@ export default function GeneralSettings(props) {
           }
           showSuccess(
             t(
-              '批量切换完成：共切换 {{userCount}} 个用户，{{tokenCount}} 个令牌',
+              '批量切换完成：共切换 {{tokenCount}} 个令牌',
               {
-                userCount: data?.user_count || 0,
                 tokenCount: data?.token_count || 0,
               },
             ),
@@ -836,7 +849,7 @@ export default function GeneralSettings(props) {
                   fullMode={false}
                   closeIcon={null}
                   description={t(
-                    '当某个分组的单次真实输入 token 超过阈值后，系统会在该用户后续请求中临时收紧 RPM。这里严格以返回包中的真实 usage 为准，不会使用本地预估 token。',
+                    '当某个分组的单次真实输入 token 超过阈值后，系统会在该用户后续请求中临时收紧 RPM，并持续指定分钟数。这里严格以返回包中的真实 usage 为准，不会使用本地预估 token。',
                   )}
                 />
               </Col>
@@ -850,7 +863,7 @@ export default function GeneralSettings(props) {
                   style={{ marginTop: 4, display: 'block' }}
                 >
                   {t(
-                    '命中规则后，会按当前模型请求限流时长，临时把该用户在该分组下的 RPM 调整为设定值。仅在上游返回了真实 input/prompt token 时才会触发。',
+                    '命中规则后，会把该用户在该分组下的 RPM 临时调整为设定值，并持续限制指定分钟数。仅在上游返回了真实 input/prompt token 时才会触发。',
                   )}
                 </Text>
               </Col>
@@ -883,7 +896,7 @@ export default function GeneralSettings(props) {
                     }}
                   >
                     <Row gutter={16}>
-                      <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                      <Col xs={24} sm={24} md={7} lg={7} xl={7}>
                         <Form.Slot label={t('分组名')}>
                           <Select
                             value={rule.group}
@@ -904,7 +917,7 @@ export default function GeneralSettings(props) {
                           />
                         </Form.Slot>
                       </Col>
-                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                      <Col xs={24} sm={12} md={5} lg={5} xl={5}>
                         <Form.Slot label={t('输入阈值')}>
                           <InputNumber
                             value={rule.threshold_k ?? 0}
@@ -922,7 +935,7 @@ export default function GeneralSettings(props) {
                           />
                         </Form.Slot>
                       </Col>
-                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                      <Col xs={24} sm={12} md={4} lg={4} xl={4}>
                         <Form.Slot label={t('临时 RPM')}>
                           <InputNumber
                             value={rule.temporary_rpm ?? 0}
@@ -940,12 +953,30 @@ export default function GeneralSettings(props) {
                           />
                         </Form.Slot>
                       </Col>
+                      <Col xs={24} sm={12} md={5} lg={5} xl={5}>
+                        <Form.Slot label={t('限制时长')}>
+                          <InputNumber
+                            value={rule.duration_minutes ?? 0}
+                            min={1}
+                            step={1}
+                            suffix={t('分钟')}
+                            onChange={(value) => {
+                              const nextRules = [...largePromptRPMRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                duration_minutes: parseRuleInt(value),
+                              };
+                              updateLargePromptRPMRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
                       <Col
                         xs={24}
                         sm={24}
-                        md={4}
-                        lg={4}
-                        xl={4}
+                        md={3}
+                        lg={3}
+                        xl={3}
                         style={ruleDeleteColStyle}
                       >
                         <Form.Slot
@@ -983,6 +1014,7 @@ export default function GeneralSettings(props) {
                         group: '',
                         threshold_k: 32,
                         temporary_rpm: 1,
+                        duration_minutes: getDefaultLargePromptRPMDuration(),
                       },
                     ])
                   }
@@ -1220,7 +1252,7 @@ export default function GeneralSettings(props) {
                   fullMode={false}
                   closeIcon={null}
                   description={t(
-                    '分组批量切换会立即修改用户默认分组，并把这些用户名下的全部令牌同步切换到目标分组。该操作适合套餐迁移或分组合并，请确认后执行。',
+                    '分组批量切换只会修改令牌分组，不会改动用户默认分组。该操作适合令牌迁移或分组合并，请确认后执行。',
                   )}
                 />
               </Col>
@@ -1234,7 +1266,7 @@ export default function GeneralSettings(props) {
                   style={{ marginTop: 4, display: 'block' }}
                 >
                   {t(
-                    '按用户当前所属分组筛选。命中用户后，会把用户默认分组切到目标分组，并同步切换其全部令牌分组。',
+                    '按令牌当前所属分组筛选。来源分组支持手动输入旧分组名；命中后，仅会把这些令牌切换到目标分组，不会修改用户默认分组。',
                   )}
                 </Text>
               </Col>
@@ -1244,8 +1276,9 @@ export default function GeneralSettings(props) {
                 <Form.Slot label={t('来源分组')}>
                   <Select
                     value={groupMigrationSource}
-                    placeholder={t('请选择来源分组')}
+                    placeholder={t('请选择或手动输入来源分组')}
                     optionList={groupOptions}
+                    allowAdditions
                     showSearch
                     filter
                     style={{ width: '100%' }}
@@ -1290,7 +1323,7 @@ export default function GeneralSettings(props) {
                     disabled={!groupMigrationSource || !groupMigrationTarget}
                     onClick={handleMigrateGroupUsers}
                   >
-                    {t('一键切换用户与令牌分组')}
+                    {t('一键切换令牌分组')}
                   </Button>
                 </Form.Slot>
               </Col>

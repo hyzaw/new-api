@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -14,7 +13,7 @@ type GroupMigrationResult struct {
 	TokenCount  int64  `json:"token_count"`
 }
 
-func MigrateUsersAndTokensGroup(sourceGroup, targetGroup string) (*GroupMigrationResult, error) {
+func MigrateTokenGroup(sourceGroup, targetGroup string) (*GroupMigrationResult, error) {
 	if sourceGroup == "" || targetGroup == "" {
 		return nil, errors.New("分组不能为空")
 	}
@@ -27,7 +26,6 @@ func MigrateUsersAndTokensGroup(sourceGroup, targetGroup string) (*GroupMigratio
 		TargetGroup: targetGroup,
 	}
 
-	var userIDs []int
 	var tokenKeys []string
 
 	tx := DB.Begin()
@@ -40,38 +38,22 @@ func MigrateUsersAndTokensGroup(sourceGroup, targetGroup string) (*GroupMigratio
 		}
 	}()
 
-	if err := tx.Model(&User{}).
+	if err := tx.Model(&Token{}).
 		Where(commonGroupCol+" = ?", sourceGroup).
-		Pluck("id", &userIDs).Error; err != nil {
+		Pluck(commonKeyCol, &tokenKeys).Error; err != nil {
 		tx.Rollback()
 		return nil, err
 	}
 
-	if len(userIDs) == 0 {
+	if len(tokenKeys) == 0 {
 		if err := tx.Rollback().Error; err != nil {
 			return nil, err
 		}
 		return result, nil
 	}
 
-	userUpdate := tx.Model(&User{}).
-		Where(commonGroupCol+" = ?", sourceGroup).
-		Update("group", targetGroup)
-	if userUpdate.Error != nil {
-		tx.Rollback()
-		return nil, userUpdate.Error
-	}
-	result.UserCount = userUpdate.RowsAffected
-
-	if err := tx.Model(&Token{}).
-		Where("user_id IN ?", userIDs).
-		Pluck(commonKeyCol, &tokenKeys).Error; err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-
 	tokenUpdate := tx.Model(&Token{}).
-		Where("user_id IN ?", userIDs).
+		Where(commonGroupCol+" = ?", sourceGroup).
 		Update("group", targetGroup)
 	if tokenUpdate.Error != nil {
 		tx.Rollback()
@@ -83,11 +65,6 @@ func MigrateUsersAndTokensGroup(sourceGroup, targetGroup string) (*GroupMigratio
 		return nil, err
 	}
 
-	for _, userID := range userIDs {
-		if err := InvalidateUserCache(userID); err != nil {
-			common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d: %s", userID, err.Error()))
-		}
-	}
 	if err := InvalidateTokensCacheByKeys(tokenKeys); err != nil {
 		common.SysLog("failed to invalidate migrated token cache: " + err.Error())
 	}

@@ -30,7 +30,7 @@ func applyLargePromptRPM(relayInfo *relaycommon.RelayInfo, inputTokens int) {
 	if relayInfo == nil || inputTokens <= 0 {
 		return
 	}
-	if !setting.ModelRequestRateLimitEnabled || setting.ModelRequestRateLimitDurationMinutes <= 0 {
+	if !setting.ModelRequestRateLimitEnabled {
 		return
 	}
 
@@ -44,7 +44,12 @@ func applyLargePromptRPM(relayInfo *relaycommon.RelayInfo, inputTokens int) {
 		return
 	}
 
-	operation_setting.SetTemporaryLargePromptRPM(relayInfo.UserId, group, rule.TemporaryRPM)
+	operation_setting.SetTemporaryLargePromptRPM(
+		relayInfo.UserId,
+		group,
+		rule.TemporaryRPM,
+		rule.DurationMinutes,
+	)
 }
 
 func actualInputTokensFromUsage(ctx *gin.Context, usage *dto.Usage) (int, bool) {

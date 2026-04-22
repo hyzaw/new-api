@@ -1,6 +1,7 @@
 package operation_setting
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,9 +14,10 @@ import (
 )
 
 type LargePromptRPMRule struct {
-	Group        string `json:"group"`
-	ThresholdK   int    `json:"threshold_k"`
-	TemporaryRPM int    `json:"temporary_rpm"`
+	Group           string `json:"group"`
+	ThresholdK      int    `json:"threshold_k"`
+	TemporaryRPM    int    `json:"temporary_rpm"`
+	DurationMinutes int    `json:"duration_minutes"`
 }
 
 type LargePromptRPMSetting struct {
@@ -79,13 +81,13 @@ func GetLargePromptRPMRule(group string, promptTokens int) (LargePromptRPMRule, 
 	return LargePromptRPMRule{}, false
 }
 
-func SetTemporaryLargePromptRPM(userID int, group string, rpm int) {
+func SetTemporaryLargePromptRPM(userID int, group string, rpm int, durationMinutes int) {
 	group = strings.TrimSpace(group)
 	if userID <= 0 || group == "" || rpm <= 0 {
 		return
 	}
 
-	ttl := temporaryLargePromptRPMTTL()
+	ttl := temporaryLargePromptRPMTTL(durationMinutes)
 	if ttl <= 0 {
 		return
 	}
@@ -127,9 +129,13 @@ func GetTemporaryLargePromptRPM(userID int, group string) (int, bool) {
 		return 0, false
 	}
 
+	ttl := getTemporaryLargePromptRPMRedisTTL(key)
+	if ttl <= 0 {
+		ttl = temporaryLargePromptRPMTTL(0)
+	}
 	temporaryLargePromptRPMStore.Store(key, temporaryLargePromptRPMEntry{
 		RPM:       rpm,
-		ExpiresAt: time.Now().Add(temporaryLargePromptRPMTTL()),
+		ExpiresAt: time.Now().Add(ttl),
 	})
 	return rpm, true
 }
@@ -166,11 +172,26 @@ func largePromptRPMTempKey(userID int, group string) string {
 	return fmt.Sprintf("rateLimit:tempRPM:%d:%s", userID, strings.TrimSpace(group))
 }
 
-func temporaryLargePromptRPMTTL() time.Duration {
-	if setting.ModelRequestRateLimitDurationMinutes <= 0 {
+func getTemporaryLargePromptRPMRedisTTL(key string) time.Duration {
+	if !common.RedisEnabled || common.RDB == nil {
 		return 0
 	}
-	return time.Duration(setting.ModelRequestRateLimitDurationMinutes) * time.Minute
+
+	ttl, err := common.RDB.TTL(context.Background(), key).Result()
+	if err != nil || ttl <= 0 {
+		return 0
+	}
+	return ttl
+}
+
+func temporaryLargePromptRPMTTL(durationMinutes int) time.Duration {
+	if durationMinutes <= 0 {
+		durationMinutes = setting.ModelRequestRateLimitDurationMinutes
+	}
+	if durationMinutes <= 0 {
+		return 0
+	}
+	return time.Duration(durationMinutes) * time.Minute
 }
 
 func normalizeLargePromptRPMRules(rules []LargePromptRPMRule) ([]LargePromptRPMRule, error) {
@@ -187,6 +208,9 @@ func normalizeLargePromptRPMRules(rules []LargePromptRPMRule) ([]LargePromptRPMR
 		}
 		if rule.TemporaryRPM <= 0 {
 			return nil, fmt.Errorf("分组 %s 的临时 RPM 必须大于 0", rule.Group)
+		}
+		if rule.DurationMinutes < 0 {
+			return nil, fmt.Errorf("分组 %s 的限制时长不能小于 0", rule.Group)
 		}
 		if _, exists := seenGroups[rule.Group]; exists {
 			return nil, fmt.Errorf("分组 %s 的大输入临时 RPM 规则重复", rule.Group)

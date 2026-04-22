@@ -78,16 +78,12 @@ func MigrateGroupUsers(c *gin.Context) {
 		common.ApiError(c, errors.New("来源分组和目标分组不能相同"))
 		return
 	}
-	if !ratio_setting.ContainsGroupRatio(req.SourceGroup) {
-		common.ApiError(c, errors.New("来源分组不存在"))
-		return
-	}
 	if !ratio_setting.ContainsGroupRatio(req.TargetGroup) {
 		common.ApiError(c, errors.New("目标分组不存在"))
 		return
 	}
 
-	result, err := model.MigrateUsersAndTokensGroup(req.SourceGroup, req.TargetGroup)
+	result, err := model.MigrateTokenGroup(req.SourceGroup, req.TargetGroup)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -97,10 +93,9 @@ func MigrateGroupUsers(c *gin.Context) {
 		c.GetInt("id"),
 		model.LogTypeManage,
 		fmt.Sprintf(
-			"批量切换分组：%s -> %s，影响用户 %d 个，令牌 %d 个",
+			"批量切换令牌分组：%s -> %s，影响令牌 %d 个",
 			req.SourceGroup,
 			req.TargetGroup,
-			result.UserCount,
 			result.TokenCount,
 		),
 	)
