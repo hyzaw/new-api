@@ -48,6 +48,7 @@ export default function GeneralSettings(props) {
   const [showQuotaWarning, setShowQuotaWarning] = useState(false);
   const [groupDelayRules, setGroupDelayRules] = useState([]);
   const [largePromptRPMRules, setLargePromptRPMRules] = useState([]);
+  const [cacheHitMissMaskRules, setCacheHitMissMaskRules] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
   const [groupMigrationSource, setGroupMigrationSource] = useState('');
   const [groupMigrationTarget, setGroupMigrationTarget] = useState('');
@@ -59,6 +60,7 @@ export default function GeneralSettings(props) {
     'general_setting.custom_currency_exchange_rate': '',
     'group_delay_setting.rules': '[]',
     'large_prompt_rpm_setting.rules': '[]',
+    'cache_hit_miss_mask_setting.rules': '[]',
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -207,6 +209,73 @@ export default function GeneralSettings(props) {
     return '';
   };
 
+  const normalizeCacheHitMissMaskRules = (rules = []) => {
+    if (!Array.isArray(rules)) {
+      return [];
+    }
+    return rules.map((rule) => ({
+      group: rule?.group ?? '',
+      min_percent: parseRuleInt(rule?.min_percent),
+      max_percent: parseRuleInt(rule?.max_percent),
+    }));
+  };
+
+  const parseCacheHitMissMaskRules = (raw) => {
+    if (!raw) {
+      return [];
+    }
+    try {
+      return normalizeCacheHitMissMaskRules(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const serializeCacheHitMissMaskRules = (rules = []) =>
+    JSON.stringify(normalizeCacheHitMissMaskRules(rules));
+
+  const updateCacheHitMissMaskRules = (rules) => {
+    const normalizedRules = normalizeCacheHitMissMaskRules(rules);
+    setCacheHitMissMaskRules(normalizedRules);
+    setInputs((prev) => ({
+      ...prev,
+      'cache_hit_miss_mask_setting.rules':
+        serializeCacheHitMissMaskRules(normalizedRules),
+    }));
+  };
+
+  const validateCacheHitMissMaskRules = () => {
+    const seenGroups = new Set();
+    for (let i = 0; i < cacheHitMissMaskRules.length; i++) {
+      const rule = cacheHitMissMaskRules[i];
+      const group = String(rule.group || '').trim();
+      const minPercent = Number(rule.min_percent);
+      const maxPercent = Number(rule.max_percent);
+      if (!group) {
+        return t(`第 ${i + 1} 条缓存命中转未命中规则的分组名不能为空`);
+      }
+      if (
+        Number.isNaN(minPercent) ||
+        Number.isNaN(maxPercent) ||
+        minPercent <= 0 ||
+        maxPercent <= 0
+      ) {
+        return t(`第 ${i + 1} 条缓存命中转未命中规则的比例必须大于 0`);
+      }
+      if (minPercent > 100 || maxPercent > 100) {
+        return t(`第 ${i + 1} 条缓存命中转未命中规则的比例不能大于 100`);
+      }
+      if (maxPercent < minPercent) {
+        return t(`第 ${i + 1} 条缓存命中转未命中规则的最大比例不能小于最小比例`);
+      }
+      if (seenGroups.has(group)) {
+        return t(`分组 ${group} 的缓存命中转未命中规则重复`);
+      }
+      seenGroups.add(group);
+    }
+    return '';
+  };
+
   const fetchGroups = async () => {
     try {
       const res = await API.get('/api/group/');
@@ -283,6 +352,10 @@ export default function GeneralSettings(props) {
     const largePromptRPMError = validateLargePromptRPMRules();
     if (largePromptRPMError) {
       return showError(largePromptRPMError);
+    }
+    const cacheHitMissMaskError = validateCacheHitMissMaskRules();
+    if (cacheHitMissMaskError) {
+      return showError(cacheHitMissMaskError);
     }
     const requestQueue = updateArray.map((item) => {
       let value = '';
@@ -458,16 +531,23 @@ export default function GeneralSettings(props) {
     const currentLargePromptRPMRules = parseLargePromptRPMRules(
       props.options['large_prompt_rpm_setting.rules'],
     );
+    const currentCacheHitMissMaskRules = parseCacheHitMissMaskRules(
+      props.options['cache_hit_miss_mask_setting.rules'],
+    );
     currentInputs['group_delay_setting.rules'] =
       props.options['group_delay_setting.rules'] ||
       serializeGroupDelayRules(currentGroupDelayRules);
     currentInputs['large_prompt_rpm_setting.rules'] =
       props.options['large_prompt_rpm_setting.rules'] ||
       serializeLargePromptRPMRules(currentLargePromptRPMRules);
+    currentInputs['cache_hit_miss_mask_setting.rules'] =
+      props.options['cache_hit_miss_mask_setting.rules'] ||
+      serializeCacheHitMissMaskRules(currentCacheHitMissMaskRules);
     setInputs(currentInputs);
     setInputsRow(structuredClone(currentInputs));
     setGroupDelayRules(currentGroupDelayRules);
     setLargePromptRPMRules(currentLargePromptRPMRules);
+    setCacheHitMissMaskRules(currentCacheHitMissMaskRules);
     refForm.current.setValues(currentInputs);
   }, [props.options]);
 
@@ -908,6 +988,171 @@ export default function GeneralSettings(props) {
                   }
                 >
                   {t('新增大输入临时 RPM 规则')}
+                </Button>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 24 }}>
+              <Col span={24}>
+                <Banner
+                  type='info'
+                  bordered
+                  fullMode={false}
+                  closeIcon={null}
+                  description={t(
+                    '可对指定分组按比例区间随机减少 cached tokens。系统会把这部分缓存命中视作未命中，返回给用户的 usage 与最终结算都会同步体现。',
+                  )}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <Text strong>{t('缓存命中转未命中')}</Text>
+                <Text
+                  type='tertiary'
+                  size='small'
+                  style={{ marginTop: 4, display: 'block' }}
+                >
+                  {t(
+                    '命中规则后，系统会在最小比例到最大比例之间随机选取一个百分比，只减少缓存命中 token，不修改总输入 token。',
+                  )}
+                </Text>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                {cacheHitMissMaskRules.length === 0 && (
+                  <div
+                    style={{
+                      border: '1px dashed var(--semi-color-border)',
+                      borderRadius: 12,
+                      padding: 16,
+                      background: 'var(--semi-color-fill-0)',
+                    }}
+                  >
+                    <Text type='tertiary'>
+                      {t('暂未配置缓存命中转未命中规则')}
+                    </Text>
+                  </div>
+                )}
+                {cacheHitMissMaskRules.map((rule, index) => (
+                  <div
+                    key={`cache-hit-miss-mask-rule-${index}`}
+                    style={{
+                      border: '1px solid var(--semi-color-border)',
+                      borderRadius: 12,
+                      padding: 16,
+                      background: 'var(--semi-color-fill-0)',
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Row gutter={16}>
+                      <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                        <Form.Slot label={t('分组名')}>
+                          <Select
+                            value={rule.group}
+                            placeholder={t('请选择分组')}
+                            optionList={groupOptions}
+                            showSearch
+                            filter
+                            insetLabel={t('分组')}
+                            style={{ width: '100%' }}
+                            onChange={(value) => {
+                              const nextRules = [...cacheHitMissMaskRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                group: String(value || ''),
+                              };
+                              updateCacheHitMissMaskRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                        <Form.Slot label={t('最小比例')}>
+                          <InputNumber
+                            value={rule.min_percent ?? 0}
+                            min={1}
+                            max={100}
+                            step={1}
+                            suffix='%'
+                            onChange={(value) => {
+                              const nextRules = [...cacheHitMissMaskRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                min_percent: parseRuleInt(value),
+                              };
+                              updateCacheHitMissMaskRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col xs={24} sm={12} md={6} lg={6} xl={6}>
+                        <Form.Slot label={t('最大比例')}>
+                          <InputNumber
+                            value={rule.max_percent ?? 0}
+                            min={1}
+                            max={100}
+                            step={1}
+                            suffix='%'
+                            onChange={(value) => {
+                              const nextRules = [...cacheHitMissMaskRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                max_percent: parseRuleInt(value),
+                              };
+                              updateCacheHitMissMaskRules(nextRules);
+                            }}
+                          />
+                        </Form.Slot>
+                      </Col>
+                      <Col
+                        xs={24}
+                        sm={24}
+                        md={4}
+                        lg={4}
+                        xl={4}
+                        style={ruleDeleteColStyle}
+                      >
+                        <Form.Slot
+                          label={
+                            <span style={{ visibility: 'hidden' }}>
+                              {t('操作')}
+                            </span>
+                          }
+                        >
+                          <Button
+                            theme='light'
+                            type='danger'
+                            style={{ width: '100%' }}
+                            onClick={() => {
+                              updateCacheHitMissMaskRules(
+                                cacheHitMissMaskRules.filter(
+                                  (_, i) => i !== index,
+                                ),
+                              );
+                            }}
+                          >
+                            {t('删除规则')}
+                          </Button>
+                        </Form.Slot>
+                      </Col>
+                    </Row>
+                  </div>
+                ))}
+                <Button
+                  theme='light'
+                  onClick={() =>
+                    updateCacheHitMissMaskRules([
+                      ...cacheHitMissMaskRules,
+                      {
+                        group: '',
+                        min_percent: 10,
+                        max_percent: 20,
+                      },
+                    ])
+                  }
+                >
+                  {t('新增缓存命中转未命中规则')}
                 </Button>
               </Col>
             </Row>

@@ -169,6 +169,13 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		logger.LogError(c, fmt.Sprintf("error handling last response: %s, lastStreamData: [%s]", err.Error(), lastStreamData))
 	}
 
+	if containStreamUsage && usage != nil {
+		applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
+		if updatedLastStreamData, err := patchChatStreamUsageData(lastStreamData, usage); err == nil {
+			lastStreamData = updatedLastStreamData
+		}
+	}
+
 	if info.RelayFormat == types.RelayFormatOpenAI {
 		if shouldSendLastResp {
 			_ = sendStreamData(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
@@ -183,9 +190,8 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	if !containStreamUsage {
 		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
+		applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
 	}
-
-	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
 
 	HandleFinalResponse(c, info, lastStreamData, responseId, createAt, model, systemFingerprint, usage, containStreamUsage)
 
@@ -257,7 +263,7 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		usageModified = true
 	}
 
-	applyUsagePostProcessing(info, &simpleResponse.Usage, responseBody)
+	usageModified = applyUsagePostProcessing(info, &simpleResponse.Usage, responseBody) || usageModified
 
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
@@ -592,25 +598,30 @@ func OpenaiHandlerWithUsage(c *gin.Context, info *relaycommon.RelayInfo, resp *h
 	return &usageResp.Usage, nil
 }
 
-func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, responseBody []byte) {
+func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, responseBody []byte) bool {
 	if info == nil || usage == nil {
-		return
+		return false
 	}
 
+	modified := false
 	switch info.ChannelType {
 	case constant.ChannelTypeDeepSeek:
 		if usage.PromptTokensDetails.CachedTokens == 0 && usage.PromptCacheHitTokens != 0 {
 			usage.PromptTokensDetails.CachedTokens = usage.PromptCacheHitTokens
+			modified = true
 		}
 	case constant.ChannelTypeZhipu_v4:
 		// 智普的cached_tokens在标准位置: usage.prompt_tokens_details.cached_tokens
 		if usage.PromptTokensDetails.CachedTokens == 0 {
 			if usage.InputTokensDetails != nil && usage.InputTokensDetails.CachedTokens > 0 {
 				usage.PromptTokensDetails.CachedTokens = usage.InputTokensDetails.CachedTokens
+				modified = true
 			} else if cachedTokens, ok := extractCachedTokensFromBody(responseBody); ok {
 				usage.PromptTokensDetails.CachedTokens = cachedTokens
+				modified = true
 			} else if usage.PromptCacheHitTokens > 0 {
 				usage.PromptTokensDetails.CachedTokens = usage.PromptCacheHitTokens
+				modified = true
 			}
 		}
 	case constant.ChannelTypeMoonshot:
@@ -618,21 +629,32 @@ func applyUsagePostProcessing(info *relaycommon.RelayInfo, usage *dto.Usage, res
 		if usage.PromptTokensDetails.CachedTokens == 0 {
 			if usage.InputTokensDetails != nil && usage.InputTokensDetails.CachedTokens > 0 {
 				usage.PromptTokensDetails.CachedTokens = usage.InputTokensDetails.CachedTokens
+				modified = true
 			} else if cachedTokens, ok := extractMoonshotCachedTokensFromBody(responseBody); ok {
 				usage.PromptTokensDetails.CachedTokens = cachedTokens
+				modified = true
 			} else if cachedTokens, ok := extractCachedTokensFromBody(responseBody); ok {
 				usage.PromptTokensDetails.CachedTokens = cachedTokens
+				modified = true
 			} else if usage.PromptCacheHitTokens > 0 {
 				usage.PromptTokensDetails.CachedTokens = usage.PromptCacheHitTokens
+				modified = true
 			}
 		}
 	case constant.ChannelTypeOpenAI:
 		if usage.PromptTokensDetails.CachedTokens == 0 {
 			if cachedTokens, ok := extractLlamaCachedTokensFromBody(responseBody); ok {
 				usage.PromptTokensDetails.CachedTokens = cachedTokens
+				modified = true
 			}
 		}
 	}
+
+	if service.ApplyCacheHitMissMaskByUsage(info, usage) {
+		modified = true
+	}
+
+	return modified
 }
 
 func extractCachedTokensFromBody(body []byte) (int, bool) {
@@ -664,6 +686,23 @@ func extractCachedTokensFromBody(body []byte) (int, bool) {
 		return *payload.Usage.PromptCacheHitTokens, true
 	}
 	return 0, false
+}
+
+func patchChatStreamUsageData(data string, usage *dto.Usage) (string, error) {
+	if data == "" || usage == nil {
+		return data, nil
+	}
+
+	var payload dto.ChatCompletionsStreamResponse
+	if err := common.UnmarshalJsonStr(data, &payload); err != nil {
+		return "", err
+	}
+	payload.Usage = usage
+	body, err := common.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 // extractMoonshotCachedTokensFromBody 从Moonshot的非标准位置提取cached_tokens

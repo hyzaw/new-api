@@ -40,19 +40,34 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		c.Set("image_generation_call_size", responsesResponse.GetSize())
 	}
 
-	// 写入新的 response body
-	service.IOCopyBytesGracefully(c, resp, responseBody)
-
 	// compute usage
 	usage := dto.Usage{}
 	if responsesResponse.Usage != nil {
 		usage.PromptTokens = responsesResponse.Usage.InputTokens
 		usage.CompletionTokens = responsesResponse.Usage.OutputTokens
 		usage.TotalTokens = responsesResponse.Usage.TotalTokens
+		usage.InputTokens = responsesResponse.Usage.InputTokens
+		usage.OutputTokens = responsesResponse.Usage.OutputTokens
 		if responsesResponse.Usage.InputTokensDetails != nil {
 			usage.PromptTokensDetails.CachedTokens = responsesResponse.Usage.InputTokensDetails.CachedTokens
+			usage.InputTokensDetails = responsesResponse.Usage.InputTokensDetails
+		}
+		if applyUsagePostProcessing(info, &usage, responseBody) {
+			responsesResponse.Usage.PromptTokensDetails.CachedTokens = usage.PromptTokensDetails.CachedTokens
+			responsesResponse.Usage.PromptCacheHitTokens = usage.PromptCacheHitTokens
+			if responsesResponse.Usage.InputTokensDetails != nil {
+				responsesResponse.Usage.InputTokensDetails.CachedTokens = usage.PromptTokensDetails.CachedTokens
+			}
+			var bodyMap map[string]interface{}
+			if err = common.Unmarshal(responseBody, &bodyMap); err == nil {
+				bodyMap["usage"] = responsesResponse.Usage
+				responseBody, _ = common.Marshal(bodyMap)
+			}
 		}
 	}
+
+	// 写入新的 response body
+	service.IOCopyBytesGracefully(c, resp, responseBody)
 	if info == nil || info.ResponsesUsageInfo == nil || info.ResponsesUsageInfo.BuiltInTools == nil {
 		return &usage, nil
 	}
@@ -77,6 +92,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	defer service.CloseResponseBodyGracefully(resp)
 
 	var usage = &dto.Usage{}
+	var usagePostProcessed bool
 	var responseTextBuilder strings.Builder
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
@@ -88,22 +104,35 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			sr.Error(err)
 			return
 		}
-		sendResponsesStreamData(c, streamResponse, data)
 		switch streamResponse.Type {
 		case "response.completed":
 			if streamResponse.Response != nil {
 				if streamResponse.Response.Usage != nil {
 					if streamResponse.Response.Usage.InputTokens != 0 {
 						usage.PromptTokens = streamResponse.Response.Usage.InputTokens
+						usage.InputTokens = streamResponse.Response.Usage.InputTokens
 					}
 					if streamResponse.Response.Usage.OutputTokens != 0 {
 						usage.CompletionTokens = streamResponse.Response.Usage.OutputTokens
+						usage.OutputTokens = streamResponse.Response.Usage.OutputTokens
 					}
 					if streamResponse.Response.Usage.TotalTokens != 0 {
 						usage.TotalTokens = streamResponse.Response.Usage.TotalTokens
 					}
 					if streamResponse.Response.Usage.InputTokensDetails != nil {
 						usage.PromptTokensDetails.CachedTokens = streamResponse.Response.Usage.InputTokensDetails.CachedTokens
+						usage.InputTokensDetails = streamResponse.Response.Usage.InputTokensDetails
+					}
+					if applyUsagePostProcessing(info, usage, nil) {
+						usagePostProcessed = true
+						streamResponse.Response.Usage.PromptTokensDetails.CachedTokens = usage.PromptTokensDetails.CachedTokens
+						streamResponse.Response.Usage.PromptCacheHitTokens = usage.PromptCacheHitTokens
+						if streamResponse.Response.Usage.InputTokensDetails != nil {
+							streamResponse.Response.Usage.InputTokensDetails.CachedTokens = usage.PromptTokensDetails.CachedTokens
+						}
+						if bodyBytes, marshalErr := common.Marshal(streamResponse); marshalErr == nil {
+							data = string(bodyBytes)
+						}
 					}
 				}
 				if streamResponse.Response.HasImageGenerationCall() {
@@ -128,6 +157,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 				}
 			}
 		}
+		sendResponsesStreamData(c, streamResponse, data)
 	})
 
 	if usage.CompletionTokens == 0 {
@@ -145,6 +175,9 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	}
 
 	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
+	if !usagePostProcessed {
+		applyUsagePostProcessing(info, usage, nil)
+	}
 
 	return usage, nil
 }

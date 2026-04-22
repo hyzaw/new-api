@@ -626,6 +626,10 @@ func handleConfigUpdate(key, value string) bool {
 		if err := operation_setting.UpdateLargePromptRPMRulesByJSONString(value); err != nil {
 			common.SysError("failed to update large prompt rpm rules: " + err.Error())
 		}
+	} else if configName == "cache_hit_miss_mask_setting" && configKey == "rules" {
+		if err := operation_setting.UpdateCacheHitMissMaskRulesByJSONString(value); err != nil {
+			common.SysError("failed to update cache hit miss mask rules: " + err.Error())
+		}
 	}
 
 	return true // 已处理
