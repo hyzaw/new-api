@@ -219,6 +219,12 @@ const EditTokenModal = (props) => {
     setLoading(true);
     if (isEdit) {
       let { tokenCount: _tc, ...localInputs } = values;
+      localInputs.group = String(localInputs.group || '').trim();
+      if (!localInputs.group) {
+        showError(t('请选择分组'));
+        setLoading(false);
+        return;
+      }
       localInputs.remain_quota = localInputs.unlimited_quota
         ? 0
         : displayAmountToQuota(localInputs.remain_amount);
@@ -255,6 +261,12 @@ const EditTokenModal = (props) => {
       let successCount = 0;
       for (let i = 0; i < count; i++) {
         let { tokenCount: _tc, ...localInputs } = values;
+        localInputs.group = String(localInputs.group || '').trim();
+        if (!localInputs.group) {
+          showError(t('请选择分组'));
+          setLoading(false);
+          break;
+        }
         const baseName =
           values.name.trim() === '' ? 'default' : values.name.trim();
         if (i !== 0 || values.name.trim() === '') {
@@ -387,9 +399,10 @@ const EditTokenModal = (props) => {
                       <Form.Select
                         field='group'
                         label={t('令牌分组')}
-                        placeholder={t('令牌分组，默认为用户的分组')}
+                        placeholder={t('请选择分组')}
                         optionList={groups}
                         renderOptionItem={renderGroupOption}
+                        rules={[{ required: true, message: t('请选择分组') }]}
                         filter={(input, option) => {
                           const q = input.toLowerCase();
                           return (

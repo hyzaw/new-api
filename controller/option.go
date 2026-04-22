@@ -295,6 +295,14 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "general_setting.default_user_group":
+		if strings.TrimSpace(option.Value.(string)) == "" {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "默认用户分组不能为空",
+			})
+			return
+		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
 		if err != nil {

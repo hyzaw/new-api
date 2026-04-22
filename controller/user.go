@@ -215,6 +215,7 @@ func Register(c *gin.Context) {
 			RemainQuota:        500000, // 示例额度
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
+			Group:              insertedUser.Group,
 		}
 		if setting.DefaultUseAutoGroup {
 			token.Group = "auto"
@@ -855,6 +856,16 @@ type ManageRequest struct {
 	Mode   string `json:"mode"`
 }
 
+type BatchUpdateUserGroupRequest struct {
+	UserIDs     []int  `json:"user_ids"`
+	TargetGroup string `json:"target_group"`
+}
+
+type MigrateUserGroupRequest struct {
+	SourceGroup string `json:"source_group"`
+	TargetGroup string `json:"target_group"`
+}
+
 // ManageUser Only admin user can do this
 func ManageUser(c *gin.Context) {
 	var req ManageRequest
@@ -1056,6 +1067,126 @@ func ManageUser(c *gin.Context) {
 		"data":    clearUser,
 	})
 	return
+}
+
+func BatchUpdateUserGroup(c *gin.Context) {
+	var req BatchUpdateUserGroupRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	req.TargetGroup = strings.TrimSpace(req.TargetGroup)
+	req.UserIDs = model.NormalizeUserIDs(req.UserIDs)
+	if len(req.UserIDs) == 0 || req.TargetGroup == "" {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	users, err := model.GetActiveUsersByIDs(req.UserIDs)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if len(users) != len(req.UserIDs) {
+		common.ApiError(c, errors.New("部分用户不存在或已删除，无法批量切换分组"))
+		return
+	}
+
+	myRole := c.GetInt("role")
+	myID := c.GetInt("id")
+	for _, user := range users {
+		if myRole <= user.Role && myRole != common.RoleRootUser {
+			common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+			return
+		}
+	}
+
+	result, err := model.BatchUpdateUserGroup(req.UserIDs, req.TargetGroup)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	for _, userID := range req.UserIDs {
+		if userID != myID {
+			continue
+		}
+		session := sessions.Default(c)
+		session.Set("group", req.TargetGroup)
+		if err := session.Save(); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+			return
+		}
+		break
+	}
+
+	model.RecordLog(
+		myID,
+		model.LogTypeManage,
+		fmt.Sprintf("批量切换用户分组到 %s，影响用户 %d 个", req.TargetGroup, result.UserCount),
+	)
+
+	common.ApiSuccess(c, result)
+}
+
+func MigrateUserGroup(c *gin.Context) {
+	var req MigrateUserGroupRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	req.SourceGroup = strings.TrimSpace(req.SourceGroup)
+	req.TargetGroup = strings.TrimSpace(req.TargetGroup)
+	if req.SourceGroup == "" || req.TargetGroup == "" || req.SourceGroup == req.TargetGroup {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	users, err := model.GetActiveUsersByGroup(req.SourceGroup)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	myRole := c.GetInt("role")
+	myID := c.GetInt("id")
+	for _, user := range users {
+		if myRole <= user.Role && myRole != common.RoleRootUser {
+			common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+			return
+		}
+	}
+
+	result, err := model.MigrateUserGroup(req.SourceGroup, req.TargetGroup)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	if req.SourceGroup != req.TargetGroup {
+		for _, user := range users {
+			if user.Id != myID {
+				continue
+			}
+			session := sessions.Default(c)
+			session.Set("group", req.TargetGroup)
+			if err := session.Save(); err != nil {
+				common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+				return
+			}
+			break
+		}
+	}
+
+	model.RecordLog(
+		myID,
+		model.LogTypeManage,
+		fmt.Sprintf("按分组批量切换用户分组：%s -> %s，影响用户 %d 个", req.SourceGroup, req.TargetGroup, result.UserCount),
+	)
+
+	common.ApiSuccess(c, result)
 }
 
 type emailBindRequest struct {

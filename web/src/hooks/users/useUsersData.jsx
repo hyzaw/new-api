@@ -35,6 +35,7 @@ export const useUsersData = () => {
   const [searching, setSearching] = useState(false);
   const [groupOptions, setGroupOptions] = useState([]);
   const [userCount, setUserCount] = useState(0);
+  const [selectedUsers, setSelectedUsers] = useState([]);
 
   // Modal states
   const [showAddUser, setShowAddUser] = useState(false);
@@ -47,6 +48,16 @@ export const useUsersData = () => {
   const formInitValues = {
     searchKeyword: '',
     searchGroup: '',
+  };
+
+  const rowSelection = {
+    getCheckboxProps: (record) => ({
+      name: record.username,
+    }),
+    selectedRowKeys: selectedUsers.map((user) => user.id),
+    onChange: (selectedRowKeys, selectedRows) => {
+      setSelectedUsers(selectedRows);
+    },
   };
 
   // Form API reference
@@ -213,15 +224,33 @@ export const useUsersData = () => {
 
   // Handle table row styling for disabled/deleted users
   const handleRow = (record, index) => {
-    if (record.DeletedAt !== null || record.status !== 1) {
-      return {
-        style: {
-          background: 'var(--semi-color-disabled-border)',
-        },
-      };
-    } else {
-      return {};
-    }
+    const rowStyle =
+      record.DeletedAt !== null || record.status !== 1
+        ? {
+            style: {
+              background: 'var(--semi-color-disabled-border)',
+            },
+          }
+        : {};
+
+    return {
+      ...rowStyle,
+      onClick: (event) => {
+        if (
+          event.target.closest(
+            'button, .semi-button, a, input, textarea, .semi-checkbox, [role="button"]',
+          )
+        ) {
+          return;
+        }
+        const nextSelectedUsers = selectedUsers.some(
+          (user) => user.id === record.id,
+        )
+          ? selectedUsers.filter((user) => user.id !== record.id)
+          : [...selectedUsers, record];
+        setSelectedUsers(nextSelectedUsers);
+      },
+    };
   };
 
   // Refresh data
@@ -274,6 +303,72 @@ export const useUsersData = () => {
     fetchGroups().then();
   }, []);
 
+  const batchSwitchUserGroup = async (targetGroup) => {
+    const finalGroup = (targetGroup || '').trim();
+    if (selectedUsers.length === 0) {
+      showError(t('请至少选择一个用户'));
+      return false;
+    }
+    if (finalGroup === '') {
+      showError(t('请选择目标分组'));
+      return false;
+    }
+
+    const res = await API.post('/api/user/batch/group', {
+      user_ids: selectedUsers.map((user) => user.id),
+      target_group: finalGroup,
+    });
+    const { success, message, data } = res.data;
+    if (!success) {
+      showError(message);
+      return false;
+    }
+
+    showSuccess(
+      t('已批量切换 {{count}} 个用户到分组 {{group}}', {
+        count: data?.user_count || selectedUsers.length,
+        group: finalGroup,
+      }),
+    );
+    setSelectedUsers([]);
+    await refresh();
+    return true;
+  };
+
+  const migrateUserGroup = async (sourceGroup, targetGroup) => {
+    const finalSourceGroup = (sourceGroup || '').trim();
+    const finalTargetGroup = (targetGroup || '').trim();
+    if (finalSourceGroup === '' || finalTargetGroup === '') {
+      showError(t('请选择来源分组和目标分组'));
+      return false;
+    }
+    if (finalSourceGroup === finalTargetGroup) {
+      showError(t('来源分组和目标分组不能相同'));
+      return false;
+    }
+
+    const res = await API.post('/api/user/migrate_group', {
+      source_group: finalSourceGroup,
+      target_group: finalTargetGroup,
+    });
+    const { success, message, data } = res.data;
+    if (!success) {
+      showError(message);
+      return false;
+    }
+
+    showSuccess(
+      t('已将分组 {{source}} 的 {{count}} 个用户切换到 {{target}}', {
+        source: finalSourceGroup,
+        count: data?.user_count || 0,
+        target: finalTargetGroup,
+      }),
+    );
+    setSelectedUsers([]);
+    await refresh(0);
+    return true;
+  };
+
   return {
     // Data state
     users,
@@ -283,6 +378,9 @@ export const useUsersData = () => {
     userCount,
     searching,
     groupOptions,
+    selectedUsers,
+    rowSelection,
+    setSelectedUsers,
 
     // Modal state
     showAddUser,
@@ -311,6 +409,8 @@ export const useUsersData = () => {
     handlePageSizeChange,
     handleRow,
     refresh,
+    batchSwitchUserGroup,
+    migrateUserGroup,
     closeAddUser,
     closeEditUser,
     getFormValues,

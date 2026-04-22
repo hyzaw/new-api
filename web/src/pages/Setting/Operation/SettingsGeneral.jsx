@@ -55,6 +55,7 @@ export default function GeneralSettings(props) {
   const [inputs, setInputs] = useState({
     TopUpLink: '',
     'general_setting.docs_link': '',
+    'general_setting.default_user_group': 'default',
     'general_setting.quota_display_type': 'USD',
     'general_setting.custom_currency_symbol': '¤',
     'general_setting.custom_currency_exchange_rate': '',
@@ -358,6 +359,12 @@ export default function GeneralSettings(props) {
   function onSubmit() {
     const updateArray = compareObjects(inputs, inputsRow);
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
+    const defaultUserGroup = String(
+      inputs['general_setting.default_user_group'] || '',
+    ).trim();
+    if (!defaultUserGroup) {
+      return showError(t('默认用户分组不能为空'));
+    }
     const groupDelayError = validateGroupDelayRules();
     if (groupDelayError) {
       return showError(groupDelayError);
@@ -538,6 +545,8 @@ export default function GeneralSettings(props) {
       currentInputs['general_setting.custom_currency_exchange_rate'] =
         props.options['general_setting.custom_currency_exchange_rate'];
     }
+    currentInputs['general_setting.default_user_group'] =
+      props.options['general_setting.default_user_group'] || 'default';
     const currentGroupDelayRules = parseGroupDelayRules(
       props.options['group_delay_setting.rules'],
     );
@@ -592,6 +601,23 @@ export default function GeneralSettings(props) {
                   placeholder={t('例如 https://docs.newapi.pro')}
                   onChange={handleFieldChange('general_setting.docs_link')}
                   showClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Select
+                  field={'general_setting.default_user_group'}
+                  label={t('默认用户分组')}
+                  placeholder={t('请选择默认用户分组')}
+                  optionList={groupOptions}
+                  allowAdditions
+                  showSearch
+                  filter
+                  onChange={handleFieldChange(
+                    'general_setting.default_user_group',
+                  )}
+                  rules={[
+                    { required: true, message: t('默认用户分组不能为空') },
+                  ]}
                 />
               </Col>
               {/* 单位美元额度已合入汇率组合控件（TOKENS 模式下编辑），不再单独展示 */}

@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"gorm.io/gorm"
@@ -415,6 +416,10 @@ func (user *User) Insert(inviterId int) error {
 			return err
 		}
 	}
+	user.Group = strings.TrimSpace(user.Group)
+	if user.Group == "" {
+		user.Group = operation_setting.GetDefaultUserGroup()
+	}
 	user.Quota = common.QuotaForNewUser
 	//user.SetAccessToken(common.GetUUID())
 	user.AffCode = common.GetRandomString(4)
@@ -473,6 +478,10 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 		if err != nil {
 			return err
 		}
+	}
+	user.Group = strings.TrimSpace(user.Group)
+	if user.Group == "" {
+		user.Group = operation_setting.GetDefaultUserGroup()
 	}
 	user.Quota = common.QuotaForNewUser
 	user.AffCode = common.GetRandomString(4)

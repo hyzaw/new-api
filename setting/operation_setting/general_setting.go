@@ -1,6 +1,10 @@
 package operation_setting
 
-import "github.com/QuantumNous/new-api/setting/config"
+import (
+	"strings"
+
+	"github.com/QuantumNous/new-api/setting/config"
+)
 
 // 额度展示类型
 const (
@@ -12,6 +16,7 @@ const (
 
 type GeneralSetting struct {
 	DocsLink            string `json:"docs_link"`
+	DefaultUserGroup    string `json:"default_user_group"`
 	PingIntervalEnabled bool   `json:"ping_interval_enabled"`
 	PingIntervalSeconds int    `json:"ping_interval_seconds"`
 	// 当前站点额度展示类型：USD / CNY / TOKENS
@@ -25,6 +30,7 @@ type GeneralSetting struct {
 // 默认配置
 var generalSetting = GeneralSetting{
 	DocsLink:                   "https://docs.newapi.pro",
+	DefaultUserGroup:           "default",
 	PingIntervalEnabled:        false,
 	PingIntervalSeconds:        60,
 	QuotaDisplayType:           QuotaDisplayTypeUSD,
@@ -39,6 +45,13 @@ func init() {
 
 func GetGeneralSetting() *GeneralSetting {
 	return &generalSetting
+}
+
+func GetDefaultUserGroup() string {
+	if group := strings.TrimSpace(generalSetting.DefaultUserGroup); group != "" {
+		return group
+	}
+	return "default"
 }
 
 // IsCurrencyDisplay 是否以货币形式展示（美元或人民币）

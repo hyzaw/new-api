@@ -41,6 +41,7 @@ const UsersTable = (usersData) => {
     pageSize,
     userCount,
     compactMode,
+    rowSelection,
     handlePageChange,
     handlePageSizeChange,
     handleRow,
@@ -175,6 +176,7 @@ const UsersTable = (usersData) => {
       <CardTable
         columns={tableColumns}
         dataSource={users}
+        rowSelection={rowSelection}
         scroll={compactMode ? undefined : { x: 'max-content' }}
         pagination={{
           currentPage: activePage,
