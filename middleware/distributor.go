@@ -135,6 +135,10 @@ func Distribute() func(c *gin.Context) {
 						Retry:      common.GetPointer(0),
 					})
 					if err != nil {
+						if service.ShouldShowUnavailableTokenGroupMessage(usingGroup, modelRequest.Model) {
+							abortWithOpenAiMessage(c, http.StatusServiceUnavailable, service.UnavailableTokenGroupMessage, types.ErrorCodeModelNotFound)
+							return
+						}
 						showGroup := usingGroup
 						if usingGroup == "auto" {
 							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
@@ -149,6 +153,10 @@ func Distribute() func(c *gin.Context) {
 						return
 					}
 					if channel == nil {
+						if service.ShouldShowUnavailableTokenGroupMessage(usingGroup, modelRequest.Model) {
+							abortWithOpenAiMessage(c, http.StatusServiceUnavailable, service.UnavailableTokenGroupMessage, types.ErrorCodeModelNotFound)
+							return
+						}
 						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
 						return
 					}

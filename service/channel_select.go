@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -10,6 +11,8 @@ import (
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/gin-gonic/gin"
 )
+
+const UnavailableTokenGroupMessage = "该分组不存在，请切换到其他分组！"
 
 type RetryParam struct {
 	Ctx          *gin.Context
@@ -159,4 +162,13 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 		}
 	}
 	return channel, selectGroup, nil
+}
+
+func ShouldShowUnavailableTokenGroupMessage(group string, modelName string) bool {
+	group = strings.TrimSpace(group)
+	modelName = strings.TrimSpace(modelName)
+	if group == "" || group == "auto" || modelName == "" {
+		return false
+	}
+	return !model.HasEnabledChannelForGroupModel(group, modelName)
 }
