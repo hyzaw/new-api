@@ -1304,7 +1304,7 @@ export default function GeneralSettings(props) {
                     value={groupMigrationSource}
                     placeholder={t('请选择或手动输入来源分组')}
                     optionList={groupOptions}
-                    allowAdditions
+                    allowCreate
                     showSearch
                     filter
                     style={{ width: '100%' }}
