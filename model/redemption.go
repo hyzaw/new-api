@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 
 	"gorm.io/gorm"
 )
+
+var ErrInvalidRedemptionQuota = errors.New("通用余额和赠送余额不能同时为 0")
 
 type Redemption struct {
 	Id           int            `json:"id"`
@@ -18,12 +21,19 @@ type Redemption struct {
 	Status       int            `json:"status" gorm:"default:1"`
 	Name         string         `json:"name" gorm:"index"`
 	Quota        int            `json:"quota" gorm:"default:100"`
+	GiftQuota    int            `json:"gift_quota" gorm:"default:0;column:gift_quota"`
 	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
 	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+}
+
+type RedeemResult struct {
+	Quota      int `json:"quota"`
+	GiftQuota  int `json:"gift_quota"`
+	TotalQuota int `json:"total_quota"`
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -112,12 +122,12 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	return &redemption, err
 }
 
-func Redeem(key string, userId int) (quota int, err error) {
+func Redeem(key string, userId int) (result *RedeemResult, err error) {
 	if key == "" {
-		return 0, errors.New("未提供兑换码")
+		return nil, errors.New("未提供兑换码")
 	}
 	if userId == 0 {
-		return 0, errors.New("无效的 user id")
+		return nil, errors.New("无效的 user id")
 	}
 	redemption := &Redemption{}
 
@@ -137,7 +147,17 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("该兑换码已过期")
 		}
-		err = tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error
+		updates := map[string]interface{}{}
+		if redemption.Quota > 0 {
+			updates["quota"] = gorm.Expr("quota + ?", redemption.Quota)
+		}
+		if redemption.GiftQuota > 0 {
+			updates["gift_quota"] = gorm.Expr("gift_quota + ?", redemption.GiftQuota)
+		}
+		if len(updates) == 0 {
+			return errors.New("兑换码额度无效")
+		}
+		err = tx.Model(&User{}).Where("id = ?", userId).Updates(updates).Error
 		if err != nil {
 			return err
 		}
@@ -149,10 +169,24 @@ func Redeem(key string, userId int) (quota int, err error) {
 	})
 	if err != nil {
 		common.SysError("redemption failed: " + err.Error())
-		return 0, ErrRedeemFailed
+		return nil, ErrRedeemFailed
 	}
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
-	return redemption.Quota, nil
+	if err := InvalidateUserCache(userId); err != nil {
+		common.SysLog("failed to invalidate user cache after redeeming code: " + err.Error())
+	}
+	logParts := make([]string, 0, 2)
+	if redemption.Quota > 0 {
+		logParts = append(logParts, fmt.Sprintf("通用余额 %s", logger.LogQuota(redemption.Quota)))
+	}
+	if redemption.GiftQuota > 0 {
+		logParts = append(logParts, fmt.Sprintf("赠送余额 %s", logger.LogQuota(redemption.GiftQuota)))
+	}
+	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", strings.Join(logParts, "，"), redemption.Id))
+	return &RedeemResult{
+		Quota:      redemption.Quota,
+		GiftQuota:  redemption.GiftQuota,
+		TotalQuota: redemption.Quota + redemption.GiftQuota,
+	}, nil
 }
 
 func (redemption *Redemption) Insert() error {
@@ -169,7 +203,7 @@ func (redemption *Redemption) SelectUpdate() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
 	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
+	err = DB.Model(redemption).Select("name", "status", "quota", "gift_quota", "redeemed_time", "expired_time").Updates(redemption).Error
 	return err
 }
 

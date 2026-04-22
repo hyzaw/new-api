@@ -46,6 +46,7 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0);
   const [checkinData, setCheckinData] = useState({
     enabled: false,
+    claim_meta: null,
     stats: {
       checked_in_today: false,
       total_checkins: 0,
@@ -86,7 +87,9 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
     const isFirstLoad = !initialLoaded;
     setLoading(true);
     try {
-      const res = await API.get(`/api/user/checkin?month=${month}`);
+      const res = await API.get(
+        `/api/user/reward_center/calendar?scope=gift_calendar_v2&period=${encodeURIComponent(month)}`,
+      );
       const { success, data, message } = res.data;
       if (success) {
         setCheckinData(data);
@@ -114,10 +117,14 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
   };
 
   const postCheckin = async (token) => {
-    const url = token
-      ? `/api/user/checkin?turnstile=${encodeURIComponent(token)}`
-      : '/api/user/checkin';
-    return API.post(url);
+    const claimMeta = checkinData?.claim_meta;
+    return API.post('/api/user/reward_center/claim', {
+      action_code: 'daily_gift_claim_v2',
+      verify_token: token || '',
+      seed: claimMeta?.seed || '',
+      stamp: claimMeta?.stamp || 0,
+      proof: claimMeta?.proof || '',
+    });
   };
 
   const shouldTriggerTurnstile = (message) => {
@@ -133,7 +140,7 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
       const { success, data, message } = res.data;
       if (success) {
         showSuccess(
-          t('签到成功！获得') + ' ' + renderQuota(data.quota_awarded),
+          t('签到成功！获得赠送余额') + ' ' + renderQuota(data.quota_awarded),
         );
         // 刷新签到状态
         fetchCheckinStatus(currentMonth);
@@ -265,7 +272,7 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
                   ? t('今日已签到，累计签到') +
                     ` ${checkinData.stats?.total_checkins || 0} ` +
                     t('天')
-                  : t('每日签到可获得随机额度奖励')}
+                  : t('每日签到可获得随机赠送余额奖励')}
             </div>
           </div>
         </div>
@@ -370,8 +377,8 @@ const CheckinCalendar = ({ t, status, turnstileEnabled, turnstileSiteKey }) => {
         <div className='mt-3 p-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg'>
           <Typography.Text type='tertiary' className='text-xs'>
             <ul className='list-disc list-inside space-y-0.5'>
-              <li>{t('每日签到可获得随机额度奖励')}</li>
-              <li>{t('签到奖励将直接添加到您的账户余额')}</li>
+              <li>{t('每日签到可获得随机赠送余额奖励')}</li>
+              <li>{t('签到奖励将直接添加到您的赠送余额')}</li>
               <li>{t('每日仅可签到一次，请勿重复签到')}</li>
             </ul>
           </Typography.Text>

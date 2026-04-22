@@ -414,7 +414,24 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		}
 	} else {
 		// Wallet
-		if quota > 0 {
+		if relayInfo != nil && (relayInfo.WalletConsumedQuota > 0 || relayInfo.WalletConsumedGiftQuota > 0 || relayInfo.WalletBaseQuota > 0 || relayInfo.WalletBaseGiftQuota > 0 || relayInfo.WalletGiftEligible) {
+			allocation := &model.WalletQuotaAllocation{
+				BaseQuota:         relayInfo.WalletBaseQuota,
+				BaseGiftQuota:     relayInfo.WalletBaseGiftQuota,
+				ConsumedQuota:     relayInfo.WalletConsumedQuota,
+				ConsumedGiftQuota: relayInfo.WalletConsumedGiftQuota,
+				GiftEligible:      relayInfo.WalletGiftEligible,
+			}
+			target := allocation.TotalConsumed() + quota
+			if target < 0 {
+				target = 0
+			}
+			err = model.ApplyUserWalletTarget(relayInfo.UserId, allocation, target)
+			if err == nil {
+				relayInfo.WalletConsumedQuota = allocation.ConsumedQuota
+				relayInfo.WalletConsumedGiftQuota = allocation.ConsumedGiftQuota
+			}
+		} else if quota > 0 {
 			err = model.DecreaseUserQuota(relayInfo.UserId, quota, false)
 		} else {
 			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)

@@ -113,6 +113,7 @@ func setupLogin(user *model.User, c *gin.Context) {
 			"role":         user.Role,
 			"status":       user.Status,
 			"group":        user.Group,
+			"gift_quota":   user.GiftQuota,
 		},
 	})
 }
@@ -411,6 +412,7 @@ func GetSelf(c *gin.Context) {
 			return ratio
 		}(),
 		"quota":             user.Quota,
+		"gift_quota":        user.GiftQuota,
 		"used_quota":        user.UsedQuota,
 		"request_count":     user.RequestCount,
 		"aff_code":          user.AffCode,
@@ -1029,6 +1031,56 @@ func ManageUser(c *gin.Context) {
 			"message": "",
 		})
 		return
+	case "add_gift_quota":
+		adminName := c.GetString("username")
+		adminId := c.GetInt("id")
+		adminInfo := map[string]interface{}{
+			"admin_id":       adminId,
+			"admin_username": adminName,
+		}
+		if req.Mode != "override" && req.Value <= 0 {
+			common.ApiErrorI18n(c, i18n.MsgUserQuotaChangeZero)
+			return
+		}
+		if req.Mode == "override" && req.Value < 0 {
+			common.ApiError(c, errors.New("赠送余额不能小于 0"))
+			return
+		}
+		switch req.Mode {
+		case "add":
+			if err := model.IncreaseUserGiftQuota(user.Id, req.Value); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
+				fmt.Sprintf("管理员增加赠送余额 %s", logger.LogQuota(req.Value)), adminInfo)
+		case "subtract":
+			if err := model.DecreaseUserGiftQuota(user.Id, req.Value); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
+				fmt.Sprintf("管理员减少赠送余额 %s", logger.LogQuota(req.Value)), adminInfo)
+		case "override":
+			oldGiftQuota := user.GiftQuota
+			if err := model.DB.Model(&model.User{}).Where("id = ?", user.Id).Update("gift_quota", req.Value).Error; err != nil {
+				common.ApiError(c, err)
+				return
+			}
+			if err := model.InvalidateUserCache(user.Id); err != nil {
+				common.SysLog(fmt.Sprintf("failed to invalidate user cache for user %d after overriding gift quota: %s", user.Id, err.Error()))
+			}
+			model.RecordLogWithAdminInfo(user.Id, model.LogTypeManage,
+				fmt.Sprintf("管理员覆盖赠送余额从 %s 为 %s", logger.LogQuota(oldGiftQuota), logger.LogQuota(req.Value)), adminInfo)
+		default:
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+		})
+		return
 	}
 
 	if err := user.Update(false); err != nil {
@@ -1289,7 +1341,7 @@ func TopUp(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	quota, err := model.Redeem(req.Key, id)
+	redeemResult, err := model.Redeem(req.Key, id)
 	if err != nil {
 		if errors.Is(err, model.ErrRedeemFailed) {
 			common.ApiErrorI18n(c, i18n.MsgRedeemFailed)
@@ -1301,7 +1353,7 @@ func TopUp(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    quota,
+		"data":    redeemResult,
 	})
 }
 

@@ -38,6 +38,7 @@ type User struct {
 	VerificationCode string         `json:"verification_code" gorm:"-:all"`                                    // this field is only for Email verification, don't save it to database!
 	AccessToken      *string        `json:"access_token" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
 	Quota            int            `json:"quota" gorm:"type:int;default:0"`
+	GiftQuota        int            `json:"gift_quota" gorm:"type:int;default:0;column:gift_quota"`
 	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
 	Group            string         `json:"group" gorm:"type:varchar(64);default:'default'"`
@@ -55,14 +56,15 @@ type User struct {
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:       user.Id,
-		Group:    user.Group,
-		Quota:    user.Quota,
-		Role:     user.Role,
-		Status:   user.Status,
-		Username: user.Username,
-		Setting:  user.Setting,
-		Email:    user.Email,
+		Id:        user.Id,
+		Group:     user.Group,
+		Quota:     user.Quota,
+		GiftQuota: user.GiftQuota,
+		Role:      user.Role,
+		Status:    user.Status,
+		Username:  user.Username,
+		Setting:   user.Setting,
+		Email:     user.Email,
 	}
 	return cache
 }

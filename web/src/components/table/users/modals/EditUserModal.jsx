@@ -95,6 +95,8 @@ const EditUserModal = (props) => {
     email: '',
     quota: 0,
     quota_amount: 0,
+    gift_quota: 0,
+    gift_quota_amount: 0,
     aff_quota: 0,
     aff_quota_amount: 0,
     aff_history_quota: 0,
@@ -107,6 +109,9 @@ const EditUserModal = (props) => {
     nextData.password = '';
     nextData.quota_amount = Number(
       quotaToDisplayAmount(nextData.quota || 0).toFixed(6),
+    );
+    nextData.gift_quota_amount = Number(
+      quotaToDisplayAmount(nextData.gift_quota || 0).toFixed(6),
     );
     nextData.aff_quota_amount = Number(
       quotaToDisplayAmount(nextData.aff_quota || 0).toFixed(6),
@@ -121,6 +126,14 @@ const EditUserModal = (props) => {
         action: 'add_aff_quota',
         title: t('调整邀请余额'),
         label: t('邀请余额'),
+      };
+    }
+    if (adjustTarget === 'gift_quota') {
+      return {
+        field: 'gift_quota',
+        action: 'add_gift_quota',
+        title: t('调整赠送余额'),
+        label: t('赠送余额'),
       };
     }
     return {
@@ -181,6 +194,8 @@ const EditUserModal = (props) => {
     let payload = { ...values };
     delete payload.quota;
     delete payload.quota_amount;
+    delete payload.gift_quota;
+    delete payload.gift_quota_amount;
     delete payload.aff_quota;
     delete payload.aff_quota_amount;
     delete payload.aff_history_quota;
@@ -427,6 +442,32 @@ const EditUserModal = (props) => {
 
                       <Col span={10}>
                         <Form.InputNumber
+                          field='gift_quota_amount'
+                          label={t('赠送余额金额')}
+                          prefix={getCurrencyConfig().symbol}
+                          precision={6}
+                          step={0.000001}
+                          style={{ width: '100%' }}
+                          readonly
+                        />
+                      </Col>
+
+                      <Col span={14}>
+                        <Form.Slot label={t('调整赠送余额')}>
+                          <Button
+                            icon={<IconEdit />}
+                            onClick={() => {
+                              setAdjustTarget('gift_quota');
+                              setAdjustModalOpen(true);
+                            }}
+                          >
+                            {t('调整赠送余额')}
+                          </Button>
+                        </Form.Slot>
+                      </Col>
+
+                      <Col span={10}>
+                        <Form.InputNumber
                           field='aff_quota_amount'
                           label={t('邀请余额金额')}
                           prefix={getCurrencyConfig().symbol}
@@ -480,6 +521,12 @@ const EditUserModal = (props) => {
                             field='quota'
                             label={t('余额额度')}
                             placeholder={t('请输入额度')}
+                            style={{ width: '100%' }}
+                            readonly
+                          />
+                          <Form.InputNumber
+                            field='gift_quota'
+                            label={t('赠送余额额度')}
                             style={{ width: '100%' }}
                             readonly
                           />

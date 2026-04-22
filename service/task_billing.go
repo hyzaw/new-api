@@ -84,10 +84,71 @@ func taskIsSubscription(task *model.Task) bool {
 	return task.PrivateData.BillingSource == BillingSourceSubscription && task.PrivateData.SubscriptionId > 0
 }
 
+func taskHasWalletSnapshot(task *model.Task) bool {
+	if task == nil {
+		return false
+	}
+	if task.PrivateData.BillingSource != "" && task.PrivateData.BillingSource != BillingSourceWallet {
+		return false
+	}
+	return task.PrivateData.WalletBaseQuota > 0 ||
+		task.PrivateData.WalletBaseGiftQuota > 0 ||
+		task.PrivateData.WalletConsumedQuota > 0 ||
+		task.PrivateData.WalletConsumedGiftQuota > 0 ||
+		task.PrivateData.WalletGiftEligible
+}
+
+func taskWalletAllocation(task *model.Task) *model.WalletQuotaAllocation {
+	if !taskHasWalletSnapshot(task) {
+		return nil
+	}
+	return &model.WalletQuotaAllocation{
+		BaseQuota:         task.PrivateData.WalletBaseQuota,
+		BaseGiftQuota:     task.PrivateData.WalletBaseGiftQuota,
+		ConsumedQuota:     task.PrivateData.WalletConsumedQuota,
+		ConsumedGiftQuota: task.PrivateData.WalletConsumedGiftQuota,
+		GiftEligible:      task.PrivateData.WalletGiftEligible,
+	}
+}
+
+func syncTaskWalletAllocation(task *model.Task, allocation *model.WalletQuotaAllocation) {
+	if task == nil || allocation == nil {
+		return
+	}
+	task.PrivateData.WalletBaseQuota = allocation.BaseQuota
+	task.PrivateData.WalletBaseGiftQuota = allocation.BaseGiftQuota
+	task.PrivateData.WalletConsumedQuota = allocation.ConsumedQuota
+	task.PrivateData.WalletConsumedGiftQuota = allocation.ConsumedGiftQuota
+	task.PrivateData.WalletGiftEligible = allocation.GiftEligible
+}
+
+func saveTaskBillingSnapshot(task *model.Task) error {
+	if task == nil || task.ID == 0 {
+		return nil
+	}
+	return model.DB.Model(&model.Task{}).
+		Where("id = ?", task.ID).
+		Updates(map[string]interface{}{
+			"quota":        task.Quota,
+			"private_data": task.PrivateData,
+		}).Error
+}
+
 // taskAdjustFunding 调整任务的资金来源（钱包或订阅），delta > 0 表示扣费，delta < 0 表示退还。
 func taskAdjustFunding(task *model.Task, delta int) error {
 	if taskIsSubscription(task) {
 		return model.PostConsumeUserSubscriptionDelta(task.PrivateData.SubscriptionId, int64(delta))
+	}
+	if allocation := taskWalletAllocation(task); allocation != nil {
+		target := allocation.TotalConsumed() + delta
+		if target < 0 {
+			target = 0
+		}
+		if err := model.ApplyUserWalletTarget(task.UserId, allocation, target); err != nil {
+			return err
+		}
+		syncTaskWalletAllocation(task, allocation)
+		return nil
 	}
 	if delta > 0 {
 		return model.DecreaseUserQuota(task.UserId, delta, false)
@@ -136,6 +197,24 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 		other["is_model_mapped"] = true
 		other["upstream_model_name"] = props.UpstreamModelName
 	}
+	if taskIsSubscription(task) {
+		other["billing_source"] = BillingSourceSubscription
+	} else if allocation := taskWalletAllocation(task); allocation != nil {
+		other["billing_source"] = BillingSourceWallet
+		if allocation.ConsumedQuota > 0 || allocation.ConsumedGiftQuota > 0 {
+			other["wallet_quota_consumed"] = allocation.ConsumedQuota
+			other["wallet_gift_quota_consumed"] = allocation.ConsumedGiftQuota
+			other["wallet_consumed"] = allocation.TotalConsumed()
+			switch {
+			case allocation.ConsumedGiftQuota > 0 && allocation.ConsumedQuota > 0:
+				other["wallet_consume_type"] = "mixed"
+			case allocation.ConsumedGiftQuota > 0:
+				other["wallet_consume_type"] = "gift"
+			default:
+				other["wallet_consume_type"] = "quota"
+			}
+		}
+	}
 	return other
 }
 
@@ -163,6 +242,10 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) {
 
 	// 2. 退还令牌额度
 	taskAdjustTokenQuota(ctx, task, -quota)
+	task.Quota = 0
+	if err := saveTaskBillingSnapshot(task); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("保存任务退款计费快照失败 task %s: %s", task.TaskID, err.Error()))
+	}
 
 	// 3. 记录日志
 	other := taskBillingOther(task)
@@ -215,6 +298,9 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	taskAdjustTokenQuota(ctx, task, quotaDelta)
 
 	task.Quota = actualQuota
+	if err := saveTaskBillingSnapshot(task); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("保存任务差额结算快照失败 task %s: %s", task.TaskID, err.Error()))
+	}
 
 	var logType int
 	var logQuota int

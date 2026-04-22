@@ -149,13 +149,19 @@ const TopUp = () => {
         showSuccess(t('兑换成功！'));
         Modal.success({
           title: t('兑换成功！'),
-          content: t('成功兑换额度：') + renderQuota(data),
+          content: (
+            <div>
+              <div>{t('通用余额')}：{renderQuota(data?.quota || 0)}</div>
+              <div>{t('赠送余额')}：{renderQuota(data?.gift_quota || 0)}</div>
+            </div>
+          ),
           centered: true,
         });
         if (userState.user) {
           const updatedUser = {
             ...userState.user,
-            quota: userState.user.quota + data,
+            quota: userState.user.quota + (data?.quota || 0),
+            gift_quota: (userState.user.gift_quota || 0) + (data?.gift_quota || 0),
           };
           userDispatch({ type: 'login', payload: updatedUser });
         }

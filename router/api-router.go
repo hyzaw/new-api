@@ -109,8 +109,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/2fa/backup_codes", controller.RegenerateBackupCodes)
 
 				// Check-in routes
-				selfRoute.GET("/checkin", controller.GetCheckinStatus)
-				selfRoute.POST("/checkin", controller.DoCheckin)
+				selfRoute.GET("/reward_center/calendar", controller.GetCheckinStatus)
+				selfRoute.POST("/reward_center/claim", controller.DoCheckin)
 
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)

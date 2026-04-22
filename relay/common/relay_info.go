@@ -117,6 +117,7 @@ type RelayInfo struct {
 	UserSetting            dto.UserSetting
 	UserEmail              string
 	UserQuota              int
+	UserGiftQuota          int
 	RelayFormat            types.RelayFormat
 	SendResponseCount      int
 	ReceivedResponseCount  int
@@ -145,6 +146,11 @@ type RelayInfo struct {
 	// SubscriptionAmountTotal / SubscriptionAmountUsedAfterPreConsume are used to compute remaining in logs.
 	SubscriptionAmountTotal               int64
 	SubscriptionAmountUsedAfterPreConsume int64
+	WalletBaseQuota                       int
+	WalletBaseGiftQuota                   int
+	WalletConsumedQuota                   int
+	WalletConsumedGiftQuota               int
+	WalletGiftEligible                    bool
 	IsClaudeBetaQuery                     bool // /v1/messages?beta=true
 	IsChannelTest                         bool // channel test request
 	RetryIndex                            int

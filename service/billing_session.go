@@ -232,10 +232,10 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 func (s *BillingSession) reserveFunding(delta int) error {
 	switch funding := s.funding.(type) {
 	case *WalletFunding:
-		if err := model.DecreaseUserQuota(funding.userId, delta, false); err != nil {
+		target := funding.state.TotalConsumed() + delta
+		if err := model.ApplyUserWalletTarget(funding.userId, &funding.state, target); err != nil {
 			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 		}
-		funding.consumed += delta
 		return nil
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
@@ -256,10 +256,12 @@ func (s *BillingSession) reserveFunding(delta int) error {
 func (s *BillingSession) rollbackFundingReserve(delta int) {
 	switch funding := s.funding.(type) {
 	case *WalletFunding:
-		if err := model.IncreaseUserQuota(funding.userId, delta, false); err != nil {
+		target := funding.state.TotalConsumed() - delta
+		if target < 0 {
+			target = 0
+		}
+		if err := model.ApplyUserWalletTarget(funding.userId, &funding.state, target); err != nil {
 			common.SysLog("error rolling back wallet funding reserve: " + err.Error())
-		} else {
-			funding.consumed -= delta
 		}
 	case *SubscriptionFunding:
 		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, -int64(delta)); err != nil {
@@ -328,9 +330,32 @@ func (s *BillingSession) syncRelayInfo() {
 		info.SubscriptionAmountUsedAfterPreConsume = sub.AmountUsedAfter + int64(s.extraReserved)
 		info.SubscriptionPlanId = sub.PlanId
 		info.SubscriptionPlanTitle = sub.PlanTitle
+		info.WalletBaseQuota = 0
+		info.WalletBaseGiftQuota = 0
+		info.WalletConsumedQuota = 0
+		info.WalletConsumedGiftQuota = 0
+		info.WalletGiftEligible = false
 	} else {
 		info.SubscriptionId = 0
+		info.SubscriptionPlanId = 0
+		info.SubscriptionPlanTitle = ""
 		info.SubscriptionPreConsumed = 0
+		info.SubscriptionPostDelta = 0
+		info.SubscriptionAmountTotal = 0
+		info.SubscriptionAmountUsedAfterPreConsume = 0
+		if wallet, ok := s.funding.(*WalletFunding); ok {
+			info.WalletBaseQuota = wallet.state.BaseQuota
+			info.WalletBaseGiftQuota = wallet.state.BaseGiftQuota
+			info.WalletConsumedQuota = wallet.state.ConsumedQuota
+			info.WalletConsumedGiftQuota = wallet.state.ConsumedGiftQuota
+			info.WalletGiftEligible = wallet.state.GiftEligible
+		} else {
+			info.WalletBaseQuota = 0
+			info.WalletBaseGiftQuota = 0
+			info.WalletConsumedQuota = 0
+			info.WalletConsumedGiftQuota = 0
+			info.WalletGiftEligible = false
+		}
 	}
 }
 
@@ -348,27 +373,33 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 
 	// 钱包路径需要先检查用户额度
 	tryWallet := func() (*BillingSession, *types.NewAPIError) {
-		userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+		summary, err := model.GetUserWalletSummary(relayInfo.UserId, relayInfo.UsingGroup, relayInfo.OriginModelName)
 		if err != nil {
 			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
-		if userQuota <= 0 {
+		if summary.AvailableQuota <= 0 {
 			return nil, types.NewErrorWithStatusCode(
-				fmt.Errorf("用户额度不足, 剩余额度: %s", logger.FormatQuota(userQuota)),
+				fmt.Errorf("用户额度不足, 剩余额度: %s", logger.FormatQuota(summary.AvailableQuota)),
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
-		if userQuota-preConsumedQuota < 0 {
+		if summary.AvailableQuota-preConsumedQuota < 0 {
 			return nil, types.NewErrorWithStatusCode(
-				fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
+				fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(summary.AvailableQuota), logger.FormatQuota(preConsumedQuota)),
 				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
-		relayInfo.UserQuota = userQuota
+		relayInfo.UserQuota = summary.AvailableQuota
+		relayInfo.UserGiftQuota = summary.GiftQuota
 
 		session := &BillingSession{
 			relayInfo: relayInfo,
-			funding:   &WalletFunding{userId: relayInfo.UserId},
+			funding: &WalletFunding{
+				userId: relayInfo.UserId,
+				state: model.WalletQuotaAllocation{
+					GiftEligible: summary.GiftEligible,
+				},
+			},
 		}
 		if apiErr := session.preConsume(c, preConsumedQuota); apiErr != nil {
 			return nil, apiErr

@@ -77,6 +77,10 @@ func AddRedemption(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgRedemptionCountMax)
 		return
 	}
+	if redemption.Quota <= 0 && redemption.GiftQuota <= 0 {
+		common.ApiError(c, model.ErrInvalidRedemptionQuota)
+		return
+	}
 	if valid, msg := validateExpiredTime(c, redemption.ExpiredTime); !valid {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": msg})
 		return
@@ -90,6 +94,7 @@ func AddRedemption(c *gin.Context) {
 			Key:         key,
 			CreatedTime: common.GetTimestamp(),
 			Quota:       redemption.Quota,
+			GiftQuota:   redemption.GiftQuota,
 			ExpiredTime: redemption.ExpiredTime,
 		}
 		err = cleanRedemption.Insert()
@@ -147,7 +152,12 @@ func UpdateRedemption(c *gin.Context) {
 		// If you add more fields, please also update redemption.Update()
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
+		cleanRedemption.GiftQuota = redemption.GiftQuota
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		if cleanRedemption.Quota <= 0 && cleanRedemption.GiftQuota <= 0 {
+			common.ApiError(c, model.ErrInvalidRedemptionQuota)
+			return
+		}
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status

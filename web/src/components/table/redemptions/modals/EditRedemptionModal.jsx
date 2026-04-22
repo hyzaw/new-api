@@ -68,6 +68,8 @@ const EditRedemptionModal = (props) => {
     name: '',
     quota: 100000,
     amount: Number(quotaToDisplayAmount(100000).toFixed(6)),
+    gift_quota: 0,
+    gift_amount: 0,
     count: 1,
     expired_time: null,
   });
@@ -87,6 +89,9 @@ const EditRedemptionModal = (props) => {
         data.expired_time = new Date(data.expired_time * 1000);
       }
       data.amount = Number(quotaToDisplayAmount(data.quota || 0).toFixed(6));
+      data.gift_amount = Number(
+        quotaToDisplayAmount(data.gift_quota || 0).toFixed(6),
+      );
       formApiRef.current?.setValues({ ...getInitValues(), ...data });
     } else {
       showError(message);
@@ -113,8 +118,9 @@ const EditRedemptionModal = (props) => {
     let localInputs = { ...values };
     localInputs.count = parseInt(localInputs.count) || 0;
     localInputs.quota = displayAmountToQuota(localInputs.amount);
-    if (localInputs.quota <= 0) {
-      showError(t('请输入金额'));
+    localInputs.gift_quota = displayAmountToQuota(localInputs.gift_amount);
+    if (localInputs.quota <= 0 && localInputs.gift_quota <= 0) {
+      showError(t('请至少填写一种余额'));
       setLoading(false);
       return;
     }
@@ -301,7 +307,7 @@ const EditRedemptionModal = (props) => {
                     <Col span={24}>
                       <Form.InputNumber
                         field='amount'
-                        label={t('金额')}
+                        label={t('通用余额金额')}
                         prefix={getCurrencyConfig().symbol}
                         placeholder={t('输入金额')}
                         precision={6}
@@ -330,7 +336,7 @@ const EditRedemptionModal = (props) => {
                       <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
                         <Form.InputNumber
                           field='quota'
-                          label={t('额度')}
+                          label={t('通用余额额度')}
                           placeholder={t('输入额度')}
                           rules={[
                             { required: true, message: t('请输入额度') },
@@ -348,6 +354,44 @@ const EditRedemptionModal = (props) => {
                             formApiRef.current?.setValue('quota', quota);
                             formApiRef.current?.setValue(
                               'amount',
+                              Number(quotaToDisplayAmount(quota).toFixed(6)),
+                            );
+                          }}
+                          style={{ width: '100%' }}
+                          showClear
+                        />
+                      </div>
+                    </Col>
+                    <Col span={24}>
+                      <Form.InputNumber
+                        field='gift_amount'
+                        label={t('赠送余额金额')}
+                        prefix={getCurrencyConfig().symbol}
+                        placeholder={t('输入赠送余额金额')}
+                        precision={6}
+                        min={0}
+                        step={0.000001}
+                        style={{ width: '100%' }}
+                        onChange={(val) => {
+                          const amount = val === '' || val == null ? 0 : val;
+                          formApiRef.current?.setValue('gift_amount', amount);
+                          formApiRef.current?.setValue(
+                            'gift_quota',
+                            displayAmountToQuota(amount),
+                          );
+                        }}
+                        showClear
+                      />
+                      <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
+                        <Form.InputNumber
+                          field='gift_quota'
+                          label={t('赠送余额额度')}
+                          placeholder={t('输入赠送余额额度')}
+                          onChange={(val) => {
+                            const quota = val === '' || val == null ? 0 : val;
+                            formApiRef.current?.setValue('gift_quota', quota);
+                            formApiRef.current?.setValue(
+                              'gift_amount',
                               Number(quotaToDisplayAmount(quota).toFixed(6)),
                             );
                           }}

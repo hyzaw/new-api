@@ -642,6 +642,30 @@ export const useLogsData = () => {
             'token 会按倍率换算成“额度/次数”，请求结束后再做差额结算（补扣/返还）。',
           ),
         });
+      } else if (
+        other?.wallet_consume_type ||
+        other?.wallet_quota_consumed ||
+        other?.wallet_gift_quota_consumed
+      ) {
+        const quotaConsumed = Number(other?.wallet_quota_consumed || 0);
+        const giftConsumed = Number(other?.wallet_gift_quota_consumed || 0);
+        const consumeTypeMap = {
+          quota: t('通用余额'),
+          gift: t('赠送余额'),
+          mixed: t('赠送余额 + 通用余额'),
+        };
+        expandDataLocal.push({
+          key: t('钱包扣费类型'),
+          value: consumeTypeMap[other?.wallet_consume_type] || t('通用余额'),
+        });
+        expandDataLocal.push({
+          key: t('钱包扣费明细'),
+          value: (
+            <div style={{ whiteSpace: 'pre-line' }}>
+              {`${t('通用余额')}：${quotaConsumed}\n${t('赠送余额')}：${giftConsumed}`}
+            </div>
+          ),
+        });
       }
       if (isAdminUser && logs[i].type !== 6 && logs[i].type !== 1) {
         expandDataLocal.push({

@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Button, Col, Form, Row, Spin } from '@douyinfe/semi-ui';
+import { Button, Col, Form, Row, Spin, Select } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import {
   compareObjects,
@@ -37,10 +37,70 @@ export default function SettingsCreditLimit(props) {
     QuotaForInviter: '',
     QuotaForInvitee: '',
     TopUpAffRatio: '',
+    'gift_quota_setting.rules': '[]',
     'quota_setting.enable_free_model_pre_consume': true,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
+  const [giftQuotaRules, setGiftQuotaRules] = useState([]);
+  const [groupOptions, setGroupOptions] = useState([]);
+  const [modelOptions, setModelOptions] = useState([]);
+
+  const normalizeGiftQuotaRules = (rules = []) => {
+    if (!Array.isArray(rules)) {
+      return [];
+    }
+    return rules.map((rule) => ({
+      group: String(rule?.group || '*').trim() || '*',
+      model: String(rule?.model || '*').trim() || '*',
+    }));
+  };
+
+  const parseGiftQuotaRules = (raw) => {
+    if (!raw) {
+      return [];
+    }
+    try {
+      return normalizeGiftQuotaRules(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  };
+
+  const serializeGiftQuotaRules = (rules = []) =>
+    JSON.stringify(normalizeGiftQuotaRules(rules));
+
+  const updateGiftQuotaRules = (rules) => {
+    const normalizedRules = normalizeGiftQuotaRules(rules);
+    setGiftQuotaRules(normalizedRules);
+    setInputs((prev) => ({
+      ...prev,
+      'gift_quota_setting.rules': serializeGiftQuotaRules(normalizedRules),
+    }));
+  };
+
+  const fetchOptions = async () => {
+    try {
+      const [groupsRes, modelsRes] = await Promise.all([
+        API.get('/api/group/'),
+        API.get('/api/channel/models'),
+      ]);
+      setGroupOptions(
+        (groupsRes?.data?.data || []).map((group) => ({
+          label: group,
+          value: group,
+        })),
+      );
+      setModelOptions(
+        (modelsRes?.data?.data || []).map((model) => ({
+          label: model,
+          value: model,
+        })),
+      );
+    } catch (error) {
+      showError(t('加载赠送余额规则选项失败'));
+    }
+  };
 
   function onSubmit() {
     const updateArray = compareObjects(inputs, inputsRow);
@@ -84,10 +144,20 @@ export default function SettingsCreditLimit(props) {
         currentInputs[key] = props.options[key];
       }
     }
+    currentInputs['gift_quota_setting.rules'] =
+      props.options['gift_quota_setting.rules'] || '[]';
+    const nextGiftQuotaRules = parseGiftQuotaRules(
+      props.options['gift_quota_setting.rules'],
+    );
     setInputs(currentInputs);
     setInputsRow(structuredClone(currentInputs));
+    setGiftQuotaRules(nextGiftQuotaRules);
     refForm.current.setValues(currentInputs);
   }, [props.options]);
+
+  useEffect(() => {
+    fetchOptions();
+  }, []);
   return (
     <>
       <Spin spinning={loading}>
@@ -183,6 +253,86 @@ export default function SettingsCreditLimit(props) {
                     })
                   }
                 />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={24}>
+                <Form.Slot
+                  label={t('赠送余额可用范围')}
+                  extraText={t(
+                    '配置赠送余额可调用的分组与模型。支持手动输入，* 表示全部；留空则赠送余额不会参与扣费。',
+                  )}
+                >
+                  <div className='space-y-3'>
+                    {giftQuotaRules.map((rule, index) => (
+                      <Row gutter={12} key={`gift-rule-${index}`}>
+                        <Col xs={24} sm={10}>
+                          <Select
+                            value={rule.group}
+                            optionList={groupOptions}
+                            placeholder={t('分组，* 表示全部')}
+                            allowCreate
+                            filter
+                            showSearch
+                            style={{ width: '100%' }}
+                            onChange={(value) => {
+                              const nextRules = [...giftQuotaRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                group: String(value || '*'),
+                              };
+                              updateGiftQuotaRules(nextRules);
+                            }}
+                          />
+                        </Col>
+                        <Col xs={24} sm={10}>
+                          <Select
+                            value={rule.model}
+                            optionList={modelOptions}
+                            placeholder={t('模型，* 表示全部')}
+                            allowCreate
+                            filter
+                            showSearch
+                            style={{ width: '100%' }}
+                            onChange={(value) => {
+                              const nextRules = [...giftQuotaRules];
+                              nextRules[index] = {
+                                ...nextRules[index],
+                                model: String(value || '*'),
+                              };
+                              updateGiftQuotaRules(nextRules);
+                            }}
+                          />
+                        </Col>
+                        <Col xs={24} sm={4}>
+                          <Button
+                            theme='light'
+                            type='danger'
+                            style={{ width: '100%' }}
+                            onClick={() =>
+                              updateGiftQuotaRules(
+                                giftQuotaRules.filter((_, i) => i !== index),
+                              )
+                            }
+                          >
+                            {t('删除')}
+                          </Button>
+                        </Col>
+                      </Row>
+                    ))}
+                    <Button
+                      theme='light'
+                      onClick={() =>
+                        updateGiftQuotaRules([
+                          ...giftQuotaRules,
+                          { group: '*', model: '*' },
+                        ])
+                      }
+                    >
+                      {t('新增赠送余额规则')}
+                    </Button>
+                  </div>
+                </Form.Slot>
               </Col>
             </Row>
             <Row>

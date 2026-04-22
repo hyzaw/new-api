@@ -299,6 +299,27 @@ function renderBillingTag(record, t) {
       </Tag>
     );
   }
+  if (other?.wallet_consume_type === 'gift') {
+    return (
+      <Tag color='amber' shape='circle'>
+        {t('赠送余额')}
+      </Tag>
+    );
+  }
+  if (other?.wallet_consume_type === 'mixed') {
+    return (
+      <Tag color='orange' shape='circle'>
+        {t('赠送+通用')}
+      </Tag>
+    );
+  }
+  if (other?.wallet_consume_type === 'quota') {
+    return (
+      <Tag color='grey' shape='circle'>
+        {t('通用余额')}
+      </Tag>
+    );
+  }
   return null;
 }
 
@@ -860,7 +881,16 @@ export const getLogsColumns = ({
             </Tooltip>
           );
         }
-        return <>{renderQuota(text, 6)}</>;
+        const billingTag = renderBillingTag(record, t);
+        if (!billingTag) {
+          return <>{renderQuota(text, 6)}</>;
+        }
+        return (
+          <Space spacing={4}>
+            <span>{renderQuota(text, 6)}</span>
+            {billingTag}
+          </Space>
+        );
       },
     },
     {

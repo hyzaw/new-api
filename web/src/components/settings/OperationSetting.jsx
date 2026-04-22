@@ -37,6 +37,7 @@ const OperationSetting = () => {
     QuotaForInviter: 0,
     QuotaForInvitee: 0,
     TopUpAffRatio: 10,
+    'gift_quota_setting.rules': '[]',
     'quota_setting.enable_free_model_pre_consume': true,
 
     /* 通用设置 */

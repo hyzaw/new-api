@@ -295,6 +295,15 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "gift_quota_setting.rules":
+		_, err = operation_setting.ParseGiftQuotaRules(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	case "general_setting.default_user_group":
 		if strings.TrimSpace(option.Value.(string)) == "" {
 			c.JSON(http.StatusOK, gin.H{

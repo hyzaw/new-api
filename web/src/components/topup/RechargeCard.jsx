@@ -193,7 +193,7 @@ const RechargeCard = ({
               </div>
 
               {/* 统计数据 */}
-              <div className='grid grid-cols-3 gap-6 mt-4'>
+              <div className='grid grid-cols-2 sm:grid-cols-4 gap-6 mt-4'>
                 {/* 当前余额 */}
                 <div className='text-center'>
                   <div
@@ -215,6 +215,30 @@ const RechargeCard = ({
                       }}
                     >
                       {t('当前余额')}
+                    </Text>
+                  </div>
+                </div>
+
+                <div className='text-center'>
+                  <div
+                    className='text-base sm:text-2xl font-bold mb-2'
+                    style={{ color: 'white' }}
+                  >
+                    {renderQuota(userState?.user?.gift_quota || 0)}
+                  </div>
+                  <div className='flex items-center justify-center text-sm'>
+                    <IconGift
+                      size='small'
+                      className='mr-1'
+                      style={{ color: 'rgba(255,255,255,0.8)' }}
+                    />
+                    <Text
+                      style={{
+                        color: 'rgba(255,255,255,0.8)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      {t('赠送余额')}
                     </Text>
                   </div>
                 </div>
@@ -641,6 +665,9 @@ const RechargeCard = ({
               )
             }
           />
+          <Text type='tertiary' size='small'>
+            {t('兑换码可分别增加通用余额和赠送余额，赠送余额会优先按运营设置的分组/模型规则抵扣。')}
+          </Text>
         </Form>
       </Card>
     </Space>
