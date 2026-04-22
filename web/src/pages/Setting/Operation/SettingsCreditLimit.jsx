@@ -46,6 +46,30 @@ export default function SettingsCreditLimit(props) {
   const [groupOptions, setGroupOptions] = useState([]);
   const [modelOptions, setModelOptions] = useState([]);
 
+  const normalizeSelectValue = (item) => {
+    if (typeof item === 'string' || typeof item === 'number') {
+      return String(item).trim();
+    }
+    if (item && typeof item === 'object') {
+      return String(item.id || item.value || item.label || item.name || '').trim();
+    }
+    return '';
+  };
+
+  const buildSelectOptions = (items = []) => {
+    const uniqueItems = new Set(['*']);
+    for (const item of items) {
+      const normalized = normalizeSelectValue(item);
+      if (normalized) {
+        uniqueItems.add(normalized);
+      }
+    }
+    return Array.from(uniqueItems).map((item) => ({
+      label: item,
+      value: item,
+    }));
+  };
+
   const normalizeGiftQuotaRules = (rules = []) => {
     if (!Array.isArray(rules)) {
       return [];
@@ -85,18 +109,8 @@ export default function SettingsCreditLimit(props) {
         API.get('/api/group/'),
         API.get('/api/channel/models'),
       ]);
-      setGroupOptions(
-        (groupsRes?.data?.data || []).map((group) => ({
-          label: group,
-          value: group,
-        })),
-      );
-      setModelOptions(
-        (modelsRes?.data?.data || []).map((model) => ({
-          label: model,
-          value: model,
-        })),
-      );
+      setGroupOptions(buildSelectOptions(groupsRes?.data?.data || []));
+      setModelOptions(buildSelectOptions(modelsRes?.data?.data || []));
     } catch (error) {
       showError(t('加载赠送余额规则选项失败'));
     }
