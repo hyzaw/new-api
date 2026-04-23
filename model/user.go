@@ -350,16 +350,17 @@ func inviteUser(inviterId int, invitee *User) (err error) {
 	}
 	now := common.GetTimestamp()
 	user.AffCount++
-	user.AffQuota += common.QuotaForInviter
-	user.AffHistoryQuota += common.QuotaForInviter
+	user.GiftQuota += common.QuotaForInviter
 	if err = DB.Save(user).Error; err != nil {
 		return err
 	}
+	if common.QuotaForInviter > 0 {
+		if err = InvalidateUserCache(inviterId); err != nil {
+			common.SysLog("failed to invalidate user cache after invite gift quota reward: " + err.Error())
+		}
+	}
 	if invitee != nil {
 		if err = SyncInviteRegistrationDetail(inviterId, invitee, now); err != nil {
-			return err
-		}
-		if err = syncInviteRewardWalletRecordTx(DB, inviterId, invitee, common.QuotaForInviter, now); err != nil {
 			return err
 		}
 	}
@@ -462,8 +463,7 @@ func (user *User) Insert(inviterId int) error {
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
 		if common.QuotaForInviter > 0 {
-			//_ = IncreaseUserQuota(inviterId, common.QuotaForInviter)
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
+			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户奖励赠送余额 %s", logger.LogQuota(common.QuotaForInviter)))
 		}
 		_ = inviteUser(inviterId, user)
 	}
@@ -527,7 +527,7 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
 		if common.QuotaForInviter > 0 {
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
+			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户奖励赠送余额 %s", logger.LogQuota(common.QuotaForInviter)))
 		}
 		_ = inviteUser(inviterId, user)
 	}
