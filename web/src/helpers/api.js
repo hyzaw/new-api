@@ -60,18 +60,14 @@ function getStoredStatus() {
   }
 }
 
-async function getPublicRequestSigningKey() {
-  if (cachedPublicRequestSigningKey) {
-    return cachedPublicRequestSigningKey;
+function storeStatus(status) {
+  if (!status) {
+    return;
   }
+  localStorage.setItem('status', JSON.stringify(status));
+}
 
-  const storedStatus = getStoredStatus();
-  const storedKey = storedStatus?.public_request_signing_key;
-  if (storedKey) {
-    cachedPublicRequestSigningKey = storedKey;
-    return storedKey;
-  }
-
+async function refreshPublicRequestSigningKey() {
   if (!publicRequestSigningKeyPromise) {
     publicRequestSigningKeyPromise = axios
       .get('/api/status', {
@@ -81,7 +77,11 @@ async function getPublicRequestSigningKey() {
         },
       })
       .then((res) => {
-        const key = res?.data?.data?.public_request_signing_key || '';
+        const status = res?.data?.data || null;
+        if (status) {
+          storeStatus(status);
+        }
+        const key = status?.public_request_signing_key || '';
         if (key) {
           cachedPublicRequestSigningKey = key;
         }
@@ -93,6 +93,26 @@ async function getPublicRequestSigningKey() {
   }
 
   return publicRequestSigningKeyPromise;
+}
+
+async function getPublicRequestSigningKey() {
+  const refreshedKey = await refreshPublicRequestSigningKey();
+  if (refreshedKey) {
+    return refreshedKey;
+  }
+
+  if (cachedPublicRequestSigningKey) {
+    return cachedPublicRequestSigningKey;
+  }
+
+  const storedStatus = getStoredStatus();
+  const storedKey = storedStatus?.public_request_signing_key;
+  if (storedKey) {
+    cachedPublicRequestSigningKey = storedKey;
+    return storedKey;
+  }
+
+  return '';
 }
 
 function getRequestPathWithQuery(config) {
