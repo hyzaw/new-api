@@ -69,9 +69,13 @@ function priceToUnitCost(price) {
 }
 
 const OPS = ['<', '<=', '>', '>='];
+const CONDITION_VAR_P = 'p';
+const CONDITION_VAR_C = 'c';
+const CONDITION_VAR_P_PLUS_CR = 'p_plus_cr';
 const VAR_OPTIONS = [
-  { value: 'p', label: 'p (输入)' },
-  { value: 'c', label: 'c (输出)' },
+  { value: CONDITION_VAR_P, label: 'p (输入)' },
+  { value: CONDITION_VAR_C, label: 'c (输出)' },
+  { value: CONDITION_VAR_P_PLUS_CR, label: 'p + cr (输入+缓存读)' },
 ];
 
 const CACHE_MODE_TIMED = 'timed';
@@ -86,6 +90,29 @@ function formatTokenHint(n) {
   return `= ${v.toLocaleString()} tokens`;
 }
 
+function conditionVarToExprVar(varName) {
+  switch (varName) {
+    case CONDITION_VAR_P_PLUS_CR:
+      return 'p + cr';
+    case CONDITION_VAR_C:
+      return 'c';
+    case CONDITION_VAR_P:
+    default:
+      return 'p';
+  }
+}
+
+function exprVarToConditionVar(exprVar) {
+  const normalized = String(exprVar || '').replace(/\s+/g, '');
+  if (normalized === 'p+cr' || normalized === '(p+cr)') {
+    return CONDITION_VAR_P_PLUS_CR;
+  }
+  if (normalized === 'c') {
+    return CONDITION_VAR_C;
+  }
+  return CONDITION_VAR_P;
+}
+
 // ---------------------------------------------------------------------------
 // Expr generation from visual config (multi-condition)
 // ---------------------------------------------------------------------------
@@ -94,7 +121,7 @@ function buildConditionStr(conditions) {
   if (!conditions || conditions.length === 0) return '';
   return conditions
     .filter((c) => c.var && c.op && c.value != null && c.value !== '')
-    .map((c) => `${c.var} ${c.op} ${c.value}`)
+    .map((c) => `${conditionVarToExprVar(c.var)} ${c.op} ${c.value}`)
     .join(' && ');
 }
 
@@ -224,7 +251,8 @@ function tryParseVisualConfig(exprStr) {
     }
 
     // Multi-tier: cond1 ? tier(body) : cond2 ? tier(body) : tier(body)
-    const condGroup = `((?:(?:p|c)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)(?:\\s*&&\\s*(?:p|c)\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`;
+    const condOperand = `(?:\\(?\\s*p\\s*\\+\\s*cr\\s*\\)?|p|c)`;
+    const condGroup = `((?:${condOperand})\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+(?:\\s*&&\\s*(?:${condOperand})\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`;
     const tierRe = new RegExp(
       `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*${bodyPat}\\)`,
       'g',
@@ -237,9 +265,15 @@ function tryParseVisualConfig(exprStr) {
       if (condStr) {
         const condParts = condStr.split(/\s*&&\s*/);
         for (const cp of condParts) {
-          const cm = cp.trim().match(/^(p|c)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/);
+          const cm = cp
+            .trim()
+            .match(/^(\(?\s*p\s*\+\s*cr\s*\)?|p|c)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/);
           if (cm) {
-            conditions.push({ var: cm[1], op: cm[2], value: Number(cm[3]) });
+            conditions.push({
+              var: exprVarToConditionVar(cm[1]),
+              op: cm[2],
+              value: Number(cm[3]),
+            });
           }
         }
       }
@@ -500,7 +534,11 @@ function ExtendedPriceBlock({ tier, index, onUpdate, t }) {
 function VisualTierCard({ tier, index, isLast, isOnly, onUpdate, onRemove, t }) {
   const conditions = tier.conditions || [];
 
-  const varLabel = { p: t('输入'), c: t('输出') };
+  const varLabel = {
+    [CONDITION_VAR_P]: t('输入'),
+    [CONDITION_VAR_C]: t('输出'),
+    [CONDITION_VAR_P_PLUS_CR]: t('输入+缓存读'),
+  };
   const condSummary = useMemo(() => {
     if (conditions.length === 0) return t('无条件（兜底档）');
     return conditions
@@ -525,7 +563,9 @@ function VisualTierCard({ tier, index, isLast, isOnly, onUpdate, onRemove, t }) 
   const addCondition = () => {
     if (conditions.length >= 2) return;
     const usedVars = conditions.map((c) => c.var);
-    const nextVar = usedVars.includes('p') ? 'c' : 'p';
+    const nextVar =
+      VAR_OPTIONS.find((option) => !usedVars.includes(option.value))?.value ||
+      CONDITION_VAR_P;
     onUpdate(index, 'conditions', [
       ...conditions,
       { var: nextVar, op: '<', value: 200000 },
@@ -692,11 +732,11 @@ function VisualEditor({ visualConfig, onChange, t }) {
       (!newTiers[newTiers.length - 1].conditions ||
         newTiers[newTiers.length - 1].conditions.length === 0)
     ) {
-      newTiers[newTiers.length - 1] = {
-        ...newTiers[newTiers.length - 1],
-        conditions: [{ var: 'p', op: '<', value: 200000 }],
-      };
-    }
+        newTiers[newTiers.length - 1] = {
+          ...newTiers[newTiers.length - 1],
+          conditions: [{ var: CONDITION_VAR_P, op: '<', value: 200000 }],
+        };
+      }
     newTiers.push({
       conditions: [],
       input_unit_cost: 0,
@@ -723,7 +763,7 @@ function VisualEditor({ visualConfig, onChange, t }) {
     <div>
       <Banner
         type='info'
-        description={t('每个档位可设置 0~2 个条件（对 p 和 c），最后一档为兜底档无需条件。')}
+        description={t('每个档位可设置 0~2 个条件（支持 p、c、p+cr），最后一档为兜底档无需条件。')}
         style={{ marginBottom: 12 }}
       />
 
