@@ -28,7 +28,7 @@ import {
   Tag,
   Typography,
 } from '@douyinfe/semi-ui';
-import { IconRefresh, IconSearch } from '@douyinfe/semi-icons';
+import { IconDownload, IconRefresh, IconSearch } from '@douyinfe/semi-icons';
 import {
   IllustrationNoResult,
   IllustrationNoResultDark,
@@ -37,7 +37,12 @@ import { Coins } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import CardPro from '../../common/ui/CardPro';
 import CardTable from '../../common/ui/CardTable';
-import { API, showError, showSuccess, timestamp2string } from '../../../helpers';
+import {
+  API,
+  showError,
+  showSuccess,
+  timestamp2string,
+} from '../../../helpers';
 import { createCardProPagination } from '../../../helpers/utils';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 
@@ -233,7 +238,9 @@ const RefundModalContent = ({
 
       <Text type='tertiary' style={refundModalNoteStyle}>
         {refundMode === 'manual'
-          ? t('手动标记退款会直接记录为已退款，并按退款比例扣回用户额度，请确认已经在线下完成退款。')
+          ? t(
+              '手动标记退款会直接记录为已退款，并按退款比例扣回用户额度，请确认已经在线下完成退款。',
+            )
           : t(
               '同一笔订单退款至少间隔 3 秒，且累计退款金额不能超过原支付金额。若接口返回待确认状态，请稍后查看退款记录。',
             )}
@@ -264,6 +271,7 @@ const TopUpOrdersPage = () => {
   const [refundRecordsLoading, setRefundRecordsLoading] = useState(false);
   const [refundRecords, setRefundRecords] = useState([]);
   const [refundRecordsOrder, setRefundRecordsOrder] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -334,6 +342,51 @@ const TopUpOrdersPage = () => {
     await loadOrders();
     if (refundRecordsVisible && refundRecordsOrder) {
       await loadRefundRecords(refundRecordsOrder);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await API.get('/api/user/topup/export', {
+        params: {
+          keyword: keyword || undefined,
+        },
+        responseType: 'blob',
+        skipErrorHandler: true,
+      });
+
+      const contentType = res.headers?.['content-type'] || '';
+      if (contentType.includes('application/json')) {
+        const text = await res.data.text();
+        try {
+          const payload = JSON.parse(text);
+          showError(payload.message || payload.data || t('导出充值订单失败'));
+        } catch (error) {
+          showError(t('导出充值订单失败'));
+        }
+        return;
+      }
+
+      const disposition = res.headers?.['content-disposition'] || '';
+      const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+      const fallbackMatch = disposition.match(/filename="?([^";]+)"?/);
+      const filename = filenameMatch
+        ? decodeURIComponent(filenameMatch[1])
+        : fallbackMatch?.[1] || `topup-orders-${Date.now()}.xlsx`;
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess(t('导出成功'));
+    } catch (error) {
+      showError(error?.message || t('导出充值订单失败'));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -418,7 +471,9 @@ const TopUpOrdersPage = () => {
       showSuccess(
         data?.message ||
           message ||
-          (refundMode === 'manual' ? t('已手动标记退款成功') : t('退款请求已提交')),
+          (refundMode === 'manual'
+            ? t('已手动标记退款成功')
+            : t('退款请求已提交')),
       );
       setRefundModalVisible(false);
       await loadOrders();
@@ -579,12 +634,7 @@ const TopUpOrdersPage = () => {
         ),
       },
     ];
-  }, [
-    actionTradeNo,
-    loadRefundRecords,
-    refundSubmitting,
-    t,
-  ]);
+  }, [actionTradeNo, loadRefundRecords, refundSubmitting, t]);
 
   const refundRecordColumns = useMemo(() => {
     return [
@@ -688,6 +738,14 @@ const TopUpOrdersPage = () => {
                 {t('打开金额大屏')}
               </Button>
               <Button
+                icon={<IconDownload />}
+                theme='outline'
+                loading={exporting}
+                onClick={handleExport}
+              >
+                {t('导出 XLSX')}
+              </Button>
+              <Button
                 icon={<IconRefresh />}
                 theme='outline'
                 onClick={handleRefresh}
@@ -720,7 +778,9 @@ const TopUpOrdersPage = () => {
           hidePagination={true}
           empty={
             <Empty
-              image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
+              image={
+                <IllustrationNoResult style={{ width: 150, height: 150 }} />
+              }
               darkModeImage={
                 <IllustrationNoResultDark style={{ width: 150, height: 150 }} />
               }
@@ -781,13 +841,14 @@ const TopUpOrdersPage = () => {
               }}
             >
               <Text>
-                {t('订单号')}:
-                {' '}
+                {t('订单号')}:{' '}
                 <Text copyable>{refundRecordsOrder.trade_no}</Text>
               </Text>
               <Text type='tertiary'>
                 {t('已退款 {{amount}} / 可退款 {{refundable}}', {
-                  amount: formatMoney(refundRecordsOrder.successful_refund_amount),
+                  amount: formatMoney(
+                    refundRecordsOrder.successful_refund_amount,
+                  ),
                   refundable: formatMoney(refundRecordsOrder.refundable_amount),
                 })}
               </Text>
@@ -802,9 +863,13 @@ const TopUpOrdersPage = () => {
             hidePagination={true}
             empty={
               <Empty
-                image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
+                image={
+                  <IllustrationNoResult style={{ width: 150, height: 150 }} />
+                }
                 darkModeImage={
-                  <IllustrationNoResultDark style={{ width: 150, height: 150 }} />
+                  <IllustrationNoResultDark
+                    style={{ width: 150, height: 150 }}
+                  />
                 }
                 description={t('暂无退款记录')}
                 style={{ padding: 30 }}

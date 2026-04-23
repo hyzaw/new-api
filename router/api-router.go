@@ -126,6 +126,7 @@ func SetApiRouter(router *gin.Engine) {
 			{
 				adminRoute.GET("/", controller.GetAllUsers)
 				adminRoute.GET("/topup", controller.GetAllTopUps)
+				adminRoute.GET("/topup/export", controller.ExportAllTopUps)
 				adminRoute.GET("/topup/stats", controller.GetTopUpDashboardStats)
 				adminRoute.GET("/aff_withdrawals", controller.GetAllInviteWithdrawals)
 				adminRoute.POST("/aff_withdrawals/:id/review", controller.ReviewInviteWithdrawal)

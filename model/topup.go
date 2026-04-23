@@ -599,6 +599,37 @@ func SearchAllTopUps(keyword string, pageInfo *common.PageInfo) (topups []*TopUp
 	return topups, total, nil
 }
 
+func GetAdminTopUpsForExport(keyword string, limit int) (topups []*TopUp, err error) {
+	if limit <= 0 {
+		limit = searchTopUpCountHardLimit
+	}
+
+	query := DB.Model(&TopUp{})
+	if keyword != "" {
+		pattern, perr := sanitizeLikePattern(keyword)
+		if perr != nil {
+			return nil, perr
+		}
+		query = query.Joins("LEFT JOIN users ON users.id = top_ups.user_id")
+
+		searchExpr := "(top_ups.trade_no LIKE ? ESCAPE '!' OR users.username LIKE ? ESCAPE '!' OR users.display_name LIKE ? ESCAPE '!' OR users.email LIKE ? ESCAPE '!')"
+		searchArgs := []interface{}{pattern, pattern, pattern, pattern}
+
+		if keywordInt, convErr := strconv.Atoi(keyword); convErr == nil {
+			searchExpr = "(top_ups.user_id = ? OR users.id = ? OR " + searchExpr[1:]
+			searchArgs = append([]interface{}{keywordInt, keywordInt}, searchArgs...)
+		}
+
+		query = query.Where(searchExpr, searchArgs...)
+	}
+
+	if err = query.Order("top_ups.id desc").Limit(limit).Find(&topups).Error; err != nil {
+		common.SysError("failed to export topups: " + err.Error())
+		return nil, errors.New("导出充值订单失败")
+	}
+	return topups, nil
+}
+
 // ManualCompleteTopUp 管理员手动完成订单并给用户充值
 func ManualCompleteTopUp(tradeNo string, callerIp string) (bool, error) {
 	if tradeNo == "" {
