@@ -62,6 +62,11 @@ export default function GeneralSettings(props) {
     'group_delay_setting.rules': '[]',
     'large_prompt_rpm_setting.rules': '[]',
     'cache_hit_miss_mask_setting.rules': '[]',
+    ChannelConsecutiveErrorFeishuEnabled: false,
+    ChannelConsecutiveErrorFeishuThreshold: 3,
+    ChannelConsecutiveErrorFeishuAppID: '',
+    ChannelConsecutiveErrorFeishuAppSecret: '',
+    ChannelConsecutiveErrorFeishuChatID: '',
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -356,8 +361,17 @@ export default function GeneralSettings(props) {
     };
   }
 
-  function onSubmit() {
-    const updateArray = compareObjects(inputs, inputsRow);
+  const getOptionSavePriority = (key) => {
+    if (key === 'ChannelConsecutiveErrorFeishuEnabled') {
+      return 20;
+    }
+    return 10;
+  };
+
+  async function onSubmit() {
+    const updateArray = compareObjects(inputs, inputsRow).sort(
+      (a, b) => getOptionSavePriority(a.key) - getOptionSavePriority(b.key),
+    );
     if (!updateArray.length) return showWarning(t('你似乎并没有修改什么'));
     const defaultUserGroup = String(
       inputs['general_setting.default_user_group'] || '',
@@ -377,36 +391,43 @@ export default function GeneralSettings(props) {
     if (cacheHitMissMaskError) {
       return showError(cacheHitMissMaskError);
     }
-    const requestQueue = updateArray.map((item) => {
-      let value = '';
-      if (typeof inputs[item.key] === 'boolean') {
-        value = String(inputs[item.key]);
-      } else {
-        value = inputs[item.key];
-      }
-      return API.put('/api/option/', {
-        key: item.key,
-        value,
-      });
-    });
+    if (
+      inputs.ChannelConsecutiveErrorFeishuEnabled &&
+      (!inputs.ChannelConsecutiveErrorFeishuAppID ||
+        !inputs.ChannelConsecutiveErrorFeishuChatID ||
+        Number(inputs.ChannelConsecutiveErrorFeishuThreshold) <= 0)
+    ) {
+      return showError(
+        t('启用连续错误飞书告警前，请先填写 App ID、群 Chat ID，并将阈值设置为大于 0'),
+      );
+    }
+
     setLoading(true);
-    Promise.all(requestQueue)
-      .then((res) => {
-        if (requestQueue.length === 1) {
-          if (res.includes(undefined)) return;
-        } else if (requestQueue.length > 1) {
-          if (res.includes(undefined))
-            return showError(t('部分保存失败，请重试'));
+    try {
+      for (const item of updateArray) {
+        let value = '';
+        if (typeof inputs[item.key] === 'boolean') {
+          value = String(inputs[item.key]);
+        } else {
+          value = inputs[item.key];
         }
-        showSuccess(t('保存成功'));
-        props.refresh();
-      })
-      .catch(() => {
-        showError(t('保存失败，请重试'));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+
+        const res = await API.put('/api/option/', {
+          key: item.key,
+          value,
+        });
+        if (!res?.data?.success) {
+          return showError(res?.data?.message || t('保存失败，请重试'));
+        }
+      }
+
+      showSuccess(t('保存成功'));
+      props.refresh();
+    } catch {
+      showError(t('保存失败，请重试'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   // 计算展示在输入框中的“1 USD = X <currency>”中的 X
@@ -565,6 +586,16 @@ export default function GeneralSettings(props) {
     currentInputs['cache_hit_miss_mask_setting.rules'] =
       props.options['cache_hit_miss_mask_setting.rules'] ||
       serializeCacheHitMissMaskRules(currentCacheHitMissMaskRules);
+    currentInputs.ChannelConsecutiveErrorFeishuEnabled =
+      props.options.ChannelConsecutiveErrorFeishuEnabled === 'true' ||
+      props.options.ChannelConsecutiveErrorFeishuEnabled === true;
+    currentInputs.ChannelConsecutiveErrorFeishuThreshold =
+      props.options.ChannelConsecutiveErrorFeishuThreshold || 3;
+    currentInputs.ChannelConsecutiveErrorFeishuAppID =
+      props.options.ChannelConsecutiveErrorFeishuAppID || '';
+    currentInputs.ChannelConsecutiveErrorFeishuAppSecret = '';
+    currentInputs.ChannelConsecutiveErrorFeishuChatID =
+      props.options.ChannelConsecutiveErrorFeishuChatID || '';
     setInputs(currentInputs);
     setInputsRow(structuredClone(currentInputs));
     setGroupDelayRules(currentGroupDelayRules);
@@ -1212,6 +1243,85 @@ export default function GeneralSettings(props) {
                 >
                   {t('新增缓存命中转未命中规则')}
                 </Button>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 24 }}>
+              <Col span={24}>
+                <Banner
+                  type='info'
+                  bordered
+                  fullMode={false}
+                  closeIcon={null}
+                  description={t(
+                    '当同一渠道或多 Key 渠道中的同一把 Key 连续报错达到阈值时，系统会向指定飞书群发送一张交互式告警卡片。只在首次达到阈值时推送一次，后续恢复成功后重新计数。',
+                  )}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <Text strong>{t('连续错误飞书告警')}</Text>
+              </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'ChannelConsecutiveErrorFeishuEnabled'}
+                  label={t('启用连续错误飞书告警')}
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange(
+                    'ChannelConsecutiveErrorFeishuEnabled',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'ChannelConsecutiveErrorFeishuThreshold'}
+                  label={t('连续错误阈值')}
+                  min={1}
+                  step={1}
+                  placeholder={'3'}
+                  extraText={t('达到该次数后发送一次飞书卡片')}
+                  onChange={handleFieldChange(
+                    'ChannelConsecutiveErrorFeishuThreshold',
+                  )}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'ChannelConsecutiveErrorFeishuAppID'}
+                  label={t('飞书 App ID')}
+                  placeholder='cli_xxxxxxxxxxxxx'
+                  onChange={handleFieldChange(
+                    'ChannelConsecutiveErrorFeishuAppID',
+                  )}
+                  showClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'ChannelConsecutiveErrorFeishuChatID'}
+                  label={t('目标群 Chat ID')}
+                  placeholder='oc_xxxxxxxxxxxxx'
+                  onChange={handleFieldChange(
+                    'ChannelConsecutiveErrorFeishuChatID',
+                  )}
+                  showClear
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Input
+                  field={'ChannelConsecutiveErrorFeishuAppSecret'}
+                  label={t('飞书 App Secret')}
+                  placeholder={t(
+                    '敏感信息不会回显；留空表示保留当前已保存的 Secret',
+                  )}
+                  type='password'
+                  onChange={handleFieldChange(
+                    'ChannelConsecutiveErrorFeishuAppSecret',
+                  )}
+                />
               </Col>
             </Row>
             <Row gutter={16}>

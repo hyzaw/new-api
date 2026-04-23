@@ -108,7 +108,7 @@ func notifyTopupSuccessToFeishu(tradeNo string, callerIP string, callbackSource 
 		return err
 	}
 
-	token, err := getFeishuTenantAccessToken()
+	token, err := getFeishuTenantAccessToken(setting.TopupNotifyFeishuAppID, setting.TopupNotifyFeishuAppSecret)
 	if err != nil {
 		return err
 	}
@@ -144,10 +144,10 @@ func notifyTopupSuccessToFeishu(tradeNo string, callerIP string, callbackSource 
 	return nil
 }
 
-func getFeishuTenantAccessToken() (string, error) {
+func getFeishuTenantAccessToken(appID string, appSecret string) (string, error) {
 	reqBody := feishuTenantAccessTokenRequest{
-		AppID:     setting.TopupNotifyFeishuAppID,
-		AppSecret: setting.TopupNotifyFeishuAppSecret,
+		AppID:     appID,
+		AppSecret: appSecret,
 	}
 	payloadBytes, err := common.Marshal(reqBody)
 	if err != nil {

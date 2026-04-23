@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -195,6 +196,23 @@ func UpdateOption(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "无法启用飞书充值通知，请先填写飞书 App ID、App Secret 和群 Chat ID！",
+			})
+			return
+		}
+	case "ChannelConsecutiveErrorFeishuThreshold":
+		threshold, parseErr := strconv.Atoi(option.Value.(string))
+		if parseErr != nil || threshold <= 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "连续错误告警阈值必须大于 0",
+			})
+			return
+		}
+	case "ChannelConsecutiveErrorFeishuEnabled":
+		if option.Value == "true" && (!setting.IsChannelConsecutiveErrorFeishuReady()) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "无法启用连续错误飞书告警，请先填写飞书 App ID、App Secret、群 Chat ID，并将连续错误阈值设置为大于 0！",
 			})
 			return
 		}

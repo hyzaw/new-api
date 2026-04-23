@@ -109,6 +109,11 @@ func InitOptionMap() {
 	common.OptionMap["TopupNotifyFeishuAppID"] = setting.TopupNotifyFeishuAppID
 	common.OptionMap["TopupNotifyFeishuAppSecret"] = setting.TopupNotifyFeishuAppSecret
 	common.OptionMap["TopupNotifyFeishuChatID"] = setting.TopupNotifyFeishuChatID
+	common.OptionMap["ChannelConsecutiveErrorFeishuEnabled"] = strconv.FormatBool(setting.ChannelConsecutiveErrorFeishuEnabled)
+	common.OptionMap["ChannelConsecutiveErrorFeishuThreshold"] = strconv.Itoa(setting.ChannelConsecutiveErrorFeishuThreshold)
+	common.OptionMap["ChannelConsecutiveErrorFeishuAppID"] = setting.ChannelConsecutiveErrorFeishuAppID
+	common.OptionMap["ChannelConsecutiveErrorFeishuAppSecret"] = setting.ChannelConsecutiveErrorFeishuAppSecret
+	common.OptionMap["ChannelConsecutiveErrorFeishuChatID"] = setting.ChannelConsecutiveErrorFeishuChatID
 	common.OptionMap["WaffoEnabled"] = strconv.FormatBool(setting.WaffoEnabled)
 	common.OptionMap["WaffoApiKey"] = setting.WaffoApiKey
 	common.OptionMap["WaffoPrivateKey"] = setting.WaffoPrivateKey
@@ -488,6 +493,16 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.TopupNotifyFeishuAppSecret = value
 	case "TopupNotifyFeishuChatID":
 		setting.TopupNotifyFeishuChatID = value
+	case "ChannelConsecutiveErrorFeishuEnabled":
+		setting.ChannelConsecutiveErrorFeishuEnabled = value == "true"
+	case "ChannelConsecutiveErrorFeishuThreshold":
+		setting.ChannelConsecutiveErrorFeishuThreshold, _ = strconv.Atoi(value)
+	case "ChannelConsecutiveErrorFeishuAppID":
+		setting.ChannelConsecutiveErrorFeishuAppID = value
+	case "ChannelConsecutiveErrorFeishuAppSecret":
+		setting.ChannelConsecutiveErrorFeishuAppSecret = value
+	case "ChannelConsecutiveErrorFeishuChatID":
+		setting.ChannelConsecutiveErrorFeishuChatID = value
 	case "WaffoEnabled":
 		setting.WaffoEnabled = value == "true"
 	case "WaffoApiKey":

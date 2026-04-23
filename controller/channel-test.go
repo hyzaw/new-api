@@ -497,6 +497,7 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		Group:            info.UsingGroup,
 		Other:            other,
 	})
+	service.ResetChannelConsecutiveError(channel.Id, common.GetContextKeyString(c, constant.ContextKeyChannelKey))
 	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
 	return testResult{
 		context:     c,
