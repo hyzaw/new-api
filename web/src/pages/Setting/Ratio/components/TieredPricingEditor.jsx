@@ -93,7 +93,7 @@ function formatTokenHint(n) {
 function conditionVarToExprVar(varName) {
   switch (varName) {
     case CONDITION_VAR_P_PLUS_CR:
-      return 'p + cr';
+      return '(p + cr)';
     case CONDITION_VAR_C:
       return 'c';
     case CONDITION_VAR_P:
