@@ -36,7 +36,7 @@ import { IconChevronDown, IconChevronUp } from '@douyinfe/semi-icons';
  * 通用可选择按钮组组件
  *
  * @param {string} title 标题
- * @param {Array<{value:any,label:string,icon?:React.ReactNode,tagCount?:number}>} items 按钮项
+ * @param {Array<{value:any,label:string,icon?:React.ReactNode,tagCount?:number,disabled?:boolean}>} items 按钮项
  * @param {*|Array} activeValue 当前激活的值，可以是单个值或数组（多选）
  * @param {(value:any)=>void} onChange 选择改变回调
  * @param {function} t i18n
@@ -46,6 +46,7 @@ import { IconChevronDown, IconChevronUp } from '@douyinfe/semi-icons';
  * @param {boolean} withCheckbox 是否启用前缀 Checkbox 来控制激活状态
  * @param {boolean} loading 是否处于加载状态
  * @param {string} variant 颜色变体: 'violet' | 'teal' | 'amber' | 'rose' | 'green'，不传则使用默认蓝色
+ * @param {'auto'|'always'|'never'} showTags 标签显示策略，默认 auto
  */
 const SelectableButtonGroup = ({
   title,
@@ -59,6 +60,7 @@ const SelectableButtonGroup = ({
   withCheckbox = false,
   loading = false,
   variant,
+  showTags = 'auto',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [skeletonCount] = useState(12);
@@ -95,7 +97,13 @@ const SelectableButtonGroup = ({
     return { columns: 3, showTags: true }; // 最宽：3列+标签
   };
 
-  const { columns: perRow, showTags: shouldShowTags } = getResponsiveConfig();
+  const { columns: perRow, showTags: responsiveShowTags } = getResponsiveConfig();
+  const shouldShowTags =
+    showTags === 'always'
+      ? true
+      : showTags === 'never'
+        ? false
+        : responsiveShowTags;
   const maxVisibleRows = Math.max(1, Math.floor(collapseHeight / 32)); // Approx row height 32
   const needCollapse = collapsible && items.length > perRow * maxVisibleRows;
   const showSkeleton = useMinimumLoadingTime(loading);
@@ -182,6 +190,7 @@ const SelectableButtonGroup = ({
         const isActive = Array.isArray(activeValue)
           ? activeValue.includes(item.value)
           : activeValue === item.value;
+        const isDisabled = !!item.disabled && !isActive;
 
         if (withCheckbox) {
           return (
@@ -190,12 +199,14 @@ const SelectableButtonGroup = ({
                 onClick={() => {
                   /* disabled */
                 }}
+                disabled={isDisabled}
                 theme={isActive ? 'light' : 'outline'}
                 type={isActive ? 'primary' : 'tertiary'}
                 className='sbg-button'
                 icon={
                   <Checkbox
                     checked={isActive}
+                    disabled={isDisabled}
                     onChange={() => onChange(item.value)}
                     style={{ pointerEvents: 'auto' }}
                   />
@@ -219,7 +230,12 @@ const SelectableButtonGroup = ({
         return (
           <Col span={getColSpan()} key={item.value}>
             <Button
-              onClick={() => onChange(item.value)}
+              onClick={() => {
+                if (!isDisabled) {
+                  onChange(item.value);
+                }
+              }}
+              disabled={isDisabled}
               theme={isActive ? 'light' : 'outline'}
               type={isActive ? 'primary' : 'tertiary'}
               className='sbg-button'

@@ -65,6 +65,7 @@ const PricingGroups = ({
       value: g,
       label: g === 'all' ? t('全部分组') : g,
       tagCount: ratioDisplay,
+      disabled: g !== 'all' && modelCount === 0,
     };
   });
 
@@ -76,6 +77,7 @@ const PricingGroups = ({
       onChange={setFilterGroup}
       loading={loading}
       variant='teal'
+      showTags='always'
       t={t}
     />
   );

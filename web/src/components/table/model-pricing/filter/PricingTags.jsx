@@ -87,6 +87,7 @@ const PricingTags = ({
         value: tag,
         label: tag,
         tagCount: count,
+        disabled: count === 0,
       });
     });
 

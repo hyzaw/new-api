@@ -83,6 +83,7 @@ const PricingEndpointTypes = ({
         value: endpointType,
         label: getEndpointTypeLabel(endpointType),
         tagCount: count,
+        disabled: count === 0,
       };
     }),
   ];
