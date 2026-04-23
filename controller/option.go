@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -113,6 +114,12 @@ type OptionUpdateRequest struct {
 	Value any    `json:"value"`
 }
 
+type ChannelConsecutiveErrorFeishuTestRequest struct {
+	AppID     string `json:"app_id"`
+	AppSecret string `json:"app_secret"`
+	ChatID    string `json:"chat_id"`
+}
+
 func UpdateOption(c *gin.Context) {
 	var option OptionUpdateRequest
 	err := common.DecodeJson(c.Request.Body, &option)
@@ -205,14 +212,6 @@ func UpdateOption(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
 				"message": "连续错误告警阈值必须大于 0",
-			})
-			return
-		}
-	case "ChannelConsecutiveErrorFeishuEnabled":
-		if option.Value == "true" && (!setting.IsChannelConsecutiveErrorFeishuReady()) {
-			c.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"message": "无法启用连续错误飞书告警，请先填写飞书 App ID、App Secret、群 Chat ID，并将连续错误阈值设置为大于 0！",
 			})
 			return
 		}
@@ -387,4 +386,28 @@ func UpdateOption(c *gin.Context) {
 		"message": "",
 	})
 	return
+}
+
+func SendChannelConsecutiveErrorFeishuTestCard(c *gin.Context) {
+	var req ChannelConsecutiveErrorFeishuTestRequest
+	if err := common.DecodeJson(c.Request.Body, &req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "无效的参数",
+		})
+		return
+	}
+
+	if err := service.SendChannelConsecutiveErrorTestCard(req.AppID, req.AppSecret, req.ChatID); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "测试卡片已发送，请前往飞书群查看",
+	})
 }

@@ -39,6 +39,32 @@ var (
 	sendChannelErrorFeishuCardFunc = sendChannelConsecutiveErrorFeishuCard
 )
 
+func SendChannelConsecutiveErrorTestCard(appID string, appSecret string, chatID string) error {
+	resolvedAppID, resolvedAppSecret, resolvedChatID, err := resolveChannelConsecutiveErrorFeishuConfig(appID, appSecret, chatID)
+	if err != nil {
+		return err
+	}
+
+	threshold := setting.ChannelConsecutiveErrorFeishuThreshold
+	if threshold <= 0 {
+		threshold = 3
+	}
+
+	payload := channelConsecutiveErrorNotifyPayload{
+		ChannelID:   999999,
+		ChannelName: "测试渠道",
+		ChannelType: constant.ChannelTypeOpenAI,
+		UsingKey:    "sk-test-channel-error-notify",
+		RequestPath: "/v1/chat/completions",
+		Count:       threshold,
+		StatusCode:  http.StatusInternalServerError,
+		ErrorCode:   string(types.ErrorCodeBadResponseStatusCode),
+		ErrorMsg:    "这是一条用于验证连续错误飞书告警配置的测试消息",
+		OccurredAt:  time.Now(),
+	}
+	return sendChannelConsecutiveErrorFeishuCardWithConfig(payload, resolvedAppID, resolvedAppSecret, resolvedChatID)
+}
+
 func RecordChannelConsecutiveError(channelError types.ChannelError, err *types.NewAPIError, requestPath string) {
 	if err == nil {
 		return
@@ -106,7 +132,16 @@ func buildChannelConsecutiveErrorFeishuMessageUUID(channelID int, usingKey strin
 }
 
 func sendChannelConsecutiveErrorFeishuCard(payload channelConsecutiveErrorNotifyPayload) error {
-	token, err := getFeishuTenantAccessToken(setting.ChannelConsecutiveErrorFeishuAppID, setting.ChannelConsecutiveErrorFeishuAppSecret)
+	return sendChannelConsecutiveErrorFeishuCardWithConfig(
+		payload,
+		setting.ChannelConsecutiveErrorFeishuAppID,
+		setting.ChannelConsecutiveErrorFeishuAppSecret,
+		setting.ChannelConsecutiveErrorFeishuChatID,
+	)
+}
+
+func sendChannelConsecutiveErrorFeishuCardWithConfig(payload channelConsecutiveErrorNotifyPayload, appID string, appSecret string, chatID string) error {
+	token, err := getFeishuTenantAccessToken(appID, appSecret)
 	if err != nil {
 		return err
 	}
@@ -117,7 +152,7 @@ func sendChannelConsecutiveErrorFeishuCard(payload channelConsecutiveErrorNotify
 	}
 
 	messageReq := feishuMessageRequest{
-		ReceiveID: setting.ChannelConsecutiveErrorFeishuChatID,
+		ReceiveID: chatID,
 		MsgType:   "interactive",
 		Content:   cardContent,
 		UUID:      buildChannelConsecutiveErrorFeishuMessageUUID(payload.ChannelID, payload.UsingKey, payload.Count, payload.OccurredAt),
@@ -140,6 +175,28 @@ func sendChannelConsecutiveErrorFeishuCard(payload channelConsecutiveErrorNotify
 		return fmt.Errorf("feishu send message failed: %s", messageResp.Msg)
 	}
 	return nil
+}
+
+func resolveChannelConsecutiveErrorFeishuConfig(appID string, appSecret string, chatID string) (string, string, string, error) {
+	resolvedAppID := strings.TrimSpace(appID)
+	if resolvedAppID == "" {
+		resolvedAppID = strings.TrimSpace(setting.ChannelConsecutiveErrorFeishuAppID)
+	}
+
+	resolvedAppSecret := strings.TrimSpace(appSecret)
+	if resolvedAppSecret == "" {
+		resolvedAppSecret = strings.TrimSpace(setting.ChannelConsecutiveErrorFeishuAppSecret)
+	}
+
+	resolvedChatID := strings.TrimSpace(chatID)
+	if resolvedChatID == "" {
+		resolvedChatID = strings.TrimSpace(setting.ChannelConsecutiveErrorFeishuChatID)
+	}
+
+	if resolvedAppID == "" || resolvedAppSecret == "" || resolvedChatID == "" {
+		return "", "", "", fmt.Errorf("请先填写飞书 App ID、App Secret 和群 Chat ID 后再发送测试卡片")
+	}
+	return resolvedAppID, resolvedAppSecret, resolvedChatID, nil
 }
 
 func buildChannelConsecutiveErrorFeishuCardContent(payload channelConsecutiveErrorNotifyPayload) (string, error) {

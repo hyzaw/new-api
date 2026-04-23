@@ -361,6 +361,25 @@ export default function GeneralSettings(props) {
     };
   }
 
+  const handleSendChannelConsecutiveErrorFeishuTest = async () => {
+    setLoading(true);
+    try {
+      const res = await API.post('/api/option/channel_error_feishu_test', {
+        app_id: inputs.ChannelConsecutiveErrorFeishuAppID || '',
+        app_secret: inputs.ChannelConsecutiveErrorFeishuAppSecret || '',
+        chat_id: inputs.ChannelConsecutiveErrorFeishuChatID || '',
+      });
+      if (!res?.data?.success) {
+        return showError(res?.data?.message || t('测试卡片发送失败'));
+      }
+      showSuccess(res?.data?.message || t('测试卡片已发送'));
+    } catch {
+      showError(t('测试卡片发送失败'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getOptionSavePriority = (key) => {
     if (key === 'ChannelConsecutiveErrorFeishuEnabled') {
       return 20;
@@ -1322,6 +1341,17 @@ export default function GeneralSettings(props) {
                     'ChannelConsecutiveErrorFeishuAppSecret',
                   )}
                 />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={24}>
+                <Button
+                  theme='light'
+                  style={{ marginRight: 12 }}
+                  onClick={handleSendChannelConsecutiveErrorFeishuTest}
+                >
+                  {t('发送测试卡片')}
+                </Button>
               </Col>
             </Row>
             <Row gutter={16}>
