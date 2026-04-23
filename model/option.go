@@ -239,7 +239,32 @@ func UpdateOption(key string, value string) error {
 	// otherwise it will execute Update (with all fields).
 	DB.Save(&option)
 	// Update OptionMap
-	return updateOptionMap(key, value)
+	err := updateOptionMap(key, value)
+	if err != nil {
+		return err
+	}
+	if isPricingRelatedOptionKey(key) {
+		InvalidatePricingCache()
+	}
+	return nil
+}
+
+func isPricingRelatedOptionKey(key string) bool {
+	switch key {
+	case "ModelPrice",
+		"ModelRatio",
+		"CompletionRatio",
+		"CacheRatio",
+		"CreateCacheRatio",
+		"ImageRatio",
+		"AudioRatio",
+		"AudioCompletionRatio",
+		"billing_setting.billing_mode",
+		"billing_setting.billing_expr":
+		return true
+	default:
+		return false
+	}
 }
 
 // EnsureSessionSecret 保证会话密钥可跨容器重启复用，避免 Docker 更新后所有用户被强制下线。
