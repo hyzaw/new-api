@@ -525,6 +525,7 @@ export const useLogsData = () => {
               ...other,
               prompt_tokens: logs[i].prompt_tokens,
               completion_tokens: logs[i].completion_tokens,
+              displayMode: billingDisplayMode,
             }),
           });
         }

@@ -1646,7 +1646,7 @@ export function renderModelPrice(opts) {
     completion_tokens: completionTokens = 0,
     model_ratio: modelRatio = 0,
     model_price: modelPrice = -1,
-    completion_ratio: completionRatio,
+    completion_ratio: _completionRatio,
     group_ratio: _groupRatio,
     user_group_ratio,
     cache_tokens: cacheTokens = 0,
@@ -1672,6 +1672,7 @@ export function renderModelPrice(opts) {
     user_group_ratio,
   );
   let groupRatio = effectiveGroupRatio;
+  const completionRatio = _completionRatio ?? 0;
 
   const { symbol, rate } = getCurrencyConfig();
   const resolvedCompletionRatio = completionRatio ?? 0;
@@ -2405,11 +2406,11 @@ export function renderAudioModelPrice(opts) {
     completion_tokens: completionTokens = 0,
     model_ratio: modelRatio = 0,
     model_price: modelPrice = -1,
-    completion_ratio: completionRatio,
+    completion_ratio: _completionRatio,
     audio_input: audioInputTokens = 0,
     audio_output: audioCompletionTokens = 0,
-    audio_ratio: audioRatio,
-    audio_completion_ratio: audioCompletionRatio,
+    audio_ratio: _audioRatio,
+    audio_completion_ratio: _audioCompletionRatio,
     group_ratio: _groupRatio,
     user_group_ratio,
     cache_tokens: cacheTokens = 0,
@@ -2421,6 +2422,9 @@ export function renderAudioModelPrice(opts) {
     user_group_ratio,
   );
   let groupRatio = effectiveGroupRatio;
+  const completionRatio = _completionRatio ?? 0;
+  const audioRatio = parseFloat(_audioRatio ?? 0).toFixed(6);
+  const audioCompletionRatio = _audioCompletionRatio ?? 0;
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
@@ -2689,7 +2693,7 @@ export function renderClaudeModelPrice(opts) {
     completion_tokens: completionTokens = 0,
     model_ratio: modelRatio = 0,
     model_price: modelPrice = -1,
-    completion_ratio: completionRatio,
+    completion_ratio: _completionRatio,
     group_ratio: _groupRatio,
     user_group_ratio,
     cache_tokens: cacheTokens = 0,
@@ -2707,6 +2711,7 @@ export function renderClaudeModelPrice(opts) {
     user_group_ratio,
   );
   let groupRatio = effectiveGroupRatio;
+  const completionRatio = _completionRatio ?? 0;
 
   // 获取货币配置
   const { symbol, rate } = getCurrencyConfig();
