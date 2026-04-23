@@ -26,6 +26,15 @@ import {
 import axios from 'axios';
 import { MESSAGE_ROLES } from '../constants/playground.constants';
 
+const PUBLIC_SIGNED_ROUTES = new Set([
+  '/api/verification',
+  '/api/user/register',
+  '/api/user/login',
+]);
+
+let cachedPublicRequestSigningKey = null;
+let publicRequestSigningKeyPromise = null;
+
 export let API = axios.create({
   baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
     ? import.meta.env.VITE_REACT_APP_SERVER_URL
@@ -36,6 +45,125 @@ export let API = axios.create({
   },
 });
 
+function getBaseURL() {
+  return import.meta.env.VITE_REACT_APP_SERVER_URL
+    ? import.meta.env.VITE_REACT_APP_SERVER_URL
+    : window.location.origin;
+}
+
+function getStoredStatus() {
+  try {
+    const raw = localStorage.getItem('status');
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function getPublicRequestSigningKey() {
+  if (cachedPublicRequestSigningKey) {
+    return cachedPublicRequestSigningKey;
+  }
+
+  const storedStatus = getStoredStatus();
+  const storedKey = storedStatus?.public_request_signing_key;
+  if (storedKey) {
+    cachedPublicRequestSigningKey = storedKey;
+    return storedKey;
+  }
+
+  if (!publicRequestSigningKeyPromise) {
+    publicRequestSigningKeyPromise = axios
+      .get('/api/status', {
+        baseURL: getBaseURL(),
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      })
+      .then((res) => {
+        const key = res?.data?.data?.public_request_signing_key || '';
+        if (key) {
+          cachedPublicRequestSigningKey = key;
+        }
+        return key;
+      })
+      .finally(() => {
+        publicRequestSigningKeyPromise = null;
+      });
+  }
+
+  return publicRequestSigningKeyPromise;
+}
+
+function getRequestPathWithQuery(config) {
+  const base = config.baseURL || getBaseURL();
+  const url = new URL(config.url, base);
+  if (config.params) {
+    Object.entries(config.params).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach((item) => url.searchParams.append(key, item));
+        return;
+      }
+      url.searchParams.append(key, value);
+    });
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+function shouldSignRequest(config) {
+  if (!config?.url) {
+    return false;
+  }
+  const target = getRequestPathWithQuery(config);
+  const url = new URL(target, window.location.origin);
+  return PUBLIC_SIGNED_ROUTES.has(url.pathname);
+}
+
+function normalizeRequestBody(data) {
+  if (data === undefined || data === null) {
+    return '';
+  }
+  if (typeof data === 'string') {
+    return data;
+  }
+  if (data instanceof URLSearchParams) {
+    return data.toString();
+  }
+  if (typeof FormData !== 'undefined' && data instanceof FormData) {
+    const params = new URLSearchParams();
+    data.forEach((value, key) => {
+      params.append(key, typeof value === 'string' ? value : String(value));
+    });
+    return params.toString();
+  }
+  return JSON.stringify(data);
+}
+
+function buildPublicRequestSignaturePayload(method, target, timestamp, body) {
+  return [method.toUpperCase(), target, String(timestamp), body].join('\n');
+}
+
+async function hmacSha256Hex(key, data) {
+  const encoder = new TextEncoder();
+  const cryptoKey = await window.crypto.subtle.importKey(
+    'raw',
+    encoder.encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await window.crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    encoder.encode(data),
+  );
+  return Array.from(new Uint8Array(signature))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 function redirectToOAuthUrl(url, options = {}) {
   const { openInNewTab = false } = options;
@@ -76,6 +204,44 @@ function patchAPIInstance(instance) {
     inFlightGetRequests.set(key, reqPromise);
     return reqPromise;
   };
+
+  instance.interceptors.request.use(async (config) => {
+    if (!shouldSignRequest(config)) {
+      return config;
+    }
+
+    const signingKey = await getPublicRequestSigningKey();
+    if (!signingKey) {
+      throw new Error('Failed to load public request signing key');
+    }
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const target = getRequestPathWithQuery(config);
+    const body = normalizeRequestBody(config.data);
+    const payload = buildPublicRequestSignaturePayload(
+      config.method || 'GET',
+      target,
+      timestamp,
+      body,
+    );
+    const signature = await hmacSha256Hex(signingKey, payload);
+
+    config.headers = config.headers || {};
+    config.headers['X-NewAPI-Timestamp'] = String(timestamp);
+    config.headers['X-NewAPI-Signature'] = signature;
+    return config;
+  });
+
+  instance.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      if (error.config && error.config.skipErrorHandler) {
+        return Promise.reject(error);
+      }
+      showError(error);
+      return Promise.reject(error);
+    },
+  );
 }
 
 patchAPIInstance(API);
@@ -93,18 +259,6 @@ export function updateAPI() {
 
   patchAPIInstance(API);
 }
-
-API.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // 如果请求配置中显式要求跳过全局错误处理，则不弹出默认错误提示
-    if (error.config && error.config.skipErrorHandler) {
-      return Promise.reject(error);
-    }
-    showError(error);
-    return Promise.reject(error);
-  },
-);
 
 // playground
 

@@ -103,6 +103,18 @@ func GetUserWalletSummary(userId int, group string, modelName string) (*UserWall
 	}, nil
 }
 
+func GetUserWalletAllocation(userId int, group string, modelName string) (*WalletQuotaAllocation, error) {
+	summary, err := GetUserWalletSummary(userId, group, modelName)
+	if err != nil {
+		return nil, err
+	}
+	return &WalletQuotaAllocation{
+		BaseQuota:     summary.Quota,
+		BaseGiftQuota: summary.GiftQuota,
+		GiftEligible:  summary.GiftEligible,
+	}, nil
+}
+
 func ApplyUserWalletTarget(userId int, allocation *WalletQuotaAllocation, targetTotal int) error {
 	if allocation == nil {
 		return errors.New("wallet allocation is nil")

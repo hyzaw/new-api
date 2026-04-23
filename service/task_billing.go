@@ -152,7 +152,15 @@ func taskAdjustFunding(task *model.Task, delta int) error {
 		return nil
 	}
 	if delta > 0 {
-		return model.DecreaseUserQuota(task.UserId, delta, false)
+		allocation, err := model.GetUserWalletAllocation(task.UserId, task.Group, taskModelName(task))
+		if err != nil {
+			return err
+		}
+		if err := model.ApplyUserWalletTarget(task.UserId, allocation, delta); err != nil {
+			return err
+		}
+		syncTaskWalletAllocation(task, allocation)
+		return nil
 	}
 	return model.IncreaseUserQuota(task.UserId, -delta, false)
 }

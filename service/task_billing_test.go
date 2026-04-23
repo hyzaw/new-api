@@ -11,6 +11,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,18 @@ func truncate(t *testing.T) {
 func seedUser(t *testing.T, id int, quota int) {
 	t.Helper()
 	user := &model.User{Id: id, Username: "test_user", Quota: quota, Status: common.UserStatusEnabled}
+	require.NoError(t, model.DB.Create(user).Error)
+}
+
+func seedUserWithGift(t *testing.T, id int, quota int, giftQuota int) {
+	t.Helper()
+	user := &model.User{
+		Id:        id,
+		Username:  "test_user_with_gift",
+		Quota:     quota,
+		GiftQuota: giftQuota,
+		Status:    common.UserStatusEnabled,
+	}
 	require.NoError(t, model.DB.Create(user).Error)
 }
 
@@ -144,6 +157,13 @@ func getUserQuota(t *testing.T, id int) int {
 	var user model.User
 	require.NoError(t, model.DB.Select("quota").Where("id = ?", id).First(&user).Error)
 	return user.Quota
+}
+
+func getUserGiftQuota(t *testing.T, id int) int {
+	t.Helper()
+	var user model.User
+	require.NoError(t, model.DB.Select("gift_quota").Where("id = ?", id).First(&user).Error)
+	return user.GiftQuota
 }
 
 func getTokenRemainQuota(t *testing.T, id int) int {
@@ -287,6 +307,59 @@ func TestRefundTaskQuota_NoToken(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+func TestPostConsumeQuota_WalletFallbackPrefersGiftQuota(t *testing.T) {
+	truncate(t)
+	const userID = 5
+
+	seedUserWithGift(t, userID, 1000, 300)
+
+	originalRules := operation_setting.GetGiftQuotaSetting().Rules
+	operation_setting.GetGiftQuotaSetting().Rules = []operation_setting.GiftQuotaRule{
+		{Group: "default", Model: "test-model"},
+	}
+	t.Cleanup(func() {
+		operation_setting.GetGiftQuotaSetting().Rules = originalRules
+	})
+
+	info := &relaycommon.RelayInfo{
+		UserId:          userID,
+		UsingGroup:      "default",
+		OriginModelName: "test-model",
+		IsPlayground:    true,
+	}
+
+	require.NoError(t, PostConsumeQuota(info, 500, 0, false))
+	assert.Equal(t, 800, getUserQuota(t, userID))
+	assert.Equal(t, 0, getUserGiftQuota(t, userID))
+	assert.Equal(t, 200, info.WalletConsumedQuota)
+	assert.Equal(t, 300, info.WalletConsumedGiftQuota)
+	assert.True(t, info.WalletGiftEligible)
+}
+
+func TestTaskAdjustFundingFallbackPrefersGiftQuota(t *testing.T) {
+	truncate(t)
+	const userID = 6
+
+	seedUserWithGift(t, userID, 1000, 150)
+
+	originalRules := operation_setting.GetGiftQuotaSetting().Rules
+	operation_setting.GetGiftQuotaSetting().Rules = []operation_setting.GiftQuotaRule{
+		{Group: "default", Model: "test-model"},
+	}
+	t.Cleanup(func() {
+		operation_setting.GetGiftQuotaSetting().Rules = originalRules
+	})
+
+	task := makeTask(userID, 0, 0, 0, "", 0)
+
+	require.NoError(t, taskAdjustFunding(task, 300))
+	assert.Equal(t, 850, getUserQuota(t, userID))
+	assert.Equal(t, 0, getUserGiftQuota(t, userID))
+	assert.Equal(t, 150, task.PrivateData.WalletConsumedQuota)
+	assert.Equal(t, 150, task.PrivateData.WalletConsumedGiftQuota)
+	assert.True(t, task.PrivateData.WalletGiftEligible)
 }
 
 // ===========================================================================
