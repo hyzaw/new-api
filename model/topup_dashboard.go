@@ -16,6 +16,8 @@ type TopUpDashboardOverview struct {
 	PendingRefundMoney float64 `json:"pending_refund_money"`
 	RefundCount        int64   `json:"refund_count"`
 	NetMoney           float64 `json:"net_money"`
+	TotalUserQuota     int64   `json:"total_user_quota"`
+	TotalUserGiftQuota int64   `json:"total_user_gift_quota"`
 }
 
 type TopUpDashboardTrendItem struct {
@@ -96,6 +98,12 @@ func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
 		return nil, err
 	}
 	if err := DB.Model(&TopUpRefund{}).Where("status = ?", TopUpRefundStatusPending).Select("COALESCE(SUM(refund_amount), 0)").Scan(&stats.Overview.PendingRefundMoney).Error; err != nil {
+		return nil, err
+	}
+	if err := DB.Model(&User{}).Select("COALESCE(SUM(quota), 0)").Scan(&stats.Overview.TotalUserQuota).Error; err != nil {
+		return nil, err
+	}
+	if err := DB.Model(&User{}).Select("COALESCE(SUM(gift_quota), 0)").Scan(&stats.Overview.TotalUserGiftQuota).Error; err != nil {
 		return nil, err
 	}
 	stats.Overview.TotalMoney = decimalFromFloatMoney(stats.Overview.TotalMoney).InexactFloat64()

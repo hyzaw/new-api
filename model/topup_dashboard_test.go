@@ -16,6 +16,8 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 		Password:    "password123",
 		DisplayName: "用户A",
 		AffCode:     "topup_dash_a",
+		Quota:       500,
+		GiftQuota:   120,
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,
 	}
@@ -24,6 +26,8 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 		Password:    "password123",
 		DisplayName: "用户B",
 		AffCode:     "topup_dash_b",
+		Quota:       800,
+		GiftQuota:   60,
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,
 	}
@@ -32,6 +36,8 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 		Password:    "password123",
 		DisplayName: "用户C",
 		AffCode:     "topup_dash_c",
+		Quota:       100,
+		GiftQuota:   20,
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,
 	}
@@ -92,6 +98,8 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 	stats, err := GetAdminTopUpDashboardStats(30)
 	require.NoError(t, err)
 	require.Len(t, stats.ValuableUsers, 3)
+	assert.EqualValues(t, 1400, stats.Overview.TotalUserQuota)
+	assert.EqualValues(t, 200, stats.Overview.TotalUserGiftQuota)
 
 	assert.Equal(t, userB.Id, stats.ValuableUsers[0].UserId)
 	assert.Equal(t, "valuable_user_b", stats.ValuableUsers[0].Username)

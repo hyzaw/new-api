@@ -32,7 +32,7 @@ import {
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
 import { VChart } from '@visactor/react-vchart';
-import { API, showError, timestamp2string } from '../../../helpers';
+import { API, renderQuota, showError, timestamp2string } from '../../../helpers';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 
 const { Text, Title } = Typography;
@@ -246,6 +246,14 @@ const TopUpDashboard = ({
       { label: t('成功支付金额'), value: formatMoney(overview.success_money) },
       { label: t('净入账金额'), value: formatMoney(overview.net_money) },
       { label: t('累计已退款'), value: formatMoney(overview.refunded_money) },
+      {
+        label: t('用户总剩余通用余额'),
+        value: renderQuota(Number(overview.total_user_quota || 0)),
+      },
+      {
+        label: t('用户总剩余赠送余额'),
+        value: renderQuota(Number(overview.total_user_gift_quota || 0)),
+      },
       {
         label: t('成功率'),
         value: `${successRate.toFixed(1)}%`,
