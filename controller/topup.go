@@ -215,14 +215,7 @@ func getPayMoney(amount int64, group string) float64 {
 
 	dTopupGroupRatio := decimal.NewFromFloat(topupGroupRatio)
 	dPrice := decimal.NewFromFloat(operation_setting.Price)
-	// apply optional preset discount by the original request amount (if configured), default 1.0
-	discount := 1.0
-	if ds, ok := operation_setting.GetPaymentSetting().AmountDiscount[int(amount)]; ok {
-		if ds > 0 {
-			discount = ds
-		}
-	}
-	dDiscount := decimal.NewFromFloat(discount)
+	dDiscount := decimal.NewFromFloat(getTopupDiscount(amount))
 
 	payMoney := dAmount.Mul(dPrice).Mul(dTopupGroupRatio).Mul(dDiscount)
 
@@ -244,18 +237,38 @@ func validateTopupAmount(amount int64, minTopup int64) string {
 		return fmt.Sprintf("充值数量不能小于 %d", minTopup)
 	}
 
-	amountOptions := operation_setting.GetPaymentSetting().AmountOptions
-	if len(amountOptions) == 0 {
+	paymentSetting := operation_setting.GetPaymentSetting()
+	discount, hasDiscount := paymentSetting.AmountDiscount[int(amount)]
+	if !hasDiscount || discount <= 0 || len(paymentSetting.AmountOptions) == 0 {
 		return ""
 	}
 
-	for _, option := range amountOptions {
-		if int64(option) == amount {
-			return ""
-		}
+	if isTopupAmountOption(amount, paymentSetting.AmountOptions) {
+		return ""
 	}
 
 	return "当前充值方案已变更，请刷新页面后重试"
+}
+
+func isTopupAmountOption(amount int64, amountOptions []int) bool {
+	for _, option := range amountOptions {
+		if int64(option) == amount {
+			return true
+		}
+	}
+	return false
+}
+
+func getTopupDiscount(amount int64) float64 {
+	paymentSetting := operation_setting.GetPaymentSetting()
+	discount, ok := paymentSetting.AmountDiscount[int(amount)]
+	if !ok || discount <= 0 {
+		return 1.0
+	}
+	if len(paymentSetting.AmountOptions) > 0 && !isTopupAmountOption(amount, paymentSetting.AmountOptions) {
+		return 1.0
+	}
+	return discount
 }
 
 func RequestEpay(c *gin.Context) {
