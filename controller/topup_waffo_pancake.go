@@ -30,8 +30,8 @@ func RequestWaffoPancakeAmount(c *gin.Context) {
 		return
 	}
 
-	if req.Amount < int64(setting.WaffoPancakeMinTopUp) {
-		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", setting.WaffoPancakeMinTopUp)})
+	if errMsg := validateTopupAmount(req.Amount, int64(setting.WaffoPancakeMinTopUp)); errMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": errMsg})
 		return
 	}
 
@@ -133,8 +133,8 @@ func RequestWaffoPancakePay(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "参数错误"})
 		return
 	}
-	if req.Amount < int64(setting.WaffoPancakeMinTopUp) {
-		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", setting.WaffoPancakeMinTopUp)})
+	if errMsg := validateTopupAmount(req.Amount, int64(setting.WaffoPancakeMinTopUp)); errMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": errMsg})
 		return
 	}
 

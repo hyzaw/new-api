@@ -239,6 +239,25 @@ func getMinTopup() int64 {
 	return int64(minTopup)
 }
 
+func validateTopupAmount(amount int64, minTopup int64) string {
+	if amount < minTopup {
+		return fmt.Sprintf("充值数量不能小于 %d", minTopup)
+	}
+
+	amountOptions := operation_setting.GetPaymentSetting().AmountOptions
+	if len(amountOptions) == 0 {
+		return ""
+	}
+
+	for _, option := range amountOptions {
+		if int64(option) == amount {
+			return ""
+		}
+	}
+
+	return "当前充值方案已变更，请刷新页面后重试"
+}
+
 func RequestEpay(c *gin.Context) {
 	var req EpayRequest
 	err := c.ShouldBindJSON(&req)
@@ -246,8 +265,8 @@ func RequestEpay(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "参数错误"})
 		return
 	}
-	if req.Amount < getMinTopup() {
-		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getMinTopup())})
+	if errMsg := validateTopupAmount(req.Amount, getMinTopup()); errMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": errMsg})
 		return
 	}
 
@@ -463,8 +482,8 @@ func RequestAmount(c *gin.Context) {
 		return
 	}
 
-	if req.Amount < getMinTopup() {
-		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getMinTopup())})
+	if errMsg := validateTopupAmount(req.Amount, getMinTopup()); errMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": errMsg})
 		return
 	}
 	id := c.GetInt("id")

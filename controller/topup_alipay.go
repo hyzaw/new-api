@@ -381,8 +381,8 @@ func RequestAlipayF2FPay(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "参数错误"})
 		return
 	}
-	if req.Amount < getMinTopup() {
-		c.JSON(http.StatusOK, gin.H{"message": "error", "data": fmt.Sprintf("充值数量不能小于 %d", getMinTopup())})
+	if errMsg := validateTopupAmount(req.Amount, getMinTopup()); errMsg != "" {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": errMsg})
 		return
 	}
 
