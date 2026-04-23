@@ -397,7 +397,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true
     },
-    title: 'New API',
+    title: 'Boxying',
     icon: path.join(__dirname, 'icon.png')
   });
 
