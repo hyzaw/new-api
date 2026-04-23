@@ -34,6 +34,15 @@ type TopUpDashboardDistributionItem struct {
 	Count  int     `json:"count"`
 }
 
+type TopUpDashboardValuableUserItem struct {
+	UserId        int     `json:"user_id"`
+	Username      string  `json:"username"`
+	DisplayName   string  `json:"display_name"`
+	TotalMoney    float64 `json:"total_money"`
+	SuccessOrders int64   `json:"success_orders"`
+	LastTopUpTime int64   `json:"last_topup_time"`
+}
+
 type TopUpDashboardStats struct {
 	Days           int                               `json:"days"`
 	Overview       TopUpDashboardOverview            `json:"overview"`
@@ -41,6 +50,7 @@ type TopUpDashboardStats struct {
 	PaymentMethods []*TopUpDashboardDistributionItem `json:"payment_methods"`
 	OrderStatuses  []*TopUpDashboardDistributionItem `json:"order_statuses"`
 	RefundStatuses []*TopUpDashboardDistributionItem `json:"refund_statuses"`
+	ValuableUsers  []*TopUpDashboardValuableUserItem `json:"valuable_users"`
 }
 
 func getDayBucket(ts int64) string {
@@ -61,6 +71,7 @@ func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
 		PaymentMethods: make([]*TopUpDashboardDistributionItem, 0),
 		OrderStatuses:  make([]*TopUpDashboardDistributionItem, 0),
 		RefundStatuses: make([]*TopUpDashboardDistributionItem, 0),
+		ValuableUsers:  make([]*TopUpDashboardValuableUserItem, 0),
 	}
 
 	if err := DB.Model(&TopUp{}).Count(&stats.Overview.TotalOrders).Error; err != nil {
@@ -205,5 +216,77 @@ func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
 		stats.RefundStatuses = append(stats.RefundStatuses, item)
 	}
 
+	valuableUsers, err := getTopUpDashboardValuableUsers(10)
+	if err != nil {
+		return nil, err
+	}
+	stats.ValuableUsers = valuableUsers
+
 	return stats, nil
+}
+
+type topUpDashboardValuableUserRow struct {
+	UserId        int     `gorm:"column:user_id"`
+	TotalMoney    float64 `gorm:"column:total_money"`
+	SuccessOrders int64   `gorm:"column:success_orders"`
+	LastTopUpTime int64   `gorm:"column:last_topup_time"`
+}
+
+func getTopUpDashboardValuableUsers(limit int) ([]*TopUpDashboardValuableUserItem, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	var rows []*topUpDashboardValuableUserRow
+	if err := DB.Model(&TopUp{}).
+		Select("user_id, COALESCE(SUM(money), 0) AS total_money, COUNT(*) AS success_orders, COALESCE(MAX(complete_time), 0) AS last_topup_time").
+		Where("status = ?", common.TopUpStatusSuccess).
+		Group("user_id").
+		Order("total_money DESC").
+		Limit(limit).
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return make([]*TopUpDashboardValuableUserItem, 0), nil
+	}
+
+	userIds := make([]int, 0, len(rows))
+	for _, row := range rows {
+		if row == nil || row.UserId <= 0 {
+			continue
+		}
+		userIds = append(userIds, row.UserId)
+	}
+
+	var users []*User
+	if err := DB.Select("id", "username", "display_name").Where("id IN ?", userIds).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	userMap := make(map[int]*User, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		userMap[user.Id] = user
+	}
+
+	items := make([]*TopUpDashboardValuableUserItem, 0, len(rows))
+	for _, row := range rows {
+		if row == nil || row.UserId <= 0 {
+			continue
+		}
+		item := &TopUpDashboardValuableUserItem{
+			UserId:        row.UserId,
+			TotalMoney:    decimalFromFloatMoney(row.TotalMoney).InexactFloat64(),
+			SuccessOrders: row.SuccessOrders,
+			LastTopUpTime: row.LastTopUpTime,
+		}
+		if user, ok := userMap[row.UserId]; ok && user != nil {
+			item.Username = user.Username
+			item.DisplayName = user.DisplayName
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }

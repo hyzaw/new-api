@@ -135,6 +135,42 @@ const chartTitleStyle = {
   color: 'var(--semi-color-text-0)',
 };
 
+const chartDescriptionStyle = {
+  display: 'block',
+  marginBottom: '14px',
+  color: 'var(--semi-color-text-2)',
+};
+
+const valuableUsersListStyle = (isMobile) => ({
+  display: 'grid',
+  gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+  gap: 12,
+});
+
+const valuableUserCardStyle = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 12,
+  padding: '14px 16px',
+  borderRadius: '18px',
+  border: '1px solid var(--semi-color-border)',
+  background:
+    'linear-gradient(135deg, rgba(37,99,235,0.06), rgba(16,185,129,0.04))',
+};
+
+const rankBadgeStyle = {
+  minWidth: 36,
+  height: 36,
+  borderRadius: 999,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontWeight: 700,
+  color: '#fff',
+  background: 'linear-gradient(135deg, #2563eb, #0f766e)',
+  boxShadow: '0 10px 24px rgba(37,99,235,0.2)',
+};
+
 const emptyNode = (t, text, size = 140) => (
   <Empty
     image={<IllustrationNoResult style={{ width: size, height: size }} />}
@@ -688,6 +724,18 @@ const TopUpDashboard = ({
     [stats],
   );
 
+  const valuableUsersHasData = useMemo(
+    () => (stats?.valuable_users || []).length > 0,
+    [stats],
+  );
+
+  const renderValuableUserName = useCallback((item) => {
+    if (!item) {
+      return '-';
+    }
+    return item.display_name || item.username || `#${item.user_id || '-'}`;
+  }, []);
+
   return (
     <div style={pageStyle}>
       <div style={headerCardStyle}>
@@ -769,6 +817,56 @@ const TopUpDashboard = ({
                 <span style={statValueStyle}>{item.value}</span>
               </div>
             ))}
+          </div>
+
+          <div style={chartCardStyle}>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <div style={chartTitleStyle}>{t('高价值充值用户')}</div>
+              <Tag color='green' shape='circle'>
+                {t('按累计成功充值金额排序')}
+              </Tag>
+            </div>
+            <Text style={chartDescriptionStyle}>
+              {t('用于快速识别累计充值贡献最高的用户，榜单按全量历史成功充值统计。')}
+            </Text>
+            {valuableUsersHasData ? (
+              <div style={valuableUsersListStyle(isMobile)}>
+                {(stats?.valuable_users || []).map((item, index) => (
+                  <div
+                    key={`${item.user_id || 'user'}-${index}`}
+                    style={valuableUserCardStyle}
+                  >
+                    <span style={rankBadgeStyle}>#{index + 1}</span>
+                    <div className='flex flex-col gap-1' style={{ minWidth: 0, flex: 1 }}>
+                      <div className='flex flex-wrap items-center gap-2'>
+                        <Text strong>{renderValuableUserName(item)}</Text>
+                        {item.username &&
+                          item.display_name &&
+                          item.display_name !== item.username && (
+                            <Text type='tertiary'>@{item.username}</Text>
+                          )}
+                      </div>
+                      <div className='flex flex-wrap items-center gap-3'>
+                        <Text>
+                          {t('累计成功充值')} {formatMoney(item.total_money)}
+                        </Text>
+                        <Text type='tertiary'>
+                          {t('成功订单')} {Number(item.success_orders || 0)}
+                        </Text>
+                      </div>
+                      <Text type='tertiary'>
+                        {t('最近充值')}
+                        {item.last_topup_time
+                          ? ` ${timestamp2string(item.last_topup_time)}`
+                          : ' -'}
+                      </Text>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              emptyNode(t, '暂无高价值充值用户数据', 120)
+            )}
           </div>
 
           <div style={chartCardStyle}>

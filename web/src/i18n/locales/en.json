@@ -3883,5 +3883,12 @@
     ,"集中管理密钥、配额与调用日志": "Manage keys, quotas, and usage logs in one place"
     ,"鉴权、限流、计费、日志": "Auth, Rate Limits, Billing, Logs"
     ,"30+ 供应商生态": "30+ Provider Ecosystem"
+    ,"高价值充值用户": "High-value top-up users"
+    ,"按累计成功充值金额排序": "Ranked by cumulative successful top-up amount"
+    ,"用于快速识别累计充值贡献最高的用户，榜单按全量历史成功充值统计。": "Quickly identify the users who contribute the most top-up revenue. The ranking is based on all-time successful top-ups."
+    ,"累计成功充值": "Cumulative successful top-up"
+    ,"成功订单": "Successful orders"
+    ,"最近充值": "Latest top-up"
+    ,"暂无高价值充值用户数据": "No high-value top-up user data yet"
   }
 }
