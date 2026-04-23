@@ -54,6 +54,78 @@ func TestInsertIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
 	assert.Len(t, records, 0)
 }
 
+func TestInsertGrantsNewUserQuotaAsGiftQuota(t *testing.T) {
+	truncateTables(t)
+
+	originalQuotaForNewUser := common.QuotaForNewUser
+	originalQuotaForInvitee := common.QuotaForInvitee
+	originalQuotaForInviter := common.QuotaForInviter
+	t.Cleanup(func() {
+		common.QuotaForNewUser = originalQuotaForNewUser
+		common.QuotaForInvitee = originalQuotaForInvitee
+		common.QuotaForInviter = originalQuotaForInviter
+	})
+
+	common.QuotaForNewUser = 100
+	common.QuotaForInvitee = 0
+	common.QuotaForInviter = 0
+
+	user := &User{
+		Username:    "new_user_gift_quota",
+		Password:    "password123",
+		DisplayName: "new_user_gift_quota",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+	}
+	require.NoError(t, user.Insert(0))
+
+	var reloaded User
+	require.NoError(t, DB.First(&reloaded, user.Id).Error)
+	assert.Equal(t, 0, reloaded.Quota)
+	assert.Equal(t, 100, reloaded.GiftQuota)
+}
+
+func TestInsertGrantsInviteeQuotaAsGiftQuota(t *testing.T) {
+	truncateTables(t)
+
+	originalQuotaForNewUser := common.QuotaForNewUser
+	originalQuotaForInvitee := common.QuotaForInvitee
+	originalQuotaForInviter := common.QuotaForInviter
+	t.Cleanup(func() {
+		common.QuotaForNewUser = originalQuotaForNewUser
+		common.QuotaForInvitee = originalQuotaForInvitee
+		common.QuotaForInviter = originalQuotaForInviter
+	})
+
+	common.QuotaForNewUser = 100
+	common.QuotaForInvitee = 50
+	common.QuotaForInviter = 0
+
+	inviter := &User{
+		Username:    "gift_inviter",
+		Password:    "password123",
+		DisplayName: "gift_inviter",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "gift_aff",
+	}
+	require.NoError(t, DB.Create(inviter).Error)
+
+	invitee := &User{
+		Username:    "gift_invitee",
+		Password:    "password123",
+		DisplayName: "gift_invitee",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+	}
+	require.NoError(t, invitee.Insert(inviter.Id))
+
+	var reloadedInvitee User
+	require.NoError(t, DB.First(&reloadedInvitee, invitee.Id).Error)
+	assert.Equal(t, 0, reloadedInvitee.Quota)
+	assert.Equal(t, 150, reloadedInvitee.GiftQuota)
+}
+
 func TestFinalizeOAuthUserCreationIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
 	truncateTables(t)
 
@@ -92,4 +164,46 @@ func TestFinalizeOAuthUserCreationIncreasesAffCountWhenInviterRewardIsZero(t *te
 	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
 	require.NoError(t, err)
 	assert.Len(t, records, 0)
+}
+
+func TestFinalizeOAuthUserCreationGrantsInviteeQuotaAsGiftQuota(t *testing.T) {
+	truncateTables(t)
+
+	originalQuotaForNewUser := common.QuotaForNewUser
+	originalQuotaForInvitee := common.QuotaForInvitee
+	originalQuotaForInviter := common.QuotaForInviter
+	t.Cleanup(func() {
+		common.QuotaForNewUser = originalQuotaForNewUser
+		common.QuotaForInvitee = originalQuotaForInvitee
+		common.QuotaForInviter = originalQuotaForInviter
+	})
+
+	common.QuotaForNewUser = 100
+	common.QuotaForInvitee = 50
+	common.QuotaForInviter = 0
+
+	inviter := &User{
+		Username:    "oauth_gift_inviter",
+		Password:    "password123",
+		DisplayName: "oauth_gift_inviter",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "oauth_gift_aff",
+	}
+	require.NoError(t, DB.Create(inviter).Error)
+
+	user := &User{
+		Username:    "oauth_gift_invitee",
+		DisplayName: "oauth_gift_invitee",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+	}
+	require.NoError(t, user.InsertWithTx(DB, inviter.Id))
+
+	user.FinalizeOAuthUserCreation(inviter.Id)
+
+	var reloadedInvitee User
+	require.NoError(t, DB.First(&reloadedInvitee, user.Id).Error)
+	assert.Equal(t, 0, reloadedInvitee.Quota)
+	assert.Equal(t, 150, reloadedInvitee.GiftQuota)
 }

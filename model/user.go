@@ -422,7 +422,7 @@ func (user *User) Insert(inviterId int) error {
 	if user.Group == "" {
 		user.Group = operation_setting.GetDefaultUserGroup()
 	}
-	user.Quota = common.QuotaForNewUser
+	user.GiftQuota = common.QuotaForNewUser
 	//user.SetAccessToken(common.GetUUID())
 	user.AffCode = common.GetRandomString(4)
 
@@ -458,7 +458,7 @@ func (user *User) Insert(inviterId int) error {
 	}
 	if inviterId != 0 {
 		if common.QuotaForInvitee > 0 {
-			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
+			_ = IncreaseUserGiftQuota(user.Id, common.QuotaForInvitee)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
 		if common.QuotaForInviter > 0 {
@@ -485,7 +485,7 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 	if user.Group == "" {
 		user.Group = operation_setting.GetDefaultUserGroup()
 	}
-	user.Quota = common.QuotaForNewUser
+	user.GiftQuota = common.QuotaForNewUser
 	user.AffCode = common.GetRandomString(4)
 
 	// 初始化用户设置
@@ -523,7 +523,7 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 	}
 	if inviterId != 0 {
 		if common.QuotaForInvitee > 0 {
-			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
+			_ = IncreaseUserGiftQuota(user.Id, common.QuotaForInvitee)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
 		if common.QuotaForInviter > 0 {
