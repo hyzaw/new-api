@@ -21,6 +21,7 @@ import {
   getUserIdFromLocalStorage,
   showError,
   formatMessageForAPI,
+  getTextContent,
   isValidMessage,
 } from './utils';
 import axios from 'axios';
@@ -281,6 +282,16 @@ export function updateAPI() {
 
 // playground
 
+export const isImageGenerationModel = (model = '') => {
+  const normalized = String(model || '').toLowerCase();
+  return (
+    normalized.startsWith('gpt-image-') ||
+    normalized.startsWith('dall-e') ||
+    normalized.startsWith('chatgpt-image') ||
+    normalized.startsWith('grok-imagine-image')
+  );
+};
+
 // 构建API请求负载
 export const buildApiPayload = (
   messages,
@@ -340,6 +351,47 @@ export const buildApiPayload = (
   });
 
   return payload;
+};
+
+export const buildImageGenerationPayload = (messages, inputs) => {
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((message) => message?.role === MESSAGE_ROLES.USER);
+  const prompt = getTextContent(lastUserMessage).trim();
+
+  return {
+    model: inputs.model,
+    group: String(inputs.group || '').trim(),
+    prompt,
+    n: 1,
+  };
+};
+
+export const formatImageGenerationResponse = (data) => {
+  const images = Array.isArray(data?.data) ? data.data : [];
+  if (images.length === 0) {
+    return (
+      '图片生成完成，但响应中没有图片数据。\n\n```json\n' +
+      JSON.stringify(data, null, 2) +
+      '\n```'
+    );
+  }
+
+  return images
+    .map((item, index) => {
+      const title = `生成图片 ${index + 1}`;
+      const imageUrl =
+        item.url ||
+        (item.b64_json ? `data:image/png;base64,${item.b64_json}` : '');
+      const revisedPrompt = item.revised_prompt
+        ? `\n\n> ${item.revised_prompt}`
+        : '';
+      if (!imageUrl) {
+        return `${title}\n\n\`\`\`json\n${JSON.stringify(item, null, 2)}\n\`\`\``;
+      }
+      return `![${title}](${imageUrl})${revisedPrompt}`;
+    })
+    .join('\n\n');
 };
 
 // 处理API错误响应

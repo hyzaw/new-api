@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -170,5 +171,5 @@ func ShouldShowUnavailableTokenGroupMessage(group string, modelName string) bool
 	if group == "" || group == "auto" || modelName == "" {
 		return false
 	}
-	return !model.HasEnabledChannelForGroupModel(group, modelName)
+	return !ratio_setting.ContainsGroupRatio(group)
 }

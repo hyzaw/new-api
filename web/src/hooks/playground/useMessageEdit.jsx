@@ -23,9 +23,14 @@ import { useTranslation } from 'react-i18next';
 import {
   getTextContent,
   buildApiPayload,
+  buildImageGenerationPayload,
   createLoadingAssistantMessage,
+  isImageGenerationModel,
 } from '../../helpers';
-import { MESSAGE_ROLES } from '../../constants/playground.constants';
+import {
+  API_ENDPOINTS,
+  MESSAGE_ROLES,
+} from '../../constants/playground.constants';
 
 export const useMessageEdit = (
   setMessage,
@@ -97,17 +102,26 @@ export const useMessageEdit = (
               setTimeout(() => saveMessages(messagesUntilUser), 0);
 
               setTimeout(() => {
-                const payload = buildApiPayload(
-                  messagesUntilUser,
-                  null,
-                  inputs,
-                  parameterEnabled,
-                );
+                const isImageGeneration = isImageGenerationModel(inputs.model);
+                const payload = isImageGeneration
+                  ? buildImageGenerationPayload(messagesUntilUser, inputs)
+                  : buildApiPayload(
+                      messagesUntilUser,
+                      null,
+                      inputs,
+                      parameterEnabled,
+                    );
                 setMessage((prevMsg) => [
                   ...prevMsg,
                   createLoadingAssistantMessage(),
                 ]);
-                sendRequest(payload, inputs.stream);
+                sendRequest(
+                  payload,
+                  isImageGeneration ? false : inputs.stream,
+                  isImageGeneration
+                    ? API_ENDPOINTS.IMAGE_GENERATIONS
+                    : API_ENDPOINTS.CHAT_COMPLETIONS,
+                );
               }, 100);
             },
             onCancel: () => {

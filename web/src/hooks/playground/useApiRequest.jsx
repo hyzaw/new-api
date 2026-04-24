@@ -27,6 +27,7 @@ import {
 } from '../../constants/playground.constants';
 import {
   getUserIdFromLocalStorage,
+  formatImageGenerationResponse,
   handleApiError,
   processThinkTags,
   processIncompleteThinkTags,
@@ -173,10 +174,11 @@ export const useApiRequest = (
 
   // 非流式请求
   const handleNonStreamRequest = useCallback(
-    async (payload) => {
+    async (payload, endpoint = API_ENDPOINTS.CHAT_COMPLETIONS) => {
       setDebugData((prev) => ({
         ...prev,
         request: payload,
+        endpoint,
         timestamp: new Date().toISOString(),
         response: null,
         sseMessages: null, // 非流式请求清除 SSE 消息
@@ -185,7 +187,7 @@ export const useApiRequest = (
       setActiveDebugTab(DEBUG_TABS.REQUEST);
 
       try {
-        const response = await fetch(API_ENDPOINTS.CHAT_COMPLETIONS, {
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -239,7 +241,28 @@ export const useApiRequest = (
         }));
         setActiveDebugTab(DEBUG_TABS.RESPONSE);
 
-        if (data.choices?.[0]) {
+        if (endpoint === API_ENDPOINTS.IMAGE_GENERATIONS) {
+          const content = formatImageGenerationResponse(data);
+          setMessage((prevMessage) => {
+            const newMessages = [...prevMessage];
+            const lastMessage = newMessages[newMessages.length - 1];
+            if (lastMessage?.status === MESSAGE_STATUS.LOADING) {
+              const autoCollapseState = applyAutoCollapseLogic(
+                lastMessage,
+                true,
+              );
+
+              newMessages[newMessages.length - 1] = {
+                ...lastMessage,
+                content,
+                status: MESSAGE_STATUS.COMPLETE,
+                ...autoCollapseState,
+              };
+            }
+            setTimeout(() => saveMessages(newMessages), 0);
+            return newMessages;
+          });
+        } else if (data.choices?.[0]) {
           const choice = data.choices[0];
           let content = choice.message?.content || '';
           let reasoningContent =
@@ -297,7 +320,14 @@ export const useApiRequest = (
         });
       }
     },
-    [setDebugData, setActiveDebugTab, setMessage, t, applyAutoCollapseLogic],
+    [
+      setDebugData,
+      setActiveDebugTab,
+      setMessage,
+      t,
+      applyAutoCollapseLogic,
+      saveMessages,
+    ],
   );
 
   // SSE请求
@@ -306,6 +336,7 @@ export const useApiRequest = (
       setDebugData((prev) => ({
         ...prev,
         request: payload,
+        endpoint: API_ENDPOINTS.CHAT_COMPLETIONS,
         timestamp: new Date().toISOString(),
         response: null,
         sseMessages: [], // 新增：存储 SSE 消息数组
@@ -421,7 +452,11 @@ export const useApiRequest = (
           setMessage((prevMessage) => {
             const newMessages = [...prevMessage];
             const lastMessage = newMessages[newMessages.length - 1];
-            if (lastMessage && lastMessage.status !== MESSAGE_STATUS.COMPLETE && lastMessage.status !== MESSAGE_STATUS.ERROR) {
+            if (
+              lastMessage &&
+              lastMessage.status !== MESSAGE_STATUS.COMPLETE &&
+              lastMessage.status !== MESSAGE_STATUS.ERROR
+            ) {
               newMessages[newMessages.length - 1] = {
                 ...lastMessage,
                 content: (lastMessage.content || '') + errorMessage,
@@ -536,11 +571,11 @@ export const useApiRequest = (
 
   // 发送请求
   const sendRequest = useCallback(
-    (payload, isStream) => {
+    (payload, isStream, endpoint = API_ENDPOINTS.CHAT_COMPLETIONS) => {
       if (isStream) {
         handleSSE(payload);
       } else {
-        handleNonStreamRequest(payload);
+        handleNonStreamRequest(payload, endpoint);
       }
     },
     [handleSSE, handleNonStreamRequest],

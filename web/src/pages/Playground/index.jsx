@@ -36,6 +36,7 @@ import { useDataLoader } from '../../hooks/playground/useDataLoader';
 
 // Constants and utils
 import {
+  API_ENDPOINTS,
   MESSAGE_ROLES,
   ERROR_MESSAGES,
 } from '../../constants/playground.constants';
@@ -47,7 +48,9 @@ import {
   createLoadingAssistantMessage,
   getTextContent,
   buildApiPayload,
+  buildImageGenerationPayload,
   encodeToBase64,
+  isImageGenerationModel,
 } from '../../helpers';
 
 // Components
@@ -228,6 +231,10 @@ const Playground = () => {
         }
       }
 
+      if (isImageGenerationModel(inputs.model)) {
+        return buildImageGenerationPayload(messages, inputs);
+      }
+
       return buildApiPayload(messages, null, inputs, parameterEnabled);
     } catch (error) {
       console.error('构造预览请求体失败:', error);
@@ -282,13 +289,17 @@ const Playground = () => {
     setMessage((prevMessage) => {
       const newMessages = [...prevMessage, userMessageWithImages];
 
-      const payload = buildApiPayload(
-        newMessages,
-        null,
-        inputs,
-        parameterEnabled,
+      const isImageGeneration = isImageGenerationModel(inputs.model);
+      const payload = isImageGeneration
+        ? buildImageGenerationPayload(newMessages, inputs)
+        : buildApiPayload(newMessages, null, inputs, parameterEnabled);
+      sendRequest(
+        payload,
+        isImageGeneration ? false : inputs.stream,
+        isImageGeneration
+          ? API_ENDPOINTS.IMAGE_GENERATIONS
+          : API_ENDPOINTS.CHAT_COMPLETIONS,
       );
-      sendRequest(payload, inputs.stream);
 
       // 禁用图片模式
       if (inputs.imageEnabled) {

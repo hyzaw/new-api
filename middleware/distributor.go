@@ -81,8 +81,8 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// check path is /pg/chat/completions
-				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
+				// Playground requests can override the token group from the UI.
+				if isPlaygroundRelayPath(c.Request.URL.Path) {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
 					if err != nil {
@@ -334,8 +334,8 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		}
 		c.Set("relay_mode", relayMode)
 	}
-	if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
-		// playground chat completions
+	if isPlaygroundRelayPath(c.Request.URL.Path) {
+		// playground relay
 		req, err := getModelFromRequest(c)
 		if err != nil {
 			return nil, false, err
@@ -349,6 +349,11 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		modelRequest.Model = ratio_setting.WithCompactModelSuffix(modelRequest.Model)
 	}
 	return &modelRequest, shouldSelectChannel, nil
+}
+
+func isPlaygroundRelayPath(path string) bool {
+	return strings.HasPrefix(path, "/pg/chat/completions") ||
+		strings.HasPrefix(path, "/pg/images/generations")
 }
 
 func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, modelName string) *types.NewAPIError {
