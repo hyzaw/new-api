@@ -10,6 +10,8 @@ type TopUpDashboardOverview struct {
 	TotalOrders        int64   `json:"total_orders"`
 	SuccessOrders      int64   `json:"success_orders"`
 	PendingOrders      int64   `json:"pending_orders"`
+	PaidUserCount      int64   `json:"paid_user_count"`
+	TotalUserCount     int64   `json:"total_user_count"`
 	TotalMoney         float64 `json:"total_money"`
 	SuccessMoney       float64 `json:"success_money"`
 	RefundedMoney      float64 `json:"refunded_money"`
@@ -83,6 +85,12 @@ func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
 		return nil, err
 	}
 	if err := DB.Model(&TopUp{}).Where("status = ?", common.TopUpStatusPending).Count(&stats.Overview.PendingOrders).Error; err != nil {
+		return nil, err
+	}
+	if err := DB.Model(&TopUp{}).Where("status = ?", common.TopUpStatusSuccess).Distinct("user_id").Count(&stats.Overview.PaidUserCount).Error; err != nil {
+		return nil, err
+	}
+	if err := DB.Model(&User{}).Where("status = ? AND role = ?", common.UserStatusEnabled, common.RoleCommonUser).Count(&stats.Overview.TotalUserCount).Error; err != nil {
 		return nil, err
 	}
 	if err := DB.Model(&TopUp{}).Select("COALESCE(SUM(money), 0)").Scan(&stats.Overview.TotalMoney).Error; err != nil {

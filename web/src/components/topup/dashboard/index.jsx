@@ -232,7 +232,10 @@ const TopUpDashboard = ({
     const overview = stats?.overview || {};
     const totalOrders = Number(overview.total_orders || 0);
     const successOrders = Number(overview.success_orders || 0);
+    const paidUserCount = Number(overview.paid_user_count || 0);
+    const totalUserCount = Number(overview.total_user_count || 0);
     const successRate = totalOrders > 0 ? (successOrders / totalOrders) * 100 : 0;
+    const paidRate = totalUserCount > 0 ? (paidUserCount / totalUserCount) * 100 : 0;
     const refundRate =
       Number(overview.success_money || 0) > 0
         ? (Number(overview.refunded_money || 0) /
@@ -253,6 +256,10 @@ const TopUpDashboard = ({
       {
         label: t('用户总剩余赠送余额'),
         value: renderQuota(Number(overview.total_user_gift_quota || 0)),
+      },
+      {
+        label: t('付费率'),
+        value: `${paidRate.toFixed(1)}%`,
       },
       {
         label: t('成功率'),

@@ -98,6 +98,8 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 	stats, err := GetAdminTopUpDashboardStats(30)
 	require.NoError(t, err)
 	require.Len(t, stats.ValuableUsers, 3)
+	assert.EqualValues(t, 3, stats.Overview.PaidUserCount)
+	assert.EqualValues(t, 3, stats.Overview.TotalUserCount)
 	assert.EqualValues(t, 1400, stats.Overview.TotalUserQuota)
 	assert.EqualValues(t, 200, stats.Overview.TotalUserGiftQuota)
 
