@@ -58,11 +58,12 @@ import {
 import OIDCIcon from '../common/logo/OIDCIcon';
 import LinuxDoIcon from '../common/logo/LinuxDoIcon';
 import WeChatIcon from '../common/logo/WeChatIcon';
+import GoogleIcon from '../common/logo/GoogleIcon';
 import TelegramLoginButton from 'react-telegram-login/src';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
 import { useTranslation } from 'react-i18next';
-import { SiDiscord, SiGoogle } from 'react-icons/si';
+import { SiDiscord } from 'react-icons/si';
 import { AuthShell, AuthCard } from './AuthShell';
 
 const RegisterForm = () => {
@@ -474,15 +475,7 @@ const RegisterForm = () => {
                     theme='outline'
                     className='auth-option-button w-full'
                     type='tertiary'
-                    icon={
-                      <SiGoogle
-                        style={{
-                          color: '#4285F4',
-                          width: '20px',
-                          height: '20px',
-                        }}
-                      />
-                    }
+                    icon={<GoogleIcon size={20} />}
                     onClick={handleGoogleClick}
                     loading={googleLoading}
                   >

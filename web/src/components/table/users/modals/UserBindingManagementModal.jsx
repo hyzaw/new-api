@@ -45,8 +45,8 @@ import {
   SiTelegram,
   SiWechat,
   SiLinux,
-  SiGoogle,
 } from 'react-icons/si';
+import GoogleIcon from '../../../common/logo/GoogleIcon';
 
 const { Text } = Typography;
 
@@ -232,9 +232,7 @@ const UserBindingManagementModal = ({
       name: 'Google',
       enabled: Boolean(statusInfo.google_oauth),
       value: getBuiltInBindingValue('google_id'),
-      icon: (
-        <SiGoogle size={20} className='text-slate-600 dark:text-slate-300' />
-      ),
+      icon: <GoogleIcon size={20} />,
     },
     {
       key: 'discord',

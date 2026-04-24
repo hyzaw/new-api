@@ -92,7 +92,6 @@ import {
   SiGitea,
   SiGithub,
   SiGitlab,
-  SiGoogle,
   SiKeycloak,
   SiLinkedin,
   SiNextcloud,
@@ -106,6 +105,7 @@ import {
   SiWechat,
   SiX,
 } from 'react-icons/si';
+import GoogleIcon from '../components/common/logo/GoogleIcon';
 
 // 获取侧边栏Lucide图标组件
 export function getLucideIcon(key, selected = false) {
@@ -509,7 +509,7 @@ const oauthProviderIconMap = {
   github: SiGithub,
   gitlab: SiGitlab,
   gitea: SiGitea,
-  google: SiGoogle,
+  google: GoogleIcon,
   discord: SiDiscord,
   facebook: SiFacebook,
   linkedin: SiLinkedin,

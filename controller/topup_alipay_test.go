@@ -8,9 +8,11 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"net/url"
 	"testing"
 
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/stretchr/testify/require"
 )
@@ -123,4 +125,55 @@ func TestVerifyAlipayNotifySignatureUsesRawEncodedValues(t *testing.T) {
 
 	require.NoError(t, verifyAlipaySignatureForContent(decodedParams, rawParams))
 	require.Error(t, verifyAlipaySignature(decodedParams))
+}
+
+func TestTryRecoverAlipayNotifyWithoutVerification(t *testing.T) {
+	successTopUp := &model.TopUp{TradeNo: "A1", PaymentMethod: paymentMethodAlipayF2F}
+	require.True(t, tryRecoverAlipayNotifyWithoutVerification(
+		"A1",
+		"127.0.0.1",
+		func(tradeNo string) *model.TopUp {
+			require.Equal(t, "A1", tradeNo)
+			return successTopUp
+		},
+		func(tradeNo string, callerIP string) (string, bool, error) {
+			require.Equal(t, "A1", tradeNo)
+			require.Equal(t, "127.0.0.1", callerIP)
+			return "TRADE_SUCCESS", true, nil
+		},
+	))
+
+	require.False(t, tryRecoverAlipayNotifyWithoutVerification(
+		"A2",
+		"127.0.0.1",
+		func(string) *model.TopUp {
+			return &model.TopUp{TradeNo: "A2", PaymentMethod: "stripe"}
+		},
+		func(string, string) (string, bool, error) {
+			t.Fatal("sync should not be called for non-alipay order")
+			return "", false, nil
+		},
+	))
+
+	require.False(t, tryRecoverAlipayNotifyWithoutVerification(
+		"A3",
+		"127.0.0.1",
+		func(string) *model.TopUp {
+			return &model.TopUp{TradeNo: "A3", PaymentMethod: paymentMethodAlipayF2F}
+		},
+		func(string, string) (string, bool, error) {
+			return "", false, errors.New("query failed")
+		},
+	))
+
+	require.False(t, tryRecoverAlipayNotifyWithoutVerification(
+		"A4",
+		"127.0.0.1",
+		func(string) *model.TopUp {
+			return &model.TopUp{TradeNo: "A4", PaymentMethod: paymentMethodAlipayF2F}
+		},
+		func(string, string) (string, bool, error) {
+			return "WAIT_BUYER_PAY", false, nil
+		},
+	))
 }

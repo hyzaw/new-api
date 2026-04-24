@@ -566,6 +566,42 @@ func syncAlipayTradeStatus(tradeNo string, callerIP string) (string, bool, error
 	return queryResp.TradeStatus, completed, nil
 }
 
+func isAlipayTradeSuccessfulStatus(tradeStatus string) bool {
+	return tradeStatus == "TRADE_SUCCESS" || tradeStatus == "TRADE_FINISHED"
+}
+
+func tryRecoverAlipayNotifyWithoutVerification(
+	outTradeNo string,
+	callerIP string,
+	getTopUp func(string) *model.TopUp,
+	syncTradeStatus func(string, string) (string, bool, error),
+) bool {
+	if outTradeNo == "" {
+		return false
+	}
+
+	topUp := getTopUp(outTradeNo)
+	if topUp == nil || topUp.PaymentMethod != paymentMethodAlipayF2F {
+		return false
+	}
+
+	LockOrder(outTradeNo)
+	defer UnlockOrder(outTradeNo)
+
+	tradeStatus, _, err := syncTradeStatus(outTradeNo, callerIP)
+	if err != nil {
+		log.Printf("支付宝回调验签失败后主动查单也失败: tradeNo=%s err=%v", outTradeNo, err)
+		return false
+	}
+	if !isAlipayTradeSuccessfulStatus(tradeStatus) {
+		log.Printf("支付宝回调验签失败后主动查单未确认成功: tradeNo=%s status=%s", outTradeNo, tradeStatus)
+		return false
+	}
+
+	log.Printf("支付宝回调验签失败，但已通过主动查单确认支付成功: tradeNo=%s status=%s", outTradeNo, tradeStatus)
+	return true
+}
+
 func AlipayF2FStatus(c *gin.Context) {
 	tradeNo := c.Query("trade_no")
 	if tradeNo == "" {
@@ -621,7 +657,12 @@ func AlipayF2FNotify(c *gin.Context) {
 	}
 	if err := verifyAlipaySignatureForContent(payload.DecodedParams, payload.RawParams); err != nil {
 		log.Printf("支付宝回调验签失败: %v", err)
-		_, _ = c.Writer.Write([]byte("fail"))
+		outTradeNo := payload.DecodedParams["out_trade_no"]
+		if !tryRecoverAlipayNotifyWithoutVerification(outTradeNo, c.ClientIP(), model.GetTopUpByTradeNo, syncAlipayTradeStatus) {
+			_, _ = c.Writer.Write([]byte("fail"))
+			return
+		}
+		_, _ = c.Writer.Write([]byte("success"))
 		return
 	}
 

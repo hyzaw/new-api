@@ -43,9 +43,9 @@ import {
   SiWechat,
   SiLinux,
   SiDiscord,
-  SiGoogle,
 } from 'react-icons/si';
 import { UserPlus, ShieldCheck } from 'lucide-react';
+import GoogleIcon from '../../../common/logo/GoogleIcon';
 import TelegramLoginButton from 'react-telegram-login';
 import {
   API,
@@ -370,10 +370,7 @@ const AccountManagement = ({
                 <div className='flex items-center justify-between gap-3'>
                   <div className='flex items-center flex-1 min-w-0'>
                     <div className='w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mr-3 flex-shrink-0'>
-                      <SiGoogle
-                        size={20}
-                        className='text-slate-600 dark:text-slate-300'
-                      />
+                      <GoogleIcon size={20} />
                     </div>
                     <div className='flex-1 min-w-0'>
                       <div className='font-medium text-gray-900'>
