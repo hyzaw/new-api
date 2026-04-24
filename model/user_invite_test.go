@@ -45,9 +45,12 @@ func TestInsertIncreasesAffCountWhenInviterRewardIsZero(t *testing.T) {
 
 	var reloadedInviter User
 	require.NoError(t, DB.First(&reloadedInviter, inviter.Id).Error)
+	var reloadedInvitee User
+	require.NoError(t, DB.First(&reloadedInvitee, invitee.Id).Error)
 	assert.Equal(t, 1, reloadedInviter.AffCount)
 	assert.Equal(t, 0, reloadedInviter.AffQuota)
 	assert.Equal(t, 0, reloadedInviter.AffHistoryQuota)
+	assert.Equal(t, inviter.Id, reloadedInvitee.InviterId)
 
 	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
 	require.NoError(t, err)
@@ -204,9 +207,12 @@ func TestFinalizeOAuthUserCreationIncreasesAffCountWhenInviterRewardIsZero(t *te
 
 	var reloadedInviter User
 	require.NoError(t, DB.First(&reloadedInviter, inviter.Id).Error)
+	var reloadedInvitee User
+	require.NoError(t, DB.First(&reloadedInvitee, user.Id).Error)
 	assert.Equal(t, 1, reloadedInviter.AffCount)
 	assert.Equal(t, 0, reloadedInviter.AffQuota)
 	assert.Equal(t, 0, reloadedInviter.AffHistoryQuota)
+	assert.Equal(t, inviter.Id, reloadedInvitee.InviterId)
 
 	records, err := GetInviteWalletRecordsByUserId(inviter.Id)
 	require.NoError(t, err)
@@ -253,4 +259,46 @@ func TestFinalizeOAuthUserCreationGrantsInviteeQuotaAsGiftQuota(t *testing.T) {
 	require.NoError(t, DB.First(&reloadedInvitee, user.Id).Error)
 	assert.Equal(t, 0, reloadedInvitee.Quota)
 	assert.Equal(t, 150, reloadedInvitee.GiftQuota)
+}
+
+func TestGetUserByIdFallsBackToInviteDetailInviter(t *testing.T) {
+	truncateTables(t)
+
+	inviter := &User{
+		Username:    "fallback_inviter",
+		Password:    "password123",
+		DisplayName: "fallback_inviter",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "fallback_inviter_aff",
+	}
+	require.NoError(t, DB.Create(inviter).Error)
+
+	invitee := &User{
+		Username:    "fallback_invitee",
+		Password:    "password123",
+		DisplayName: "fallback_invitee",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		AffCode:     "fallback_invitee_aff",
+		InviterId:   0,
+	}
+	require.NoError(t, DB.Create(invitee).Error)
+	require.NoError(t, SyncInviteRegistrationDetail(inviter.Id, invitee, common.GetTimestamp()))
+
+	loaded, err := GetUserById(invitee.Id, false)
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, inviter.Id, loaded.InviterId)
+
+	users, _, err := GetAllUsers(&common.PageInfo{Page: 0, PageSize: 20})
+	require.NoError(t, err)
+	found := false
+	for _, user := range users {
+		if user != nil && user.Id == invitee.Id {
+			assert.Equal(t, inviter.Id, user.InviterId)
+			found = true
+		}
+	}
+	assert.True(t, found)
 }

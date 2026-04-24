@@ -54,6 +54,51 @@ type User struct {
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 }
 
+type inviteUserFallbackRow struct {
+	InviteeId int `gorm:"column:invitee_id"`
+	InviterId int `gorm:"column:inviter_id"`
+}
+
+func fillUsersInviterFallback(tx *gorm.DB, users []*User) error {
+	if len(users) == 0 {
+		return nil
+	}
+	if tx == nil {
+		tx = DB
+	}
+
+	inviteeIDs := make([]int, 0, len(users))
+	userByID := make(map[int]*User, len(users))
+	for _, user := range users {
+		if user == nil || user.Id == 0 {
+			continue
+		}
+		if user.InviterId != 0 {
+			continue
+		}
+		inviteeIDs = append(inviteeIDs, user.Id)
+		userByID[user.Id] = user
+	}
+	if len(inviteeIDs) == 0 {
+		return nil
+	}
+
+	var rows []inviteUserFallbackRow
+	if err := tx.Model(&InviteDetail{}).
+		Select("invitee_id", "inviter_id").
+		Where("detail_type = ? AND invitee_id IN ? AND inviter_id <> 0", InviteDetailTypeInvite, inviteeIDs).
+		Find(&rows).Error; err != nil {
+		return err
+	}
+
+	for _, row := range rows {
+		if user, ok := userByID[row.InviteeId]; ok && user != nil && user.InviterId == 0 {
+			user.InviterId = row.InviterId
+		}
+	}
+	return nil
+}
+
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
 		Id:        user.Id,
@@ -228,6 +273,10 @@ func GetAllUsers(pageInfo *common.PageInfo) (users []*User, total int64, err err
 		tx.Rollback()
 		return nil, 0, err
 	}
+	if err = fillUsersInviterFallback(tx, users); err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
 
 	// Commit transaction
 	if err = tx.Commit().Error; err != nil {
@@ -295,6 +344,10 @@ func SearchUsers(keyword string, group string, startIdx int, num int) ([]*User, 
 		tx.Rollback()
 		return nil, 0, err
 	}
+	if err = fillUsersInviterFallback(tx, users); err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
 
 	// 提交事务
 	if err = tx.Commit().Error; err != nil {
@@ -314,6 +367,11 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 		err = DB.First(&user, "id = ?", id).Error
 	} else {
 		err = DB.Omit("password").First(&user, "id = ?", id).Error
+	}
+	if err == nil {
+		if fillErr := fillUsersInviterFallback(DB, []*User{&user}); fillErr != nil {
+			return nil, fillErr
+		}
 	}
 	return &user, err
 }
@@ -423,6 +481,9 @@ func (user *User) Insert(inviterId int) error {
 	if user.Group == "" {
 		user.Group = operation_setting.GetDefaultUserGroup()
 	}
+	if inviterId != 0 && user.InviterId == 0 {
+		user.InviterId = inviterId
+	}
 	user.GiftQuota = common.QuotaForNewUser
 	//user.SetAccessToken(common.GetUUID())
 	user.AffCode = common.GetRandomString(4)
@@ -484,6 +545,9 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 	user.Group = strings.TrimSpace(user.Group)
 	if user.Group == "" {
 		user.Group = operation_setting.GetDefaultUserGroup()
+	}
+	if inviterId != 0 && user.InviterId == 0 {
+		user.InviterId = inviterId
 	}
 	user.GiftQuota = common.QuotaForNewUser
 	user.AffCode = common.GetRandomString(4)
