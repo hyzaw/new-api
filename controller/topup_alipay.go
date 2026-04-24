@@ -229,6 +229,10 @@ func verifyAlipaySignatureWithContent(publicKey *rsa.PublicKey, signature string
 }
 
 func verifyAlipaySignature(params map[string]string) error {
+	return verifyAlipaySignatureForContent(params, params)
+}
+
+func verifyAlipaySignatureForContent(params map[string]string, signContentParams map[string]string) error {
 	signature := params["sign"]
 	if signature == "" {
 		return errors.New("支付宝通知缺少签名")
@@ -243,7 +247,7 @@ func verifyAlipaySignature(params map[string]string) error {
 		name    string
 		content string
 	}{
-		{name: "exclude_sign_type", content: buildAlipaySignContent(params, true)},
+		{name: "exclude_sign_type", content: buildAlipaySignContent(signContentParams, true)},
 	}
 	if signType != "" {
 		signContents = append(signContents, struct {
@@ -251,7 +255,7 @@ func verifyAlipaySignature(params map[string]string) error {
 			content string
 		}{
 			name:    "include_sign_type",
-			content: buildAlipaySignContent(params, false),
+			content: buildAlipaySignContent(signContentParams, false),
 		})
 	}
 
@@ -265,6 +269,52 @@ func verifyAlipaySignature(params map[string]string) error {
 	}
 
 	return fmt.Errorf("alipay signature verification failed (sign_type=%s): %s", common.GetStringIfEmpty(signType, "RSA2"), strings.Join(errs, "; "))
+}
+
+type alipayNotifyPayload struct {
+	DecodedParams map[string]string
+	RawParams     map[string]string
+}
+
+func parseAlipayNotifyPayload(body []byte) (*alipayNotifyPayload, error) {
+	rawBody := strings.TrimSpace(string(body))
+	payload := &alipayNotifyPayload{
+		DecodedParams: make(map[string]string),
+		RawParams:     make(map[string]string),
+	}
+	if rawBody == "" {
+		return payload, nil
+	}
+
+	pairs := strings.Split(rawBody, "&")
+	for _, pair := range pairs {
+		if pair == "" {
+			continue
+		}
+
+		rawKey, rawValue, hasValue := strings.Cut(pair, "=")
+		if !hasValue {
+			rawValue = ""
+		}
+
+		key, err := url.QueryUnescape(rawKey)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := payload.DecodedParams[key]; exists {
+			continue
+		}
+
+		value, err := url.QueryUnescape(rawValue)
+		if err != nil {
+			return nil, err
+		}
+
+		payload.DecodedParams[key] = value
+		payload.RawParams[key] = rawValue
+	}
+
+	return payload, nil
 }
 
 func doAlipayGatewayRequest(method string, bizContent any, notifyURL string) ([]byte, error) {
@@ -558,22 +608,24 @@ func collectAlipayNotifyParams(values url.Values) map[string]string {
 }
 
 func AlipayF2FNotify(c *gin.Context) {
-	if err := c.Request.ParseForm(); err != nil {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
-	params := collectAlipayNotifyParams(c.Request.PostForm)
-	if len(params) == 0 {
+
+	payload, err := parseAlipayNotifyPayload(body)
+	if err != nil || len(payload.DecodedParams) == 0 {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
-	if err := verifyAlipaySignature(params); err != nil {
+	if err := verifyAlipaySignatureForContent(payload.DecodedParams, payload.RawParams); err != nil {
 		log.Printf("支付宝回调验签失败: %v", err)
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
 
-	outTradeNo := params["out_trade_no"]
+	outTradeNo := payload.DecodedParams["out_trade_no"]
 	if outTradeNo == "" {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return

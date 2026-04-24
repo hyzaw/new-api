@@ -504,6 +504,19 @@ export async function onDiscordOAuthClicked(client_id, options = {}) {
   );
 }
 
+export async function onGoogleOAuthClicked(client_id, options = {}) {
+  const state = await prepareOAuthState(options);
+  if (!state) return;
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  url.searchParams.set('client_id', client_id);
+  url.searchParams.set('redirect_uri', `${window.location.origin}/oauth/google`);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', 'openid profile email');
+  url.searchParams.set('state', state);
+  url.searchParams.set('prompt', 'select_account');
+  redirectToOAuthUrl(url);
+}
+
 export async function onOIDCClicked(
   auth_url,
   client_id,

@@ -40,7 +40,13 @@ import {
   IconDelete,
   IconGithubLogo,
 } from '@douyinfe/semi-icons';
-import { SiDiscord, SiTelegram, SiWechat, SiLinux } from 'react-icons/si';
+import {
+  SiDiscord,
+  SiTelegram,
+  SiWechat,
+  SiLinux,
+  SiGoogle,
+} from 'react-icons/si';
 
 const { Text } = Typography;
 
@@ -87,6 +93,7 @@ const UserBindingManagementModal = ({
         setBuiltInBindings({
           email: userData.email || '',
           github_id: userData.github_id || '',
+          google_id: userData.google_id || '',
           discord_id: userData.discord_id || '',
           oidc_id: userData.oidc_id || '',
           wechat_id: userData.wechat_id || '',
@@ -217,6 +224,16 @@ const UserBindingManagementModal = ({
           size='default'
           className='text-slate-600 dark:text-slate-300'
         />
+      ),
+    },
+    {
+      key: 'google',
+      field: 'google_id',
+      name: 'Google',
+      enabled: Boolean(statusInfo.google_oauth),
+      value: getBuiltInBindingValue('google_id'),
+      icon: (
+        <SiGoogle size={20} className='text-slate-600 dark:text-slate-300' />
       ),
     },
     {
