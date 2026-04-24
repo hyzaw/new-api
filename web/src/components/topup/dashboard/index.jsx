@@ -62,6 +62,7 @@ const REFUND_STATUS_LABELS = {
 };
 
 const formatMoney = (value) => `¥${Number(value || 0).toFixed(2)}`;
+const formatCount = (value) => Number(value || 0).toLocaleString();
 
 const pageStyle = {
   display: 'flex',
@@ -256,6 +257,14 @@ const TopUpDashboard = ({
       {
         label: t('用户总剩余赠送余额'),
         value: renderQuota(Number(overview.total_user_gift_quota || 0)),
+      },
+      {
+        label: t('建站以来消耗额度'),
+        value: renderQuota(Number(overview.total_consumed_quota || 0)),
+      },
+      {
+        label: t('建站以来消耗 Tokens'),
+        value: formatCount(overview.total_consumed_tokens),
       },
       {
         label: t('付费率'),

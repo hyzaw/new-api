@@ -1,26 +1,45 @@
 package model
 
 import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/go-redis/redis/v8"
+	"gorm.io/gorm"
 )
 
 type TopUpDashboardOverview struct {
-	TotalOrders        int64   `json:"total_orders"`
-	SuccessOrders      int64   `json:"success_orders"`
-	PendingOrders      int64   `json:"pending_orders"`
-	PaidUserCount      int64   `json:"paid_user_count"`
-	TotalUserCount     int64   `json:"total_user_count"`
-	TotalMoney         float64 `json:"total_money"`
-	SuccessMoney       float64 `json:"success_money"`
-	RefundedMoney      float64 `json:"refunded_money"`
-	PendingRefundMoney float64 `json:"pending_refund_money"`
-	RefundCount        int64   `json:"refund_count"`
-	NetMoney           float64 `json:"net_money"`
-	TotalUserQuota     int64   `json:"total_user_quota"`
-	TotalUserGiftQuota int64   `json:"total_user_gift_quota"`
+	TotalOrders         int64   `json:"total_orders"`
+	SuccessOrders       int64   `json:"success_orders"`
+	PendingOrders       int64   `json:"pending_orders"`
+	PaidUserCount       int64   `json:"paid_user_count"`
+	TotalUserCount      int64   `json:"total_user_count"`
+	TotalMoney          float64 `json:"total_money"`
+	SuccessMoney        float64 `json:"success_money"`
+	RefundedMoney       float64 `json:"refunded_money"`
+	PendingRefundMoney  float64 `json:"pending_refund_money"`
+	RefundCount         int64   `json:"refund_count"`
+	NetMoney            float64 `json:"net_money"`
+	TotalUserQuota      int64   `json:"total_user_quota"`
+	TotalUserGiftQuota  int64   `json:"total_user_gift_quota"`
+	TotalConsumedQuota  int64   `json:"total_consumed_quota"`
+	TotalConsumedTokens int64   `json:"total_consumed_tokens"`
 }
+
+type topUpDashboardConsumeTotals struct {
+	Quota  int64 `gorm:"column:quota"`
+	Tokens int64 `gorm:"column:tokens"`
+}
+
+const (
+	topUpDashboardConsumeCachePrefix = "new-api:topup_dashboard:consume:v1"
+	topUpDashboardTodayCacheTTL      = 10 * time.Minute
+	topUpDashboardHistoryCacheTTL    = 365 * 24 * time.Hour
+)
 
 type TopUpDashboardTrendItem struct {
 	Date          string  `json:"date"`
@@ -59,6 +78,103 @@ type TopUpDashboardStats struct {
 
 func getDayBucket(ts int64) string {
 	return time.Unix(ts, 0).In(time.Local).Format("2006-01-02")
+}
+
+func getDayStart(ts int64) time.Time {
+	t := time.Unix(ts, 0).In(time.Local)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+}
+
+func topUpDashboardConsumeCacheKey(day string) string {
+	return fmt.Sprintf("%s:%s", topUpDashboardConsumeCachePrefix, day)
+}
+
+func encodeTopUpDashboardConsumeTotals(totals topUpDashboardConsumeTotals) string {
+	return fmt.Sprintf("%d:%d", totals.Quota, totals.Tokens)
+}
+
+func decodeTopUpDashboardConsumeTotals(raw string) (topUpDashboardConsumeTotals, bool) {
+	parts := strings.Split(raw, ":")
+	if len(parts) != 2 {
+		return topUpDashboardConsumeTotals{}, false
+	}
+	quota, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return topUpDashboardConsumeTotals{}, false
+	}
+	tokens, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return topUpDashboardConsumeTotals{}, false
+	}
+	return topUpDashboardConsumeTotals{Quota: quota, Tokens: tokens}, true
+}
+
+func getTopUpDashboardConsumeTotalsForDay(dayStart time.Time, nowDayStart time.Time) (topUpDashboardConsumeTotals, error) {
+	day := dayStart.Format("2006-01-02")
+	cacheKey := topUpDashboardConsumeCacheKey(day)
+	if common.RedisEnabled && common.RDB != nil {
+		raw, err := common.RedisGet(cacheKey)
+		if err == nil {
+			if totals, ok := decodeTopUpDashboardConsumeTotals(raw); ok {
+				return totals, nil
+			}
+		} else if !errors.Is(err, redis.Nil) {
+			common.SysLog(fmt.Sprintf("failed to get topup dashboard consume cache %s: %s", cacheKey, err.Error()))
+		}
+	}
+
+	var totals topUpDashboardConsumeTotals
+	start := dayStart.Unix()
+	end := dayStart.AddDate(0, 0, 1).Unix()
+	err := LOG_DB.Model(&Log{}).
+		Select("COALESCE(SUM(quota), 0) AS quota, COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS tokens").
+		Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeConsume, start, end).
+		Scan(&totals).Error
+	if err != nil {
+		return totals, err
+	}
+
+	if common.RedisEnabled && common.RDB != nil {
+		ttl := topUpDashboardHistoryCacheTTL
+		if dayStart.Equal(nowDayStart) {
+			ttl = topUpDashboardTodayCacheTTL
+		}
+		if err := common.RedisSet(cacheKey, encodeTopUpDashboardConsumeTotals(totals), ttl); err != nil {
+			common.SysLog(fmt.Sprintf("failed to set topup dashboard consume cache %s: %s", cacheKey, err.Error()))
+		}
+	}
+	return totals, nil
+}
+
+func getTopUpDashboardConsumeTotals() (topUpDashboardConsumeTotals, error) {
+	var firstLog Log
+	err := LOG_DB.Model(&Log{}).
+		Select("created_at").
+		Where("type = ?", LogTypeConsume).
+		Order("created_at ASC").
+		Limit(1).
+		First(&firstLog).Error
+	if err != nil {
+		// GORM returns ErrRecordNotFound when there are no consume logs.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return topUpDashboardConsumeTotals{}, nil
+		}
+		return topUpDashboardConsumeTotals{}, err
+	}
+
+	nowDayStart := getDayStart(common.GetTimestamp())
+	dayStart := getDayStart(firstLog.CreatedAt)
+	var totals topUpDashboardConsumeTotals
+	for !dayStart.After(nowDayStart) {
+		dayTotals, err := getTopUpDashboardConsumeTotalsForDay(dayStart, nowDayStart)
+		if err != nil {
+			return totals, err
+		}
+		totals.Quota += dayTotals.Quota
+		totals.Tokens += dayTotals.Tokens
+		dayStart = dayStart.AddDate(0, 0, 1)
+	}
+	return totals, nil
 }
 
 func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
@@ -114,6 +230,12 @@ func GetAdminTopUpDashboardStats(days int) (*TopUpDashboardStats, error) {
 	if err := DB.Model(&User{}).Select("COALESCE(SUM(gift_quota), 0)").Scan(&stats.Overview.TotalUserGiftQuota).Error; err != nil {
 		return nil, err
 	}
+	consumeTotals, err := getTopUpDashboardConsumeTotals()
+	if err != nil {
+		return nil, err
+	}
+	stats.Overview.TotalConsumedQuota = consumeTotals.Quota
+	stats.Overview.TotalConsumedTokens = consumeTotals.Tokens
 	stats.Overview.TotalMoney = decimalFromFloatMoney(stats.Overview.TotalMoney).InexactFloat64()
 	stats.Overview.SuccessMoney = decimalFromFloatMoney(stats.Overview.SuccessMoney).InexactFloat64()
 	stats.Overview.RefundedMoney = decimalFromFloatMoney(stats.Overview.RefundedMoney).InexactFloat64()

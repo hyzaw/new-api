@@ -95,6 +95,32 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 		require.NoError(t, DB.Create(topUp).Error)
 	}
 
+	consumeLogs := []*Log{
+		{
+			UserId:           userA.Id,
+			Username:         userA.Username,
+			CreatedAt:        1713800900,
+			Type:             LogTypeConsume,
+			ModelName:        "gpt-test",
+			Quota:            1000,
+			PromptTokens:     300,
+			CompletionTokens: 200,
+		},
+		{
+			UserId:           userB.Id,
+			Username:         userB.Username,
+			CreatedAt:        1713887300,
+			Type:             LogTypeConsume,
+			ModelName:        "gpt-test",
+			Quota:            2500,
+			PromptTokens:     800,
+			CompletionTokens: 700,
+		},
+	}
+	for _, logItem := range consumeLogs {
+		require.NoError(t, LOG_DB.Create(logItem).Error)
+	}
+
 	stats, err := GetAdminTopUpDashboardStats(30)
 	require.NoError(t, err)
 	require.Len(t, stats.ValuableUsers, 3)
@@ -102,6 +128,8 @@ func TestGetAdminTopUpDashboardStatsValuableUsersSortedByCumulativeTopUp(t *test
 	assert.EqualValues(t, 3, stats.Overview.TotalUserCount)
 	assert.EqualValues(t, 1400, stats.Overview.TotalUserQuota)
 	assert.EqualValues(t, 200, stats.Overview.TotalUserGiftQuota)
+	assert.EqualValues(t, 3500, stats.Overview.TotalConsumedQuota)
+	assert.EqualValues(t, 2000, stats.Overview.TotalConsumedTokens)
 
 	assert.Equal(t, userB.Id, stats.ValuableUsers[0].UserId)
 	assert.Equal(t, "valuable_user_b", stats.ValuableUsers[0].Username)
