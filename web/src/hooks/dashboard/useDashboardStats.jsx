@@ -50,6 +50,9 @@ export const useDashboardStats = (
       ).toFixed(2),
     });
 
+  const currentBalance =
+    Number(userState?.user?.quota || 0) + Number(userState?.user?.gift_quota || 0);
+
   const groupedStatsData = useMemo(
     () => [
       {
@@ -58,8 +61,8 @@ export const useDashboardStats = (
         items: [
           {
             title: t('当前余额'),
-            value: renderQuota(userState?.user?.quota),
-            subValue: formatApproxUsdText(userState?.user?.quota),
+            value: renderQuota(currentBalance),
+            subValue: formatApproxUsdText(currentBalance),
             icon: <IconMoneyExchangeStroked />,
             avatarColor: 'blue',
             trendData: [],
@@ -143,7 +146,7 @@ export const useDashboardStats = (
       },
     ],
     [
-      userState?.user?.quota,
+      currentBalance,
       userState?.user?.group_ratio,
       userState?.user?.used_quota,
       userState?.user?.request_count,
