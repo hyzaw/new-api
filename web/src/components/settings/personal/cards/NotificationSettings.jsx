@@ -33,7 +33,7 @@ import {
   Col,
 } from '@douyinfe/semi-ui';
 import { IconMail, IconKey, IconBell, IconLink } from '@douyinfe/semi-icons';
-import { ShieldCheck, Bell, DollarSign, Settings } from 'lucide-react';
+import { Bell, DollarSign, Settings } from 'lucide-react';
 import {
   renderQuotaWithPrompt,
   API,
@@ -791,38 +791,6 @@ const NotificationSettings = ({
                     '当模型没有设置价格时仍接受调用，仅当您信任该网站时使用，可能会产生高额费用',
                   )}
                 />
-              </div>
-            </TabPane>
-
-            {/* 隐私设置 Tab */}
-            <TabPane
-              tab={
-                <div className='flex items-center'>
-                  <ShieldCheck size={16} className='mr-2' />
-                  {t('隐私设置')}
-                </div>
-              }
-              itemKey='privacy'
-            >
-              <div className='py-4'>
-                <div className='flex items-start justify-between gap-4 rounded-xl border border-[var(--semi-color-border)] bg-[var(--semi-color-fill-0)] p-4'>
-                  <div className='min-w-0'>
-                    <div className='font-medium text-sm'>
-                      {t('记录请求与错误日志IP')}
-                    </div>
-                    <Typography.Text type='tertiary' size='small'>
-                      {t(
-                        '该站点已强制开启此审计项，消费与错误日志会始终记录您的客户端IP地址，且不可关闭。',
-                      )}
-                    </Typography.Text>
-                  </div>
-                  <Switch
-                    checked
-                    disabled
-                    checkedText={t('开')}
-                    uncheckedText={t('关')}
-                  />
-                </div>
               </div>
             </TabPane>
 
