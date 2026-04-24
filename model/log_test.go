@@ -116,25 +116,33 @@ func TestRecordConsumeLogStoresAdminOnlyBodies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse log other: %v", err)
 	}
-	adminInfo, ok := otherMap["admin_info"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing admin_info: %v", otherMap)
-	}
-	reqBody, ok := adminInfo["request_body"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing request_body: %v", adminInfo)
-	}
-	if got := reqBody["body"]; got != `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}` {
-		t.Fatalf("unexpected request body: %v", got)
-	}
-	respBody, ok := adminInfo["response_body"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("missing response_body: %v", adminInfo)
-	}
-	if got := respBody["body"]; got != `{"id":"chatcmpl-test","choices":[]}` {
-		t.Fatalf("unexpected response body: %v", got)
+	if adminInfo, ok := otherMap["admin_info"].(map[string]interface{}); ok {
+		if _, exists := adminInfo["request_body"]; exists {
+			t.Fatalf("request_body should not be stored in logs.other: %v", adminInfo)
+		}
+		if _, exists := adminInfo["response_body"]; exists {
+			t.Fatalf("response_body should not be stored in logs.other: %v", adminInfo)
+		}
 	}
 
+	detail, err := GetLogDetail(log.Id)
+	if err != nil {
+		t.Fatalf("failed to load log detail: %v", err)
+	}
+	if detail.RequestBody != `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}` {
+		t.Fatalf("unexpected request body: %v", detail.RequestBody)
+	}
+	if detail.ResponseBody != `{"id":"chatcmpl-test","choices":[]}` {
+		t.Fatalf("unexpected response body: %v", detail.ResponseBody)
+	}
+	if detail.RequestBodyEncoding != common.LogBodyEncodingText || detail.ResponseBodyEncoding != common.LogBodyEncodingText {
+		t.Fatalf("unexpected encodings: request=%s response=%s", detail.RequestBodyEncoding, detail.ResponseBodyEncoding)
+	}
+
+	markLogsHasDetail([]*Log{&log})
+	if !log.HasDetail {
+		t.Fatalf("expected log has_detail to be true")
+	}
 	formatUserLogs([]*Log{&log}, 0)
 	userOther, err := common.StrToMap(log.Other)
 	if err != nil {

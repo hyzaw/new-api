@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '@douyinfe/semi-ui';
+import { Button, Modal, Spin } from '@douyinfe/semi-ui';
 import {
   API,
   getTodayStartTimestamp,
@@ -188,6 +188,8 @@ export const useLogsData = () => {
     useState(null);
   const [showParamOverrideModal, setShowParamOverrideModal] = useState(false);
   const [paramOverrideTarget, setParamOverrideTarget] = useState(null);
+  const [logDetailCache, setLogDetailCache] = useState({});
+  const [logDetailLoading, setLogDetailLoading] = useState({});
 
   // Initialize default column visibility
   const initDefaultColumns = () => {
@@ -233,6 +235,12 @@ export const useLogsData = () => {
   useEffect(() => {
     localStorage.setItem(BILLING_DISPLAY_MODE_STORAGE_KEY, billingDisplayMode);
   }, [BILLING_DISPLAY_MODE_STORAGE_KEY, billingDisplayMode]);
+
+  useEffect(() => {
+    if (logs.length > 0) {
+      setLogsFormat(logs);
+    }
+  }, [logDetailCache, logDetailLoading]);
 
   // 获取表单值的辅助函数，确保所有值都是字符串
   const getFormValues = () => {
@@ -366,45 +374,126 @@ export const useLogsData = () => {
     setShowParamOverrideModal(true);
   };
 
-  // Format logs data
-  const setLogsFormat = (logs) => {
-    const renderCapturedLogBody = (captured, label) => {
-      if (!captured) {
-        return null;
+  const loadLogDetail = async (logId) => {
+    if (!isAdminUser || !logId || logDetailLoading[logId]) {
+      return;
+    }
+    if (logDetailCache[logId]) {
+      return;
+    }
+    setLogDetailLoading((prev) => ({ ...prev, [logId]: true }));
+    try {
+      const res = await API.get(`/api/log/${logId}/detail`);
+      const { success, message, data } = res.data;
+      if (success) {
+        setLogDetailCache((prev) => ({ ...prev, [logId]: data }));
+      } else {
+        showError(message);
       }
-      const encoding = captured.encoding || 'text';
-      const body = captured.body ?? '';
+    } catch (err) {
+      showError(err?.message || String(err));
+    } finally {
+      setLogDetailLoading((prev) => ({ ...prev, [logId]: false }));
+    }
+  };
+
+  const renderCapturedLogBody = (captured, label) => {
+    if (!captured) {
+      return null;
+    }
+    const encoding = captured.encoding || 'text';
+    const body = captured.body ?? '';
+    return (
+      <div
+        style={{
+          maxWidth: 720,
+          maxHeight: 320,
+          overflow: 'auto',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          lineHeight: 1.6,
+          cursor: 'pointer',
+        }}
+        title={t('点击复制')}
+        onClick={async (event) => {
+          event.stopPropagation();
+          const copiedText =
+            encoding === 'base64' ? `base64:${body}` : String(body);
+          if (await copy(copiedText)) {
+            showSuccess(t('已复制：') + label);
+          } else {
+            Modal.error({
+              title: t('无法复制到剪贴板，请手动复制'),
+              content: copiedText,
+            });
+          }
+        }}
+      >
+        {encoding === 'base64' ? `${t('Base64 编码')}:\n${body}` : body}
+      </div>
+    );
+  };
+
+  const normalizeLogDetailBody = (detail, type) => {
+    if (!detail) {
+      return null;
+    }
+    const encoding = detail[`${type}_body_encoding`] || 'text';
+    const body = detail[`${type}_body`] || '';
+    if (!body) {
+      return null;
+    }
+    return { encoding, body };
+  };
+
+  const renderLazyLogDetail = (log) => {
+    const logId = log?.id;
+    const detail = logDetailCache[logId];
+    const loading = Boolean(logDetailLoading[logId]);
+    if (!detail) {
       return (
-        <div
-          style={{
-            maxWidth: 720,
-            maxHeight: 320,
-            overflow: 'auto',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            lineHeight: 1.6,
-            cursor: 'pointer',
-          }}
-          title={t('点击复制')}
-          onClick={async (event) => {
+        <Button
+          size='small'
+          type='primary'
+          theme='light'
+          loading={loading}
+          onClick={(event) => {
             event.stopPropagation();
-            const copiedText =
-              encoding === 'base64' ? `base64:${body}` : String(body);
-            if (await copy(copiedText)) {
-              showSuccess(t('已复制：') + label);
-            } else {
-              Modal.error({
-                title: t('无法复制到剪贴板，请手动复制'),
-                content: copiedText,
-              });
-            }
+            loadLogDetail(logId);
           }}
         >
-          {encoding === 'base64' ? `${t('Base64 编码')}:\n${body}` : body}
-        </div>
+          {t('查看完整日志详情')}
+        </Button>
       );
-    };
+    }
+    const requestBody = normalizeLogDetailBody(detail, 'request');
+    const responseBody = normalizeLogDetailBody(detail, 'response');
+    return (
+      <Spin spinning={loading}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {requestBody ? (
+            <div>
+              <div style={{ marginBottom: 6, fontWeight: 600 }}>
+                {t('完整请求体')}
+              </div>
+              {renderCapturedLogBody(requestBody, t('完整请求体'))}
+            </div>
+          ) : null}
+          {responseBody ? (
+            <div>
+              <div style={{ marginBottom: 6, fontWeight: 600 }}>
+                {t('完整返回体')}
+              </div>
+              {renderCapturedLogBody(responseBody, t('完整返回体'))}
+            </div>
+          ) : null}
+        </div>
+      </Spin>
+    );
+  };
 
+  // Format logs data
+  const setLogsFormat = (logs) => {
     const requestConversionDisplayValue = (conversionChain) => {
       const chain = Array.isArray(conversionChain)
         ? conversionChain.filter(Boolean)
@@ -723,22 +812,10 @@ export const useLogsData = () => {
           value: localCountMode,
         });
       }
-      if (isAdminUser && other?.admin_info?.request_body) {
+      if (isAdminUser && logs[i].has_detail) {
         expandDataLocal.push({
-          key: t('完整请求体'),
-          value: renderCapturedLogBody(
-            other.admin_info.request_body,
-            t('完整请求体'),
-          ),
-        });
-      }
-      if (isAdminUser && other?.admin_info?.response_body) {
-        expandDataLocal.push({
-          key: t('完整返回体'),
-          value: renderCapturedLogBody(
-            other.admin_info.response_body,
-            t('完整返回体'),
-          ),
+          key: t('详细日志'),
+          value: renderLazyLogDetail(logs[i]),
         });
       }
       if (isAdminUser && logs[i].type === 1) {

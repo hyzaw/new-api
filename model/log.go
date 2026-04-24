@@ -38,6 +38,16 @@ type Log struct {
 	Ip               string `json:"ip" gorm:"index;default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
+	HasDetail        bool   `json:"has_detail,omitempty" gorm:"-"`
+}
+
+type LogDetail struct {
+	Id                   int    `json:"id"`
+	LogId                int    `json:"log_id" gorm:"uniqueIndex;index"`
+	RequestBodyEncoding  string `json:"request_body_encoding" gorm:"type:varchar(16);default:''"`
+	RequestBody          string `json:"request_body" gorm:"type:text"`
+	ResponseBodyEncoding string `json:"response_body_encoding" gorm:"type:varchar(16);default:''"`
+	ResponseBody         string `json:"response_body" gorm:"type:text"`
 }
 
 const edgeOneClientIPCountryHeader = "EO-Client-IPCountry12"
@@ -113,24 +123,72 @@ func ensureAdminInfo(logOther map[string]interface{}) map[string]interface{} {
 	return adminInfo
 }
 
-func attachRequestResponseBodies(c *gin.Context, logOther map[string]interface{}) {
-	if c == nil || logOther == nil {
-		return
+func buildLogDetailFromContext(c *gin.Context) *LogDetail {
+	if c == nil {
+		return nil
 	}
-	adminInfo := ensureAdminInfo(logOther)
-	if adminInfo == nil {
-		return
-	}
+	detail := &LogDetail{}
 	if storage, err := common.GetBodyStorage(c); err == nil && storage != nil {
 		if body, err := storage.Bytes(); err == nil {
 			if captured := common.BuildCapturedLogBody(body); captured != nil {
-				adminInfo["request_body"] = captured
+				detail.RequestBodyEncoding = captured.Encoding
+				detail.RequestBody = captured.Body
 			}
 		}
 	}
 	if captured := common.BuildCapturedLogBody(common.GetCapturedResponseBody(c)); captured != nil {
-		adminInfo["response_body"] = captured
+		detail.ResponseBodyEncoding = captured.Encoding
+		detail.ResponseBody = captured.Body
 	}
+	if detail.RequestBody == "" && detail.ResponseBody == "" {
+		return nil
+	}
+	return detail
+}
+
+func createLogDetail(logId int, detail *LogDetail) {
+	if logId == 0 || detail == nil {
+		return
+	}
+	detail.LogId = logId
+	if err := LOG_DB.Create(detail).Error; err != nil {
+		common.SysLog("failed to record log detail: " + err.Error())
+	}
+}
+
+func markLogsHasDetail(logs []*Log) {
+	if len(logs) == 0 {
+		return
+	}
+	logIds := make([]int, 0, len(logs))
+	logById := make(map[int]*Log, len(logs))
+	for _, item := range logs {
+		if item != nil && item.Id > 0 {
+			logIds = append(logIds, item.Id)
+			logById[item.Id] = item
+		}
+	}
+	if len(logIds) == 0 {
+		return
+	}
+	var detailLogIds []int
+	if err := LOG_DB.Model(&LogDetail{}).Where("log_id IN ?", logIds).Pluck("log_id", &detailLogIds).Error; err != nil {
+		common.SysLog("failed to query log detail flags: " + err.Error())
+		return
+	}
+	for _, logId := range detailLogIds {
+		if item := logById[logId]; item != nil {
+			item.HasDetail = true
+		}
+	}
+}
+
+func GetLogDetail(logId int) (*LogDetail, error) {
+	var detail LogDetail
+	if err := LOG_DB.Where("log_id = ?", logId).First(&detail).Error; err != nil {
+		return nil, err
+	}
+	return &detail, nil
 }
 
 func formatUserLogs(logs []*Log, startIdx int) {
@@ -154,6 +212,7 @@ func formatUserLogs(logs []*Log, startIdx int) {
 func GetLogByTokenId(tokenId int) (logs []*Log, err error) {
 	err = LOG_DB.Model(&Log{}).Where("token_id = ?", tokenId).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
 	enrichLogsClientIPCountry(logs)
+	markLogsHasDetail(logs)
 	formatUserLogs(logs, 0)
 	return logs, err
 }
@@ -267,7 +326,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	if userAgent := getRequestUserAgent(c); userAgent != "" {
 		logOther["user_agent"] = userAgent
 	}
-	attachRequestResponseBodies(c, logOther)
+	detail := buildLogDetailFromContext(c)
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
@@ -293,6 +352,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
+	createLogDetail(log.Id, detail)
 }
 
 type RecordConsumeLogParams struct {
@@ -324,7 +384,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if userAgent := getRequestUserAgent(c); userAgent != "" {
 		logOther["user_agent"] = userAgent
 	}
-	attachRequestResponseBodies(c, logOther)
+	detail := buildLogDetailFromContext(c)
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
@@ -350,6 +410,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
+	createLogDetail(log.Id, detail)
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
@@ -482,6 +543,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 
 	enrichLogsClientIPCountry(logs)
+	markLogsHasDetail(logs)
 
 	return logs, total, err
 }
@@ -530,6 +592,7 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 
 	enrichLogsClientIPCountry(logs)
+	markLogsHasDetail(logs)
 	formatUserLogs(logs, startIdx)
 	return logs, total, err
 }
@@ -625,7 +688,21 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 			return total, ctx.Err()
 		}
 
-		result := LOG_DB.Where("created_at < ?", targetTimestamp).Limit(limit).Delete(&Log{})
+		var logIds []int
+		if err := LOG_DB.Model(&Log{}).
+			Where("created_at < ?", targetTimestamp).
+			Order("id asc").
+			Limit(limit).
+			Pluck("id", &logIds).Error; err != nil {
+			return total, err
+		}
+		if len(logIds) == 0 {
+			break
+		}
+		if err := LOG_DB.Where("log_id IN ?", logIds).Delete(&LogDetail{}).Error; err != nil {
+			return total, err
+		}
+		result := LOG_DB.Where("id IN ?", logIds).Delete(&Log{})
 		if nil != result.Error {
 			return total, result.Error
 		}

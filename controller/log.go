@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type requestStatusMonitorLineResponse struct {
@@ -83,6 +85,24 @@ func GetUserLogs(c *gin.Context) {
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
 	return
+}
+
+func GetLogDetail(c *gin.Context) {
+	logId, err := strconv.Atoi(c.Param("id"))
+	if err != nil || logId <= 0 {
+		common.ApiErrorMsg(c, "无效的日志 ID")
+		return
+	}
+	detail, err := model.GetLogDetail(logId)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			common.ApiErrorMsg(c, "日志详情不存在")
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, detail)
 }
 
 // Deprecated: SearchAllLogs 已废弃，前端未使用该接口。
