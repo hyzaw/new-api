@@ -14,6 +14,47 @@ import (
 	"gorm.io/gorm"
 )
 
+func shouldAutoBindOAuthEmail(provider oauth.Provider, oauthUser *oauth.OAuthUser) bool {
+	if provider == nil || oauthUser == nil || oauthUser.Email == "" {
+		return false
+	}
+	if provider.GetName() != "Google" {
+		return false
+	}
+	emailVerified, _ := oauthUser.Extra["email_verified"].(bool)
+	return emailVerified
+}
+
+func syncOAuthEmailForExistingUser(user *model.User, oauthUser *oauth.OAuthUser, provider oauth.Provider) error {
+	if user == nil || oauthUser == nil || !shouldAutoBindOAuthEmail(provider, oauthUser) {
+		return nil
+	}
+	if user.Email != "" {
+		return nil
+	}
+
+	user.Email = oauthUser.Email
+	return user.Update(false)
+}
+
+func tryAutoBindOAuthUserByEmail(provider oauth.Provider, oauthUser *oauth.OAuthUser) (*model.User, error) {
+	if !shouldAutoBindOAuthEmail(provider, oauthUser) {
+		return nil, nil
+	}
+
+	user := &model.User{Email: oauthUser.Email}
+	if err := user.FillUserByEmail(); err != nil || user.Id == 0 {
+		return nil, nil
+	}
+
+	provider.SetProviderUserID(user, oauthUser.ProviderUserID)
+	if err := user.Update(false); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
 // providerParams returns map with Provider key for i18n templates
 func providerParams(name string) map[string]any {
 	return map[string]any{"Provider": name}
@@ -188,6 +229,10 @@ func handleOAuthBind(c *gin.Context, provider oauth.Provider) {
 			common.ApiError(c, err)
 			return
 		}
+		if err = syncOAuthEmailForExistingUser(&user, oauthUser, provider); err != nil {
+			common.ApiError(c, err)
+			return
+		}
 	}
 
 	common.ApiSuccessI18n(c, i18n.MsgOAuthBindSuccess, gin.H{
@@ -230,6 +275,12 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 				return user, nil
 			}
 		}
+	}
+
+	if existingUser, err := tryAutoBindOAuthUserByEmail(provider, oauthUser); err != nil {
+		return nil, err
+	} else if existingUser != nil {
+		return existingUser, nil
 	}
 
 	// User doesn't exist, create new user if registration is enabled
