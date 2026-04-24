@@ -368,6 +368,43 @@ export const useLogsData = () => {
 
   // Format logs data
   const setLogsFormat = (logs) => {
+    const renderCapturedLogBody = (captured, label) => {
+      if (!captured) {
+        return null;
+      }
+      const encoding = captured.encoding || 'text';
+      const body = captured.body ?? '';
+      return (
+        <div
+          style={{
+            maxWidth: 720,
+            maxHeight: 320,
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            lineHeight: 1.6,
+            cursor: 'pointer',
+          }}
+          title={t('点击复制')}
+          onClick={async (event) => {
+            event.stopPropagation();
+            const copiedText =
+              encoding === 'base64' ? `base64:${body}` : String(body);
+            if (await copy(copiedText)) {
+              showSuccess(t('已复制：') + label);
+            } else {
+              Modal.error({
+                title: t('无法复制到剪贴板，请手动复制'),
+                content: copiedText,
+              });
+            }
+          }}
+        >
+          {encoding === 'base64' ? `${t('Base64 编码')}:\n${body}` : body}
+        </div>
+      );
+    };
+
     const requestConversionDisplayValue = (conversionChain) => {
       const chain = Array.isArray(conversionChain)
         ? conversionChain.filter(Boolean)
@@ -684,6 +721,24 @@ export const useLogsData = () => {
         expandDataLocal.push({
           key: t('计费模式'),
           value: localCountMode,
+        });
+      }
+      if (isAdminUser && other?.admin_info?.request_body) {
+        expandDataLocal.push({
+          key: t('完整请求体'),
+          value: renderCapturedLogBody(
+            other.admin_info.request_body,
+            t('完整请求体'),
+          ),
+        });
+      }
+      if (isAdminUser && other?.admin_info?.response_body) {
+        expandDataLocal.push({
+          key: t('完整返回体'),
+          value: renderCapturedLogBody(
+            other.admin_info.response_body,
+            t('完整返回体'),
+          ),
         });
       }
       if (isAdminUser && logs[i].type === 1) {

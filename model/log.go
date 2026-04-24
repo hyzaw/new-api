@@ -99,18 +99,53 @@ func cloneLogOther(other map[string]interface{}) map[string]interface{} {
 	return cloned
 }
 
+func ensureAdminInfo(logOther map[string]interface{}) map[string]interface{} {
+	if logOther == nil {
+		return nil
+	}
+	if value, ok := logOther["admin_info"]; ok && value != nil {
+		if adminInfo, ok := value.(map[string]interface{}); ok {
+			return adminInfo
+		}
+	}
+	adminInfo := make(map[string]interface{})
+	logOther["admin_info"] = adminInfo
+	return adminInfo
+}
+
+func attachRequestResponseBodies(c *gin.Context, logOther map[string]interface{}) {
+	if c == nil || logOther == nil {
+		return
+	}
+	adminInfo := ensureAdminInfo(logOther)
+	if adminInfo == nil {
+		return
+	}
+	if storage, err := common.GetBodyStorage(c); err == nil && storage != nil {
+		if body, err := storage.Bytes(); err == nil {
+			if captured := common.BuildCapturedLogBody(body); captured != nil {
+				adminInfo["request_body"] = captured
+			}
+		}
+	}
+	if captured := common.BuildCapturedLogBody(common.GetCapturedResponseBody(c)); captured != nil {
+		adminInfo["response_body"] = captured
+	}
+}
+
 func formatUserLogs(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].ChannelName = ""
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
-		if otherMap != nil {
-			// Remove admin-only debug fields and internal upstream model details.
-			delete(otherMap, "admin_info")
-			delete(otherMap, "stream_status")
-			delete(otherMap, "upstream_model_name")
-			delete(otherMap, "is_model_mapped")
+		if otherMap == nil {
+			otherMap = map[string]interface{}{}
 		}
+		// Remove admin-only debug fields and internal upstream model details.
+		delete(otherMap, "admin_info")
+		delete(otherMap, "stream_status")
+		delete(otherMap, "upstream_model_name")
+		delete(otherMap, "is_model_mapped")
 		logs[i].Other = common.MapToJsonStr(otherMap)
 		logs[i].Id = startIdx + i + 1
 	}
@@ -232,6 +267,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	if userAgent := getRequestUserAgent(c); userAgent != "" {
 		logOther["user_agent"] = userAgent
 	}
+	attachRequestResponseBodies(c, logOther)
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
@@ -288,6 +324,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if userAgent := getRequestUserAgent(c); userAgent != "" {
 		logOther["user_agent"] = userAgent
 	}
+	attachRequestResponseBodies(c, logOther)
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
