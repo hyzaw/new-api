@@ -378,6 +378,7 @@ const (
 type ResponsesStreamResponse struct {
 	Type     string                   `json:"type"`
 	Response *OpenAIResponsesResponse `json:"response,omitempty"`
+	Error    any                      `json:"error,omitempty"`
 	Delta    string                   `json:"delta,omitempty"`
 	Item     *ResponsesOutput         `json:"item,omitempty"`
 	// - response.function_call_arguments.delta
@@ -387,6 +388,21 @@ type ResponsesStreamResponse struct {
 	SummaryIndex *int                           `json:"summary_index,omitempty"`
 	ItemID       string                         `json:"item_id,omitempty"`
 	Part         *ResponsesReasoningSummaryPart `json:"part,omitempty"`
+}
+
+// GetOpenAIError extracts an OpenAI-style error from either top-level stream
+// events (`event: error`) or terminal response events (`response.failed`).
+func (r *ResponsesStreamResponse) GetOpenAIError() *types.OpenAIError {
+	if r == nil {
+		return nil
+	}
+	if err := GetOpenAIError(r.Error); err != nil && (err.Type != "" || err.Message != "" || err.Code != nil) {
+		return err
+	}
+	if r.Response != nil {
+		return r.Response.GetOpenAIError()
+	}
+	return nil
 }
 
 // GetOpenAIError 从动态错误类型中提取OpenAIError结构

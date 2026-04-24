@@ -446,6 +446,86 @@ export const useLogsData = () => {
     return { encoding, body };
   };
 
+  const extractSSEErrorsFromBody = (captured) => {
+    if (!captured || captured.encoding === 'base64' || !captured.body) {
+      return [];
+    }
+    const lines = String(captured.body).split(/\r?\n/);
+    const errors = [];
+    let eventName = 'message';
+    let dataLines = [];
+
+    const flushEvent = () => {
+      if (dataLines.length === 0) {
+        eventName = 'message';
+        return;
+      }
+      const data = dataLines.join('\n').trim();
+      let parsed = null;
+      try {
+        parsed = JSON.parse(data);
+      } catch (_) {
+        parsed = null;
+      }
+      const type = parsed?.type || eventName;
+      const err = parsed?.error || parsed?.response?.error || null;
+      if (
+        eventName === 'error' ||
+        type === 'error' ||
+        type === 'response.error' ||
+        type === 'response.failed'
+      ) {
+        errors.push({
+          event: eventName,
+          type,
+          code: err?.code || '',
+          message: err?.message || data,
+        });
+      }
+      eventName = 'message';
+      dataLines = [];
+    };
+
+    for (const line of lines) {
+      if (line.trim() === '') {
+        flushEvent();
+      } else if (line.startsWith('event:')) {
+        eventName = line.slice(6).trim() || 'message';
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trim());
+      }
+    }
+    flushEvent();
+    return errors;
+  };
+
+  const renderSSEErrorSummary = (errors) => {
+    if (!Array.isArray(errors) || errors.length === 0) {
+      return null;
+    }
+    return (
+      <div
+        style={{
+          maxWidth: 720,
+          padding: 12,
+          borderRadius: 8,
+          background: 'var(--semi-color-danger-light-default)',
+          color: 'var(--semi-color-danger)',
+          whiteSpace: 'pre-line',
+          wordBreak: 'break-word',
+          lineHeight: 1.6,
+        }}
+      >
+        {errors
+          .map((err) => {
+            const code = err.code ? ` [${err.code}]` : '';
+            return `${err.event}/${err.type}${code}: ${err.message}`;
+          })
+          .join('\n')}
+      </div>
+    );
+  };
+
   const renderLazyLogDetail = (log) => {
     const logId = log?.id;
     const detail = logDetailCache[logId];
@@ -468,9 +548,18 @@ export const useLogsData = () => {
     }
     const requestBody = normalizeLogDetailBody(detail, 'request');
     const responseBody = normalizeLogDetailBody(detail, 'response');
+    const sseErrors = extractSSEErrorsFromBody(responseBody);
     return (
       <Spin spinning={loading}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {sseErrors.length > 0 ? (
+            <div>
+              <div style={{ marginBottom: 6, fontWeight: 600 }}>
+                {t('SSE 错误摘要')}
+              </div>
+              {renderSSEErrorSummary(sseErrors)}
+            </div>
+          ) : null}
           {requestBody ? (
             <div>
               <div style={{ marginBottom: 6, fontWeight: 600 }}>

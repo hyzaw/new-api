@@ -57,12 +57,14 @@ const SSEViewer = ({ sseData }) => {
       let parsed = null;
       let error = null;
       let isDone = false;
+      const event = item?.event || 'message';
+      const raw = item && typeof item === 'object' && 'data' in item ? item.data : item;
 
-      if (item === '[DONE]') {
+      if (raw === '[DONE]') {
         isDone = true;
       } else {
         try {
-          parsed = typeof item === 'string' ? JSON.parse(item) : item;
+          parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
         } catch (e) {
           error = e.message;
         }
@@ -70,10 +72,16 @@ const SSEViewer = ({ sseData }) => {
 
       return {
         index,
-        raw: item,
+        event,
+        raw,
         parsed,
         error,
         isDone,
+        isErrorEvent:
+          event === 'error' ||
+          parsed?.type === 'error' ||
+          parsed?.type === 'response.error' ||
+          parsed?.type === 'response.failed',
         key: `sse-${index}`,
       };
     });
@@ -81,7 +89,9 @@ const SSEViewer = ({ sseData }) => {
 
   const stats = useMemo(() => {
     const total = parsedSSEData.length;
-    const errors = parsedSSEData.filter((item) => item.error).length;
+    const errors = parsedSSEData.filter(
+      (item) => item.error || item.isErrorEvent,
+    ).length;
     const done = parsedSSEData.filter((item) => item.isDone).length;
     const valid = total - errors - done;
 
@@ -155,6 +165,23 @@ const SSEViewer = ({ sseData }) => {
           <div className='p-3 bg-gray-100 dark:bg-gray-800 rounded-lg font-mono text-xs overflow-auto'>
             <pre>{item.raw}</pre>
           </div>
+        </div>
+      );
+    }
+
+    if (item.isErrorEvent) {
+      const err = item.parsed?.error || item.parsed?.response?.error || {};
+      return (
+        <div className='space-y-2'>
+          <div className='flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg'>
+            <XCircle size={16} className='text-red-600' />
+            <Typography.Text className='text-red-600 font-medium'>
+              {t('SSE 错误')}: {err.message || item.parsed?.type || item.event}
+            </Typography.Text>
+          </div>
+          <pre className='p-4 bg-gray-900 text-gray-100 rounded-lg overflow-auto text-xs font-mono leading-relaxed'>
+            {JSON.stringify(item.parsed, null, 2)}
+          </pre>
         </div>
       );
     }
@@ -280,14 +307,19 @@ const SSEViewer = ({ sseData }) => {
                   <Badge count={`#${item.index + 1}`} type='tertiary' />
                   {item.isDone ? (
                     <span className='text-green-600 font-medium'>[DONE]</span>
+                  ) : item.isErrorEvent ? (
+                    <span className='text-red-600'>{t('SSE 错误')}</span>
                   ) : item.error ? (
                     <span className='text-red-600'>{t('解析错误')}</span>
                   ) : (
                     <>
                       <span className='text-gray-600'>
-                        {item.parsed?.id ||
+                        {item.event !== 'message'
+                          ? `event: ${item.event}`
+                          : item.parsed?.id ||
                           item.parsed?.object ||
-                          t('SSE 事件')}
+                            item.parsed?.type ||
+                            t('SSE 事件')}
                       </span>
                       {item.parsed?.choices?.[0]?.delta && (
                         <span className='text-xs text-gray-400'>

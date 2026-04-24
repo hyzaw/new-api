@@ -148,6 +148,24 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		return true
 	}
 
+	sendErrorEvent := func(oaiErr types.OpenAIError) bool {
+		payload := map[string]any{
+			"error": oaiErr,
+		}
+		jsonData, err := common.Marshal(payload)
+		if err != nil {
+			streamErr = types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
+			return false
+		}
+		c.Render(-1, common.CustomEvent{Data: "event: error\n"})
+		c.Render(-1, common.CustomEvent{Data: "data: " + string(jsonData)})
+		if err := helper.FlushWriter(c); err != nil {
+			streamErr = types.NewOpenAIError(err, types.ErrorCodeBadResponse, http.StatusInternalServerError)
+			return false
+		}
+		return true
+	}
+
 	sendStartIfNeeded := func() bool {
 		if sentStart {
 			return true
@@ -495,15 +513,21 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 				sentStop = true
 			}
 
-		case "response.error", "response.failed":
-			if streamResp.Response != nil {
-				if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
-					streamErr = types.WithOpenAIError(*oaiErr, http.StatusInternalServerError)
+		case "error", "response.error", "response.failed":
+			if oaiErr := streamResp.GetOpenAIError(); oaiErr != nil && (oaiErr.Type != "" || oaiErr.Message != "" || oaiErr.Code != nil) {
+				streamErr = types.WithOpenAIError(*oaiErr, http.StatusInternalServerError)
+				if !sendErrorEvent(*oaiErr) {
 					sr.Stop(streamErr)
 					return
 				}
+				sr.Stop(streamErr)
+				return
 			}
 			streamErr = types.NewOpenAIError(fmt.Errorf("responses stream error: %s", streamResp.Type), types.ErrorCodeBadResponse, http.StatusInternalServerError)
+			if !sendErrorEvent(streamErr.ToOpenAIError()) {
+				sr.Stop(streamErr)
+				return
+			}
 			sr.Stop(streamErr)
 			return
 

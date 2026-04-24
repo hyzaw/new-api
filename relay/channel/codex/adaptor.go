@@ -101,6 +101,10 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 	}
 	// codex: store must be false
 	request.Store = json.RawMessage("false")
+	// Prefer upstream automatic context truncation for Codex sessions. The Codex
+	// client can otherwise send `truncation:"disabled"` and receive a streamed
+	// context_length_exceeded error with no assistant content.
+	request.Truncation = json.RawMessage(`"auto"`)
 	// rm max_output_tokens
 	request.MaxOutputTokens = nil
 	request.Temperature = nil

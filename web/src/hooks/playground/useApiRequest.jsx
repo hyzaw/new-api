@@ -358,6 +358,34 @@ export const useApiRequest = (
       let responseData = '';
       let hasReceivedFirstResponse = false;
       let isStreamComplete = false; // 添加标志位跟踪流是否正常完成
+      let hasHandledStreamError = false;
+
+      const appendSSEDebugMessage = (event, data) => {
+        setDebugData((prev) => ({
+          ...prev,
+          sseMessages: [...(prev.sseMessages || []), { event, data }],
+        }));
+      };
+
+      const parseSSEErrorPayload = (data) => {
+        let errorMessage = data || t('请求发生错误');
+        let errorCode = null;
+        let errorType = null;
+
+        if (data) {
+          try {
+            const errorJson = JSON.parse(data);
+            const error = errorJson?.error || errorJson;
+            errorMessage = error?.message || errorMessage;
+            errorCode = error?.code || null;
+            errorType = error?.type || null;
+          } catch (_) {
+            // not JSON, use raw data as error message
+          }
+        }
+
+        return { errorMessage, errorCode, errorType };
+      };
 
       source.addEventListener('message', (e) => {
         if (e.data === '[DONE]') {
@@ -384,10 +412,7 @@ export const useApiRequest = (
           }
 
           // 新增：将 SSE 消息添加到数组
-          setDebugData((prev) => ({
-            ...prev,
-            sseMessages: [...(prev.sseMessages || []), e.data],
-          }));
+          appendSSEDebugMessage('message', e.data);
 
           const delta = payload.choices?.[0]?.delta;
           if (delta) {
@@ -408,7 +433,10 @@ export const useApiRequest = (
           setDebugData((prev) => ({
             ...prev,
             response: responseData + `\n\nError: ${errorInfo}`,
-            sseMessages: [...(prev.sseMessages || []), e.data], // 即使解析失败也保存原始数据
+            sseMessages: [
+              ...(prev.sseMessages || []),
+              { event: 'message', data: e.data },
+            ], // 即使解析失败也保存原始数据
             isStreaming: false,
           }));
           setActiveDebugTab(DEBUG_TABS.RESPONSE);
@@ -420,25 +448,25 @@ export const useApiRequest = (
 
       source.addEventListener('error', (e) => {
         // 只有在流没有正常完成且连接状态异常时才处理错误
-        if (!isStreamComplete && source.readyState !== 2) {
+        if (
+          !isStreamComplete &&
+          !hasHandledStreamError &&
+          (e.data || source.readyState !== 2)
+        ) {
+          hasHandledStreamError = true;
           console.error('SSE Error:', e);
-          let errorMessage = e.data || t('请求发生错误');
-          let errorCode = null;
-
-          if (e.data) {
-            try {
-              const errorJson = JSON.parse(e.data);
-              if (errorJson?.error) {
-                errorMessage = errorJson.error.message || errorMessage;
-                errorCode = errorJson.error.code || null;
-              }
-            } catch (_) {
-              // not JSON, use raw data as error message
-            }
-          }
+          const { errorMessage, errorCode, errorType } = parseSSEErrorPayload(
+            e.data,
+          );
+          const eventData = e.data || errorMessage;
+          responseData += `event: error\ndata: ${eventData}\n`;
+          appendSSEDebugMessage('error', eventData);
 
           const errorInfo = handleApiError(new Error(errorMessage));
           errorInfo.readyState = source.readyState;
+          errorInfo.event = 'error';
+          errorInfo.code = errorCode;
+          errorInfo.type = errorType;
 
           setDebugData((prev) => ({
             ...prev,
@@ -446,6 +474,7 @@ export const useApiRequest = (
               responseData +
               '\n\nSSE Error:\n' +
               JSON.stringify(errorInfo, null, 2),
+            isStreaming: false,
           }));
           setActiveDebugTab(DEBUG_TABS.RESPONSE);
 
@@ -477,8 +506,10 @@ export const useApiRequest = (
           e.readyState >= 2 &&
           source.status !== undefined &&
           source.status !== 200 &&
-          !isStreamComplete
+          !isStreamComplete &&
+          !hasHandledStreamError
         ) {
+          hasHandledStreamError = true;
           const errorInfo = handleApiError(new Error('HTTP状态错误'));
           errorInfo.status = source.status;
           errorInfo.readyState = source.readyState;
