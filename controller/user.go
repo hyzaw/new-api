@@ -236,7 +236,8 @@ func Register(c *gin.Context) {
 
 func GetAllUsers(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	users, total, err := model.GetAllUsers(pageInfo)
+	sortBy := c.Query("sort")
+	users, total, err := model.GetAllUsers(pageInfo, sortBy)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -252,8 +253,9 @@ func GetAllUsers(c *gin.Context) {
 func SearchUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	group := c.Query("group")
+	sortBy := c.Query("sort")
 	pageInfo := common.GetPageQuery(c)
-	users, total, err := model.SearchUsers(keyword, group, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	users, total, err := model.SearchUsers(keyword, group, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), sortBy)
 	if err != nil {
 		common.ApiError(c, err)
 		return

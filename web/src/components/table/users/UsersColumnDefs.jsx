@@ -142,7 +142,9 @@ const renderStatistics = (text, record, showEnableDisableModal, t) => {
 const renderQuotaUsage = (text, record, t) => {
   const { Paragraph } = Typography;
   const used = parseInt(record.used_quota) || 0;
-  const remain = parseInt(record.quota) || 0;
+  const quota = parseInt(record.quota) || 0;
+  const giftQuota = parseInt(record.gift_quota) || 0;
+  const remain = quota + giftQuota;
   const total = used + remain;
   const percent = total > 0 ? (remain / total) * 100 : 0;
   const popoverContent = (
@@ -150,11 +152,17 @@ const renderQuotaUsage = (text, record, t) => {
       <Paragraph copyable={{ content: renderQuota(used) }}>
         {t('已用额度')}: {renderQuota(used)}
       </Paragraph>
+      <Paragraph copyable={{ content: renderQuota(quota) }}>
+        {t('通用余额')}: {renderQuota(quota)}
+      </Paragraph>
+      <Paragraph copyable={{ content: renderQuota(giftQuota) }}>
+        {t('赠送余额')}: {renderQuota(giftQuota)}
+      </Paragraph>
       <Paragraph copyable={{ content: renderQuota(remain) }}>
-        {t('剩余额度')}: {renderQuota(remain)} ({percent.toFixed(0)}%)
+        {t('剩余余额')}: {renderQuota(remain)} ({percent.toFixed(0)}%)
       </Paragraph>
       <Paragraph copyable={{ content: renderQuota(total) }}>
-        {t('总额度')}: {renderQuota(total)}
+        {t('总余额')}: {renderQuota(total)}
       </Paragraph>
     </div>
   );
@@ -353,7 +361,7 @@ export const getUsersColumns = ({
         renderStatistics(text, record, showEnableDisableModal, t),
     },
     {
-      title: t('剩余额度/总额度'),
+      title: t('剩余余额/总余额'),
       key: 'quota_usage',
       render: (text, record) => renderQuotaUsage(text, record, t),
     },

@@ -48,6 +48,7 @@ export const useUsersData = () => {
   const formInitValues = {
     searchKeyword: '',
     searchGroup: '',
+    searchSort: '',
   };
 
   const rowSelection = {
@@ -69,7 +70,19 @@ export const useUsersData = () => {
     return {
       searchKeyword: formValues.searchKeyword || '',
       searchGroup: formValues.searchGroup || '',
+      searchSort: formValues.searchSort || '',
     };
+  };
+
+  const buildUserListParams = (page, size, sortBy = '') => {
+    const params = new URLSearchParams({
+      p: String(page),
+      page_size: String(size),
+    });
+    if (sortBy) {
+      params.set('sort', sortBy);
+    }
+    return params.toString();
   };
 
   // Set user format with key field
@@ -81,9 +94,12 @@ export const useUsersData = () => {
   };
 
   // Load users data
-  const loadUsers = async (startIdx, pageSize) => {
+  const loadUsers = async (startIdx, pageSize, sortBy = null) => {
     setLoading(true);
-    const res = await API.get(`/api/user/?p=${startIdx}&page_size=${pageSize}`);
+    const finalSort = sortBy ?? getFormValues().searchSort;
+    const res = await API.get(
+      `/api/user/?${buildUserListParams(startIdx, pageSize, finalSort)}`,
+    );
     const { success, message, data } = res.data;
     if (success) {
       const newPageData = data.items;
@@ -102,23 +118,32 @@ export const useUsersData = () => {
     pageSize,
     searchKeyword = null,
     searchGroup = null,
+    searchSort = null,
   ) => {
     // If no parameters passed, get values from form
-    if (searchKeyword === null || searchGroup === null) {
+    if (searchKeyword === null || searchGroup === null || searchSort === null) {
       const formValues = getFormValues();
       searchKeyword = formValues.searchKeyword;
       searchGroup = formValues.searchGroup;
+      searchSort = formValues.searchSort;
     }
 
     if (searchKeyword === '' && searchGroup === '') {
       // If keyword is blank, load files instead
-      await loadUsers(startIdx, pageSize);
+      await loadUsers(startIdx, pageSize, searchSort);
       return;
     }
     setSearching(true);
-    const res = await API.get(
-      `/api/user/search?keyword=${searchKeyword}&group=${searchGroup}&p=${startIdx}&page_size=${pageSize}`,
-    );
+    const params = new URLSearchParams({
+      keyword: searchKeyword,
+      group: searchGroup,
+      p: String(startIdx),
+      page_size: String(pageSize),
+    });
+    if (searchSort) {
+      params.set('sort', searchSort);
+    }
+    const res = await API.get(`/api/user/search?${params.toString()}`);
     const { success, message, data } = res.data;
     if (success) {
       const newPageData = data.items;
@@ -202,11 +227,11 @@ export const useUsersData = () => {
   // Handle page change
   const handlePageChange = (page) => {
     setActivePage(page);
-    const { searchKeyword, searchGroup } = getFormValues();
+    const { searchKeyword, searchGroup, searchSort } = getFormValues();
     if (searchKeyword === '' && searchGroup === '') {
-      loadUsers(page, pageSize).then();
+      loadUsers(page, pageSize, searchSort).then();
     } else {
-      searchUsers(page, pageSize, searchKeyword, searchGroup).then();
+      searchUsers(page, pageSize, searchKeyword, searchGroup, searchSort).then();
     }
   };
 
@@ -215,11 +240,14 @@ export const useUsersData = () => {
     localStorage.setItem('page-size', size + '');
     setPageSize(size);
     setActivePage(1);
-    loadUsers(activePage, size)
-      .then()
-      .catch((reason) => {
-        showError(reason);
-      });
+    const { searchKeyword, searchGroup, searchSort } = getFormValues();
+    const request =
+      searchKeyword === '' && searchGroup === ''
+        ? loadUsers(1, size, searchSort)
+        : searchUsers(1, size, searchKeyword, searchGroup, searchSort);
+    request.then().catch((reason) => {
+      showError(reason);
+    });
   };
 
   // Handle table row styling for disabled/deleted users
@@ -255,11 +283,11 @@ export const useUsersData = () => {
 
   // Refresh data
   const refresh = async (page = activePage) => {
-    const { searchKeyword, searchGroup } = getFormValues();
+    const { searchKeyword, searchGroup, searchSort } = getFormValues();
     if (searchKeyword === '' && searchGroup === '') {
-      await loadUsers(page, pageSize);
+      await loadUsers(page, pageSize, searchSort);
     } else {
-      await searchUsers(page, pageSize, searchKeyword, searchGroup);
+      await searchUsers(page, pageSize, searchKeyword, searchGroup, searchSort);
     }
   };
 

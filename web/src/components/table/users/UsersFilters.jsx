@@ -39,9 +39,17 @@ const UsersFilters = ({
     if (!formApiRef.current) return;
     formApiRef.current.reset();
     setTimeout(() => {
-      loadUsers(1, pageSize);
+      loadUsers(1, pageSize, '');
     }, 100);
   };
+
+  const sortOptions = [
+    { label: t('默认排序'), value: '' },
+    { label: t('剩余余额从高到低'), value: 'remaining_balance_desc' },
+    { label: t('剩余余额从低到高'), value: 'remaining_balance_asc' },
+    { label: t('总余额从高到低'), value: 'total_balance_desc' },
+    { label: t('总余额从低到高'), value: 'total_balance_asc' },
+  ];
 
   return (
     <Form
@@ -78,6 +86,22 @@ const UsersFilters = ({
             optionList={groupOptions}
             onChange={(value) => {
               // Group change triggers automatic search
+              setTimeout(() => {
+                searchUsers(1, pageSize);
+              }, 100);
+            }}
+            className='w-full'
+            showClear
+            pure
+            size='small'
+          />
+        </div>
+        <div className='w-full md:w-48'>
+          <Form.Select
+            field='searchSort'
+            placeholder={t('排序方式')}
+            optionList={sortOptions}
+            onChange={() => {
               setTimeout(() => {
                 searchUsers(1, pageSize);
               }, 100);
