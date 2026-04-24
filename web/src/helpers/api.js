@@ -197,7 +197,6 @@ function redirectToOAuthUrl(url, options = {}) {
   window.location.assign(targetUrl);
 }
 
-
 function patchAPIInstance(instance) {
   const originalGet = instance.get.bind(instance);
   const inFlightGetRequests = new Map();
@@ -304,7 +303,7 @@ export const buildApiPayload = (
 
   const payload = {
     model: inputs.model,
-    group: inputs.group,
+    group: String(inputs.group || '').trim(),
     messages: processedMessages,
     stream: inputs.stream,
   };
