@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func TestNormalizeClientIPCountryCode(t *testing.T) {
@@ -71,7 +73,7 @@ func TestRecordConsumeLogStoresUserAgent(t *testing.T) {
 	}
 }
 
-func TestRecordConsumeLogStoresAdminOnlyBodies(t *testing.T) {
+func TestRecordConsumeLogDoesNotStoreLogDetail(t *testing.T) {
 	truncateTables(t)
 
 	gin.SetMode(gin.TestMode)
@@ -125,6 +127,56 @@ func TestRecordConsumeLogStoresAdminOnlyBodies(t *testing.T) {
 		}
 	}
 
+	if _, err = GetLogDetail(log.Id); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("expected log detail to be absent, got err=%v", err)
+	}
+
+	markLogsHasDetail([]*Log{&log})
+	if log.HasDetail {
+		t.Fatalf("expected log has_detail to be false")
+	}
+	formatUserLogs([]*Log{&log}, 0)
+	userOther, err := common.StrToMap(log.Other)
+	if err != nil {
+		t.Fatalf("failed to parse user log other: %v", err)
+	}
+	if _, exists := userOther["admin_info"]; exists {
+		t.Fatalf("admin_info should be hidden from user logs: %v", userOther)
+	}
+}
+
+func TestRecordErrorLogStoresLogDetail(t *testing.T) {
+	truncateTables(t)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(w)
+	req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}`))
+	req.Header.Set("User-Agent", "new-api-test-agent/1.0")
+	ctx.Request = req
+	ctx.Set("username", "tester")
+	ctx.Set(common.RequestIdKey, "req-error-body-test")
+
+	storage, err := common.GetBodyStorage(ctx)
+	if err != nil {
+		t.Fatalf("failed to cache request body: %v", err)
+	}
+	ctx.Request.Body = io.NopCloser(storage)
+
+	capture := common.NewResponseBodyCapture(ctx.Writer)
+	common.SetResponseBodyCapture(ctx, capture)
+	ctx.Writer = capture
+	if _, err = ctx.Writer.Write([]byte(`{"error":{"message":"boom"}}`)); err != nil {
+		t.Fatalf("failed to write response body: %v", err)
+	}
+
+	RecordErrorLog(ctx, 1, 1, "gpt-4o-mini", "token-a", "upstream failed", 1, 0, false, "default", nil)
+
+	var log Log
+	if err := LOG_DB.Last(&log).Error; err != nil {
+		t.Fatalf("failed to load log: %v", err)
+	}
+
 	detail, err := GetLogDetail(log.Id)
 	if err != nil {
 		t.Fatalf("failed to load log detail: %v", err)
@@ -132,7 +184,7 @@ func TestRecordConsumeLogStoresAdminOnlyBodies(t *testing.T) {
 	if detail.RequestBody != `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}` {
 		t.Fatalf("unexpected request body: %v", detail.RequestBody)
 	}
-	if detail.ResponseBody != `{"id":"chatcmpl-test","choices":[]}` {
+	if detail.ResponseBody != `{"error":{"message":"boom"}}` {
 		t.Fatalf("unexpected response body: %v", detail.ResponseBody)
 	}
 	if detail.RequestBodyEncoding != common.LogBodyEncodingText || detail.ResponseBodyEncoding != common.LogBodyEncodingText {
@@ -142,13 +194,5 @@ func TestRecordConsumeLogStoresAdminOnlyBodies(t *testing.T) {
 	markLogsHasDetail([]*Log{&log})
 	if !log.HasDetail {
 		t.Fatalf("expected log has_detail to be true")
-	}
-	formatUserLogs([]*Log{&log}, 0)
-	userOther, err := common.StrToMap(log.Other)
-	if err != nil {
-		t.Fatalf("failed to parse user log other: %v", err)
-	}
-	if _, exists := userOther["admin_info"]; exists {
-		t.Fatalf("admin_info should be hidden from user logs: %v", userOther)
 	}
 }

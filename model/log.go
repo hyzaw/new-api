@@ -428,8 +428,12 @@ func GetLogDetail(logId int) (*LogDetail, error) {
 		}
 	}
 	var detail LogDetail
-	if err := LOG_DB.Where("log_id = ?", logId).First(&detail).Error; err != nil {
-		return nil, err
+	result := LOG_DB.Where("log_id = ?", logId).Limit(1).Find(&detail)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	if logDetailRedisEnabled() {
 		if err := cacheLogDetail(&detail, false); err != nil {
@@ -739,7 +743,6 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if userAgent := getRequestUserAgent(c); userAgent != "" {
 		logOther["user_agent"] = userAgent
 	}
-	detail := buildLogDetailFromContext(c)
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
@@ -765,7 +768,6 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
-	createLogDetail(log.Id, detail)
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
