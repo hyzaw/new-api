@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 func TestNormalizeClientIPCountryCode(t *testing.T) {
@@ -73,7 +71,7 @@ func TestRecordConsumeLogStoresUserAgent(t *testing.T) {
 	}
 }
 
-func TestRecordConsumeLogDoesNotStoreLogDetail(t *testing.T) {
+func TestRecordConsumeLogStoresLogDetail(t *testing.T) {
 	truncateTables(t)
 
 	gin.SetMode(gin.TestMode)
@@ -127,13 +125,20 @@ func TestRecordConsumeLogDoesNotStoreLogDetail(t *testing.T) {
 		}
 	}
 
-	if _, err = GetLogDetail(log.Id); !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("expected log detail to be absent, got err=%v", err)
+	detail, err := GetLogDetail(log.Id)
+	if err != nil {
+		t.Fatalf("failed to load log detail: %v", err)
+	}
+	if detail.RequestBody != `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}` {
+		t.Fatalf("unexpected request body: %v", detail.RequestBody)
+	}
+	if detail.ResponseBody != `{"id":"chatcmpl-test","choices":[]}` {
+		t.Fatalf("unexpected response body: %v", detail.ResponseBody)
 	}
 
 	markLogsHasDetail([]*Log{&log})
-	if log.HasDetail {
-		t.Fatalf("expected log has_detail to be false")
+	if !log.HasDetail {
+		t.Fatalf("expected log has_detail to be true")
 	}
 	formatUserLogs([]*Log{&log}, 0)
 	userOther, err := common.StrToMap(log.Other)

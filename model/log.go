@@ -772,6 +772,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if userAgent := getRequestUserAgent(c); userAgent != "" {
 		logOther["user_agent"] = userAgent
 	}
+	detail := buildLogDetailFromContext(c)
 	otherStr := common.MapToJsonStr(logOther)
 	log := &Log{
 		UserId:           userId,
@@ -797,6 +798,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
 	}
+	createLogDetail(log.Id, detail)
 	if common.DataExportEnabled {
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
