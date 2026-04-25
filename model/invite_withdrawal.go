@@ -156,6 +156,15 @@ func GetInviteWithdrawalsByUserId(userId int) ([]*InviteWithdrawal, error) {
 	return withdrawals, err
 }
 
+func GetInviteWithdrawalById(id int) (*InviteWithdrawal, error) {
+	var withdrawal InviteWithdrawal
+	err := DB.Where("id = ?", id).First(&withdrawal).Error
+	if err != nil {
+		return nil, err
+	}
+	return &withdrawal, nil
+}
+
 func GetInviteWithdrawals(pageInfo *common.PageInfo, keyword string, status string) ([]*InviteWithdrawal, int64, error) {
 	var (
 		withdrawals []*InviteWithdrawal
@@ -182,6 +191,7 @@ func GetInviteWithdrawals(pageInfo *common.PageInfo, keyword string, status stri
 		return nil, 0, err
 	}
 	if err := tx.Order("id DESC").
+		Omit("receipt_code").
 		Limit(pageInfo.GetPageSize()).
 		Offset(pageInfo.GetStartIdx()).
 		Find(&withdrawals).Error; err != nil {

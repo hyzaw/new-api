@@ -60,6 +60,20 @@ func GetAllInviteWithdrawals(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
+func GetInviteWithdrawal(c *gin.Context) {
+	id := common.String2Int(strings.TrimSpace(c.Param("id")))
+	if id == 0 {
+		common.ApiErrorMsg(c, "提现申请不存在")
+		return
+	}
+	withdrawal, err := model.GetInviteWithdrawalById(id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, withdrawal)
+}
+
 func ReviewInviteWithdrawal(c *gin.Context) {
 	var req ReviewInviteWithdrawalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

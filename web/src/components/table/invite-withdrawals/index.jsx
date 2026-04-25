@@ -88,6 +88,7 @@ const InviteWithdrawalsPage = () => {
   const [adminRemark, setAdminRemark] = useState('');
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailOverview, setDetailOverview] = useState(null);
+  const [receiptLoadingId, setReceiptLoadingId] = useState(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -153,12 +154,59 @@ const InviteWithdrawalsPage = () => {
     }
   };
 
+  const loadWithdrawalDetail = useCallback(
+    async (item) => {
+      if (!item?.id) {
+        return null;
+      }
+      if (item.receipt_code) {
+        return item;
+      }
+      setReceiptLoadingId(item.id);
+      try {
+        const res = await API.get(`/api/user/aff_withdrawals/${item.id}`);
+        const { success, message, data } = res.data;
+        if (!success) {
+          showError(message || t('加载收款码失败'));
+          return null;
+        }
+        const detail = { ...item, ...(data || {}) };
+        setItems((prev) =>
+          prev.map((entry) =>
+            entry.id === detail.id ? { ...entry, ...detail } : entry,
+          ),
+        );
+        setCurrentItem((prev) =>
+          prev?.id === detail.id ? { ...prev, ...detail } : prev,
+        );
+        return detail;
+      } catch (error) {
+        showError(error);
+        return null;
+      } finally {
+        setReceiptLoadingId(null);
+      }
+    },
+    [t],
+  );
+
+  const handlePreviewReceipt = useCallback(
+    async (item) => {
+      const detail = await loadWithdrawalDetail(item);
+      if (detail?.receipt_code) {
+        setPreviewImage(detail.receipt_code);
+      }
+    },
+    [loadWithdrawalDetail],
+  );
+
   const openReviewModal = (item, action) => {
     setCurrentItem(item);
     setReviewAction(action);
     setAdminRemark('');
     setDetailOverview(null);
     setReviewVisible(true);
+    loadWithdrawalDetail(item).then();
     loadInviteOverview(item?.user_id).then();
   };
 
@@ -264,7 +312,12 @@ const InviteWithdrawalsPage = () => {
         title: t('收款码'),
         key: 'receipt_code',
         render: (_, record) => (
-          <Button size='small' theme='outline' onClick={() => setPreviewImage(record.receipt_code)}>
+          <Button
+            size='small'
+            theme='outline'
+            loading={receiptLoadingId === record.id}
+            onClick={() => handlePreviewReceipt(record)}
+          >
             {t('查看')}
           </Button>
         ),
@@ -302,7 +355,7 @@ const InviteWithdrawalsPage = () => {
         ),
       },
     ];
-  }, [symbol, t]);
+  }, [handlePreviewReceipt, receiptLoadingId, symbol, t]);
 
   return (
     <>
@@ -314,7 +367,9 @@ const InviteWithdrawalsPage = () => {
               {t('邀请提现管理')}
             </Title>
             <Text type='tertiary'>
-              {t('查看用户提交的邀请提现申请，核对收款码后手动完成打款或驳回。')}
+              {t(
+                '查看用户提交的邀请提现申请，核对收款码后手动完成打款或驳回。',
+              )}
             </Text>
           </div>
         }
@@ -380,7 +435,9 @@ const InviteWithdrawalsPage = () => {
           scroll={{ x: 'max-content' }}
           empty={
             <Empty
-              image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
+              image={
+                <IllustrationNoResult style={{ width: 150, height: 150 }} />
+              }
               darkModeImage={
                 <IllustrationNoResultDark style={{ width: 150, height: 150 }} />
               }
@@ -419,11 +476,17 @@ const InviteWithdrawalsPage = () => {
 
             <div className='rounded-xl border border-[var(--semi-color-border)] p-3'>
               <Text type='tertiary'>{t('收款码')}</Text>
-              <img
-                src={currentItem.receipt_code}
-                alt='receipt-code'
-                className='mt-3 max-h-72 w-full rounded-lg object-contain'
-              />
+              {currentItem.receipt_code ? (
+                <img
+                  src={currentItem.receipt_code}
+                  alt='receipt-code'
+                  className='mt-3 max-h-72 w-full rounded-lg object-contain'
+                />
+              ) : (
+                <div className='mt-3'>
+                  <Text type='tertiary'>{t('收款码加载中')}</Text>
+                </div>
+              )}
             </div>
 
             <div>
