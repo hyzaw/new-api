@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Button, Col, Form, Row, Spin } from '@douyinfe/semi-ui';
+import { Banner, Button, Col, Form, Row, Spin } from '@douyinfe/semi-ui';
 import {
   compareObjects,
   API,
@@ -130,6 +130,14 @@ export default function SettingsMonitoring(props) {
           style={{ marginBottom: 15 }}
         >
           <Form.Section text={t('监控设置')}>
+            <Banner
+              type='info'
+              closeIcon={null}
+              description={t(
+                '单个渠道可在渠道编辑的高级设置中单独配置检测周期、启用/禁用延迟阈值，以及检测模型（支持全部模型取均值）。',
+              )}
+              style={{ marginBottom: 16 }}
+            />
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
                 <Form.Switch

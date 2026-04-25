@@ -102,6 +102,7 @@ const REGION_EXAMPLE = {
   'gemini-1.5-flash-002': 'europe-west2',
   'claude-3-5-sonnet-20240620': 'europe-west1',
 };
+const CHANNEL_MONITOR_ALL_MODELS_VALUE = '__all__';
 const UPSTREAM_DETECTED_MODEL_PREVIEW_LIMIT = 8;
 const ADVANCED_SETTINGS_EXPANDED_KEY = 'channel-advanced-settings-expanded';
 
@@ -195,6 +196,10 @@ const EditChannelModal = (props) => {
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    monitor_interval_minutes: 0,
+    monitor_enable_threshold_seconds: 0,
+    monitor_disable_threshold_seconds: 0,
+    monitor_models: [],
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -499,6 +504,11 @@ const EditChannelModal = (props) => {
     proxy: '',
     pass_through_body_enabled: false,
     system_prompt: '',
+    system_prompt_override: false,
+    monitor_interval_minutes: 0,
+    monitor_enable_threshold_seconds: 0,
+    monitor_disable_threshold_seconds: 0,
+    monitor_models: [],
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -582,6 +592,30 @@ const EditChannelModal = (props) => {
   };
 
   const isIonetLocked = isIonetChannel && isEdit;
+
+  const channelMonitorModelOptions = useMemo(() => {
+    const options = [
+      {
+        label: t('全部模型（取均值）'),
+        value: CHANNEL_MONITOR_ALL_MODELS_VALUE,
+      },
+    ];
+    const seen = new Set();
+    [...(inputs.models || []), ...(inputs.monitor_models || [])].forEach(
+      (model) => {
+      const value = String(model || '').trim();
+      if (!value || seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+      options.push({
+        label: value,
+        value,
+      });
+    },
+    );
+    return options;
+  }, [inputs.models, inputs.monitor_models, t]);
 
   const handleInputChange = (name, value) => {
     if (
@@ -852,6 +886,15 @@ const EditChannelModal = (props) => {
           data.system_prompt = parsedSettings.system_prompt || '';
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
+          data.monitor_interval_minutes =
+            Number(parsedSettings.monitor_interval_minutes) || 0;
+          data.monitor_enable_threshold_seconds =
+            Number(parsedSettings.monitor_enable_threshold_seconds) || 0;
+          data.monitor_disable_threshold_seconds =
+            Number(parsedSettings.monitor_disable_threshold_seconds) || 0;
+          data.monitor_models = Array.isArray(parsedSettings.monitor_models)
+            ? parsedSettings.monitor_models
+            : [];
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -860,6 +903,10 @@ const EditChannelModal = (props) => {
           data.pass_through_body_enabled = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
+          data.monitor_interval_minutes = 0;
+          data.monitor_enable_threshold_seconds = 0;
+          data.monitor_disable_threshold_seconds = 0;
+          data.monitor_models = [];
         }
       } else {
         data.force_format = false;
@@ -868,6 +915,10 @@ const EditChannelModal = (props) => {
         data.pass_through_body_enabled = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
+        data.monitor_interval_minutes = 0;
+        data.monitor_enable_threshold_seconds = 0;
+        data.monitor_disable_threshold_seconds = 0;
+        data.monitor_models = [];
       }
 
       if (data.settings) {
@@ -977,6 +1028,14 @@ const EditChannelModal = (props) => {
         pass_through_body_enabled: data.pass_through_body_enabled,
         system_prompt: data.system_prompt,
         system_prompt_override: data.system_prompt_override || false,
+        monitor_interval_minutes: data.monitor_interval_minutes || 0,
+        monitor_enable_threshold_seconds:
+          data.monitor_enable_threshold_seconds || 0,
+        monitor_disable_threshold_seconds:
+          data.monitor_disable_threshold_seconds || 0,
+        monitor_models: Array.isArray(data.monitor_models)
+          ? data.monitor_models
+          : [],
       });
       initialModelsRef.current = (data.models || [])
         .map((model) => (model || '').trim())
@@ -1015,6 +1074,10 @@ const EditChannelModal = (props) => {
         (data.weight && data.weight !== 0) ||
         (data.proxy && data.proxy.trim()) ||
         (data.system_prompt && data.system_prompt.trim()) ||
+        data.monitor_interval_minutes > 0 ||
+        data.monitor_enable_threshold_seconds > 0 ||
+        data.monitor_disable_threshold_seconds > 0 ||
+        (Array.isArray(data.monitor_models) && data.monitor_models.length > 0) ||
         data.thinking_to_content ||
         data.pass_through_body_enabled ||
         data.force_format ||
@@ -1366,6 +1429,10 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: false,
       system_prompt: '',
       system_prompt_override: false,
+      monitor_interval_minutes: 0,
+      monitor_enable_threshold_seconds: 0,
+      monitor_disable_threshold_seconds: 0,
+      monitor_models: [],
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1736,7 +1803,29 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
+      monitor_interval_minutes:
+        Number(localInputs.monitor_interval_minutes) || 0,
+      monitor_enable_threshold_seconds:
+        Number(localInputs.monitor_enable_threshold_seconds) || 0,
+      monitor_disable_threshold_seconds:
+        Number(localInputs.monitor_disable_threshold_seconds) || 0,
+      monitor_models: Array.isArray(localInputs.monitor_models)
+        ? Array.from(
+            new Set(
+              localInputs.monitor_models
+                .map((model) => String(model || '').trim())
+                .filter(Boolean),
+            ),
+          )
+        : [],
     };
+    if (
+      channelExtraSettings.monitor_models.includes(
+        CHANNEL_MONITOR_ALL_MODELS_VALUE,
+      )
+    ) {
+      channelExtraSettings.monitor_models = [CHANNEL_MONITOR_ALL_MODELS_VALUE];
+    }
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
     // 处理 settings 字段（包括企业账户设置和字段透传控制）
@@ -1817,6 +1906,10 @@ const EditChannelModal = (props) => {
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
+    delete localInputs.monitor_interval_minutes;
+    delete localInputs.monitor_enable_threshold_seconds;
+    delete localInputs.monitor_disable_threshold_seconds;
+    delete localInputs.monitor_models;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2507,6 +2600,84 @@ const EditChannelModal = (props) => {
 
                   <Form.Switch field='thinking_to_content' label={t('思考内容转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('thinking_to_content', value)} extraText={t('将 reasoning_content 转换为 <think> 标签拼接到内容中')} />
                   <Form.Switch field='pass_through_body_enabled' label={t('透传请求体')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('pass_through_body_enabled', value)} extraText={t('启用请求体透传功能')} />
+
+                  <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
+                    {t('渠道探活策略')}
+                  </div>
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Form.InputNumber
+                        field='monitor_interval_minutes'
+                        label={t('检测周期')}
+                        min={0}
+                        step={1}
+                        suffix={t('分钟')}
+                        extraText={t('0 表示沿用全局周期')}
+                        onNumberChange={(value) =>
+                          handleChannelSettingsChange(
+                            'monitor_interval_minutes',
+                            Number(value) || 0,
+                          )
+                        }
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Form.InputNumber
+                        field='monitor_enable_threshold_seconds'
+                        label={t('启用条件')}
+                        min={0}
+                        step={0.1}
+                        suffix={t('秒')}
+                        extraText={t('自动启用时要求平均延迟不高于该值，0 表示成功即启用')}
+                        onNumberChange={(value) =>
+                          handleChannelSettingsChange(
+                            'monitor_enable_threshold_seconds',
+                            Number(value) || 0,
+                          )
+                        }
+                      />
+                    </Col>
+                  </Row>
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Form.InputNumber
+                        field='monitor_disable_threshold_seconds'
+                        label={t('禁用条件')}
+                        min={0}
+                        step={0.1}
+                        suffix={t('秒')}
+                        extraText={t('自动禁用时要求平均延迟高于该值，0 表示沿用全局阈值')}
+                        onNumberChange={(value) =>
+                          handleChannelSettingsChange(
+                            'monitor_disable_threshold_seconds',
+                            Number(value) || 0,
+                          )
+                        }
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Form.Select
+                        field='monitor_models'
+                        label={t('检测模型')}
+                        multiple
+                        optionList={channelMonitorModelOptions}
+                        placeholder={t('留空则使用默认测试模型')}
+                        extraText={t('选择“全部模型（取均值）”后，将对当前渠道全部模型求平均延迟')}
+                        onChange={(value) => {
+                          const nextValue = Array.isArray(value) ? value : [];
+                          const normalizedValue = nextValue.includes(
+                            CHANNEL_MONITOR_ALL_MODELS_VALUE,
+                          )
+                            ? [CHANNEL_MONITOR_ALL_MODELS_VALUE]
+                            : nextValue;
+                          handleChannelSettingsChange(
+                            'monitor_models',
+                            normalizedValue,
+                          );
+                        }}
+                      />
+                    </Col>
+                  </Row>
 
                   <Form.Input field='proxy' label={t('代理地址')} placeholder={t('例如: socks5://user:pass@host:port')} onChange={(value) => handleChannelSettingsChange('proxy', value)} showClear extraText={t('用于配置网络代理，支持 socks5 协议')} />
 

@@ -871,6 +871,200 @@ func TestChannel(c *gin.Context) {
 
 var testAllChannelsLock sync.Mutex
 var testAllChannelsRunning bool = false
+var channelAutoTestLastRun sync.Map
+
+const channelMonitorAllModelsValue = "__all__"
+
+type channelAutoTestConfig struct {
+	Interval           time.Duration
+	EnableThresholdMs  int64
+	DisableThresholdMs int64
+	MonitorModels      []string
+}
+
+type channelAutoTestOutcome struct {
+	Result            testResult
+	AverageLatencyMs  int64
+	DisableError      *types.NewAPIError
+	AllSuccessful     bool
+	AttemptedModelNum int
+}
+
+func normalizeChannelMonitorModels(models []string) []string {
+	if len(models) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(models))
+	normalized := make([]string, 0, len(models))
+	for _, modelName := range models {
+		name := strings.TrimSpace(modelName)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		normalized = append(normalized, name)
+	}
+	return normalized
+}
+
+func averageLatencyMs(values []int64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var total int64
+	for _, value := range values {
+		total += value
+	}
+	return total / int64(len(values))
+}
+
+func newChannelAutoTestConfig(channel *model.Channel) channelAutoTestConfig {
+	frequency := int(math.Round(operation_setting.GetMonitorSetting().AutoTestChannelMinutes))
+	if frequency <= 0 {
+		frequency = 10
+	}
+
+	disableThresholdMs := int64(math.Round(common.ChannelDisableThreshold * 1000))
+	if disableThresholdMs == 0 {
+		disableThresholdMs = 10000000 // impossible value, keep legacy behavior
+	}
+
+	config := channelAutoTestConfig{
+		Interval:           time.Duration(frequency) * time.Minute,
+		DisableThresholdMs: disableThresholdMs,
+	}
+
+	if channel == nil {
+		return config
+	}
+
+	channelSetting := channel.GetSetting()
+	if channelSetting.MonitorIntervalMinutes > 0 {
+		config.Interval = time.Duration(channelSetting.MonitorIntervalMinutes) * time.Minute
+	}
+	if channelSetting.MonitorEnableThreshold > 0 {
+		config.EnableThresholdMs = int64(math.Round(channelSetting.MonitorEnableThreshold * 1000))
+	}
+	if channelSetting.MonitorDisableThreshold > 0 {
+		config.DisableThresholdMs = int64(math.Round(channelSetting.MonitorDisableThreshold * 1000))
+	}
+	config.MonitorModels = normalizeChannelMonitorModels(channelSetting.MonitorModels)
+	return config
+}
+
+func (config channelAutoTestConfig) ResolveModels(channel *model.Channel) []string {
+	if len(config.MonitorModels) == 0 {
+		return []string{""}
+	}
+
+	if lo.Contains(config.MonitorModels, channelMonitorAllModelsValue) {
+		if channel == nil {
+			return []string{""}
+		}
+		models := normalizeChannelMonitorModels(channel.GetModels())
+		if len(models) == 0 {
+			return []string{""}
+		}
+		return models
+	}
+
+	return config.MonitorModels
+}
+
+func shouldRunChannelAutoTest(channelId int, interval time.Duration, now time.Time) bool {
+	if interval <= 0 {
+		return false
+	}
+	lastRunAt, ok := channelAutoTestLastRun.Load(channelId)
+	if !ok {
+		return true
+	}
+	lastTime, ok := lastRunAt.(time.Time)
+	if !ok {
+		return true
+	}
+	return now.Sub(lastTime) >= interval
+}
+
+func markChannelAutoTestRun(channelId int, now time.Time) {
+	channelAutoTestLastRun.Store(channelId, now)
+}
+
+func executeAutomaticChannelTest(channel *model.Channel) channelAutoTestOutcome {
+	config := newChannelAutoTestConfig(channel)
+	testModels := config.ResolveModels(channel)
+	useStream := shouldUseStreamForAutomaticChannelTest(channel)
+
+	var (
+		result            testResult
+		successLatencies  []int64
+		measuredLatencies []int64
+		allSuccessful     = len(testModels) > 0
+	)
+
+	for idx, testModel := range testModels {
+		tik := time.Now()
+		currentResult := testChannel(channel, testModel, "", useStream)
+		milliseconds := time.Since(tik).Milliseconds()
+
+		result = currentResult
+		measuredLatencies = append(measuredLatencies, milliseconds)
+
+		if currentResult.localErr == nil && currentResult.newAPIError == nil {
+			successLatencies = append(successLatencies, milliseconds)
+		} else {
+			allSuccessful = false
+		}
+
+		if currentResult.newAPIError != nil && service.ShouldDisableChannel(currentResult.newAPIError) {
+			return channelAutoTestOutcome{
+				Result:            currentResult,
+				AverageLatencyMs:  averageLatencyMs(measuredLatencies),
+				DisableError:      currentResult.newAPIError,
+				AllSuccessful:     false,
+				AttemptedModelNum: len(testModels),
+			}
+		}
+
+		if idx < len(testModels)-1 {
+			time.Sleep(common.RequestInterval)
+		}
+	}
+
+	avgLatencyMs := averageLatencyMs(measuredLatencies)
+	if len(successLatencies) > 0 {
+		avgLatencyMs = averageLatencyMs(successLatencies)
+	}
+
+	if common.AutomaticDisableChannelEnabled &&
+		len(successLatencies) > 0 &&
+		config.DisableThresholdMs > 0 &&
+		avgLatencyMs > config.DisableThresholdMs {
+		err := fmt.Errorf("平均响应时间 %.2fs 超过阈值 %.2fs", float64(avgLatencyMs)/1000.0, float64(config.DisableThresholdMs)/1000.0)
+		return channelAutoTestOutcome{
+			Result:            result,
+			AverageLatencyMs:  avgLatencyMs,
+			DisableError:      types.NewOpenAIError(err, types.ErrorCodeChannelResponseTimeExceeded, http.StatusRequestTimeout),
+			AllSuccessful:     false,
+			AttemptedModelNum: len(testModels),
+		}
+	}
+
+	if config.EnableThresholdMs > 0 && avgLatencyMs > config.EnableThresholdMs {
+		allSuccessful = false
+	}
+
+	return channelAutoTestOutcome{
+		Result:            result,
+		AverageLatencyMs:  avgLatencyMs,
+		DisableError:      nil,
+		AllSuccessful:     allSuccessful && len(successLatencies) > 0,
+		AttemptedModelNum: len(testModels),
+	}
+}
 
 func testAllChannels(notify bool) error {
 
@@ -885,10 +1079,6 @@ func testAllChannels(notify bool) error {
 	if getChannelErr != nil {
 		return getChannelErr
 	}
-	var disableThreshold = int64(common.ChannelDisableThreshold * 1000)
-	if disableThreshold == 0 {
-		disableThreshold = 10000000 // a impossible value
-	}
 	gopool.Go(func() {
 		// 使用 defer 确保无论如何都会重置运行状态，防止死锁
 		defer func() {
@@ -897,43 +1087,37 @@ func testAllChannels(notify bool) error {
 			testAllChannelsLock.Unlock()
 		}()
 
+		now := time.Now()
 		for _, channel := range channels {
 			if channel.Status == common.ChannelStatusManuallyDisabled {
 				continue
 			}
+			config := newChannelAutoTestConfig(channel)
+			if !shouldRunChannelAutoTest(channel.Id, config.Interval, now) {
+				continue
+			}
+
 			isChannelEnabled := channel.Status == common.ChannelStatusEnabled
-			tik := time.Now()
-			result := testChannel(channel, "", "", shouldUseStreamForAutomaticChannelTest(channel))
-			tok := time.Now()
-			milliseconds := tok.Sub(tik).Milliseconds()
-
-			shouldBanChannel := false
-			newAPIError := result.newAPIError
-			// request error disables the channel
-			if newAPIError != nil {
-				shouldBanChannel = service.ShouldDisableChannel(result.newAPIError)
-			}
-
-			// 当错误检查通过，才检查响应时间
-			if common.AutomaticDisableChannelEnabled && !shouldBanChannel {
-				if milliseconds > disableThreshold {
-					err := fmt.Errorf("响应时间 %.2fs 超过阈值 %.2fs", float64(milliseconds)/1000.0, float64(disableThreshold)/1000.0)
-					newAPIError = types.NewOpenAIError(err, types.ErrorCodeChannelResponseTimeExceeded, http.StatusRequestTimeout)
-					shouldBanChannel = true
-				}
-			}
+			outcome := executeAutomaticChannelTest(channel)
+			markChannelAutoTestRun(channel.Id, time.Now())
 
 			// disable channel
-			if isChannelEnabled && shouldBanChannel && channel.GetAutoBan() {
-				processChannelError(result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+			if isChannelEnabled && outcome.DisableError != nil && channel.GetAutoBan() {
+				processChannelError(outcome.Result.context, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(outcome.Result.context, constant.ContextKeyChannelKey), channel.GetAutoBan()), outcome.DisableError)
 			}
 
 			// enable channel
-			if !isChannelEnabled && service.ShouldEnableChannel(newAPIError, channel.Status) {
-				service.EnableChannel(channel.Id, common.GetContextKeyString(result.context, constant.ContextKeyChannelKey), channel.Name)
+			if !isChannelEnabled &&
+				outcome.DisableError == nil &&
+				common.AutomaticEnableChannelEnabled &&
+				channel.Status == common.ChannelStatusAutoDisabled &&
+				outcome.AllSuccessful {
+				service.EnableChannel(channel.Id, common.GetContextKeyString(outcome.Result.context, constant.ContextKeyChannelKey), channel.Name)
 			}
 
-			channel.UpdateResponseTime(milliseconds)
+			if outcome.AverageLatencyMs > 0 {
+				channel.UpdateResponseTime(outcome.AverageLatencyMs)
+			}
 			time.Sleep(common.RequestInterval)
 		}
 
@@ -969,17 +1153,9 @@ func AutomaticallyTestChannels() {
 				time.Sleep(1 * time.Minute)
 				continue
 			}
-			for {
-				frequency := operation_setting.GetMonitorSetting().AutoTestChannelMinutes
-				time.Sleep(time.Duration(int(math.Round(frequency))) * time.Minute)
-				common.SysLog(fmt.Sprintf("automatically test channels with interval %f minutes", frequency))
-				common.SysLog("automatically testing all channels")
-				_ = testAllChannels(false)
-				common.SysLog("automatically channel test finished")
-				if !operation_setting.GetMonitorSetting().AutoTestChannelEnabled {
-					break
-				}
-			}
+			common.SysLog("automatically testing due channels")
+			_ = testAllChannels(false)
+			time.Sleep(1 * time.Minute)
 		}
 	})
 }

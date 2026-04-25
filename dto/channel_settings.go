@@ -1,12 +1,16 @@
 package dto
 
 type ChannelSettings struct {
-	ForceFormat            bool   `json:"force_format,omitempty"`
-	ThinkingToContent      bool   `json:"thinking_to_content,omitempty"`
-	Proxy                  string `json:"proxy"`
-	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
-	SystemPrompt           string `json:"system_prompt,omitempty"`
-	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	ForceFormat             bool     `json:"force_format,omitempty"`
+	ThinkingToContent       bool     `json:"thinking_to_content,omitempty"`
+	Proxy                   string   `json:"proxy"`
+	PassThroughBodyEnabled  bool     `json:"pass_through_body_enabled,omitempty"`
+	SystemPrompt            string   `json:"system_prompt,omitempty"`
+	SystemPromptOverride    bool     `json:"system_prompt_override,omitempty"`
+	MonitorIntervalMinutes  int      `json:"monitor_interval_minutes,omitempty"`
+	MonitorEnableThreshold  float64  `json:"monitor_enable_threshold_seconds,omitempty"`
+	MonitorDisableThreshold float64  `json:"monitor_disable_threshold_seconds,omitempty"`
+	MonitorModels           []string `json:"monitor_models,omitempty"`
 }
 
 type VertexKeyType string

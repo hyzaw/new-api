@@ -438,6 +438,21 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 	if err := channel.ValidateSettings(); err != nil {
 		return fmt.Errorf("渠道额外设置[channel setting] 格式错误：%s", err.Error())
 	}
+	channelSettings := channel.GetSetting()
+	if channelSettings.MonitorIntervalMinutes < 0 {
+		return fmt.Errorf("渠道检测周期不能小于 0")
+	}
+	if channelSettings.MonitorEnableThreshold < 0 {
+		return fmt.Errorf("渠道启用延迟阈值不能小于 0")
+	}
+	if channelSettings.MonitorDisableThreshold < 0 {
+		return fmt.Errorf("渠道禁用延迟阈值不能小于 0")
+	}
+	if channelSettings.MonitorEnableThreshold > 0 &&
+		channelSettings.MonitorDisableThreshold > 0 &&
+		channelSettings.MonitorEnableThreshold > channelSettings.MonitorDisableThreshold {
+		return fmt.Errorf("渠道启用延迟阈值不能大于禁用延迟阈值")
+	}
 
 	// 如果是添加操作，检查 channel 和 key 是否为空
 	if isAdd {
