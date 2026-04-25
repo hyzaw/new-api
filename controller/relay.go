@@ -143,6 +143,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	handled, localProbeErr := tryHandleLocalRelayProbe(c, relayFormat, request)
+	if handled {
+		newAPIError = localProbeErr
+		return
+	}
+
 	relayInfo, err = relaycommon.GenRelayInfo(c, relayFormat, request, ws)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
