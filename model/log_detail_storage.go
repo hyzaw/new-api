@@ -46,6 +46,7 @@ var (
 	logDetailCOSClientOnce sync.Once
 	logDetailCOSClient     *cos.Client
 	logDetailCOSClientErr  error
+	logDetailCOSTimezone   = time.FixedZone("UTC+8", 8*60*60)
 )
 
 func logDetailExternalStorageEnabled() bool {
@@ -257,7 +258,7 @@ func buildLogDetailCOSObjectKey(basePath string, logId int, part string, hash st
 	if len(hash) > 16 {
 		hash = hash[:16]
 	}
-	now := time.Now().UTC()
+	now := time.Now().In(logDetailCOSTimezone)
 	fileName := fmt.Sprintf("%s-%s-%d%s", part, hash, now.UnixNano(), extension)
 	return path.Join(basePath, now.Format("2006/01/02"), strconv.Itoa(logId), fileName)
 }

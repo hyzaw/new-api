@@ -1,6 +1,10 @@
 package model
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestPrepareLogDetailForStorageKeepsInlineWhenCOSDisabled(t *testing.T) {
 	t.Setenv("LOG_DETAIL_STORAGE_TYPE", "")
@@ -48,5 +52,17 @@ func TestLogDetailGzipRoundTrip(t *testing.T) {
 	}
 	if string(got) != string(original) {
 		t.Fatalf("round trip mismatch: got %q want %q", got, original)
+	}
+}
+
+func TestBuildLogDetailCOSObjectKeyUsesUTC8Path(t *testing.T) {
+	key := buildLogDetailCOSObjectKey("log-details", 123, "request", "0123456789abcdef0123", ".gz")
+
+	if !strings.HasPrefix(key, "log-details/") {
+		t.Fatalf("unexpected base path: %s", key)
+	}
+	todayUTC8 := time.Now().In(logDetailCOSTimezone).Format("2006/01/02")
+	if !strings.Contains(key, "/"+todayUTC8+"/123/") {
+		t.Fatalf("object key should contain UTC+8 date path %s, got %s", todayUTC8, key)
 	}
 }
