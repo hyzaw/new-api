@@ -890,6 +890,35 @@ type channelAutoTestOutcome struct {
 	AttemptedModelNum int
 }
 
+func hasChannelSpecificMonitorConfig(channel *model.Channel) bool {
+	if channel == nil {
+		return false
+	}
+	channelSetting := channel.GetSetting()
+	if channelSetting.MonitorIntervalMinutes > 0 {
+		return true
+	}
+	if channelSetting.MonitorEnableThreshold > 0 {
+		return true
+	}
+	if channelSetting.MonitorDisableThreshold > 0 {
+		return true
+	}
+	return len(normalizeChannelMonitorModels(channelSetting.MonitorModels)) > 0
+}
+
+func shouldRunAutomaticChannelTestForChannel(channel *model.Channel) bool {
+	return operation_setting.GetMonitorSetting().AutoTestChannelEnabled || hasChannelSpecificMonitorConfig(channel)
+}
+
+func shouldAutomaticallyEnableChannelForChannel(channel *model.Channel) bool {
+	return common.AutomaticEnableChannelEnabled || hasChannelSpecificMonitorConfig(channel)
+}
+
+func shouldAutomaticallyDisableByThresholdForChannel(channel *model.Channel) bool {
+	return common.AutomaticDisableChannelEnabled || hasChannelSpecificMonitorConfig(channel)
+}
+
 func normalizeChannelMonitorModels(models []string) []string {
 	if len(models) == 0 {
 		return nil
@@ -997,6 +1026,7 @@ func executeAutomaticChannelTest(channel *model.Channel) channelAutoTestOutcome 
 	config := newChannelAutoTestConfig(channel)
 	testModels := config.ResolveModels(channel)
 	useStream := shouldUseStreamForAutomaticChannelTest(channel)
+	thresholdAutoDisableEnabled := shouldAutomaticallyDisableByThresholdForChannel(channel)
 
 	var (
 		result            testResult
@@ -1039,7 +1069,7 @@ func executeAutomaticChannelTest(channel *model.Channel) channelAutoTestOutcome 
 		avgLatencyMs = averageLatencyMs(successLatencies)
 	}
 
-	if common.AutomaticDisableChannelEnabled &&
+	if thresholdAutoDisableEnabled &&
 		len(successLatencies) > 0 &&
 		config.DisableThresholdMs > 0 &&
 		avgLatencyMs > config.DisableThresholdMs {
@@ -1092,6 +1122,9 @@ func testAllChannels(notify bool) error {
 			if channel.Status == common.ChannelStatusManuallyDisabled {
 				continue
 			}
+			if !shouldRunAutomaticChannelTestForChannel(channel) {
+				continue
+			}
 			config := newChannelAutoTestConfig(channel)
 			if !shouldRunChannelAutoTest(channel.Id, config.Interval, now) {
 				continue
@@ -1109,7 +1142,7 @@ func testAllChannels(notify bool) error {
 			// enable channel
 			if !isChannelEnabled &&
 				outcome.DisableError == nil &&
-				common.AutomaticEnableChannelEnabled &&
+				shouldAutomaticallyEnableChannelForChannel(channel) &&
 				channel.Status == common.ChannelStatusAutoDisabled &&
 				outcome.AllSuccessful {
 				service.EnableChannel(channel.Id, common.GetContextKeyString(outcome.Result.context, constant.ContextKeyChannelKey), channel.Name)
@@ -1149,11 +1182,9 @@ func AutomaticallyTestChannels() {
 	}
 	autoTestChannelsOnce.Do(func() {
 		for {
-			if !operation_setting.GetMonitorSetting().AutoTestChannelEnabled {
-				time.Sleep(1 * time.Minute)
-				continue
+			if operation_setting.GetMonitorSetting().AutoTestChannelEnabled {
+				common.SysLog("automatically testing due channels")
 			}
-			common.SysLog("automatically testing due channels")
 			_ = testAllChannels(false)
 			time.Sleep(1 * time.Minute)
 		}

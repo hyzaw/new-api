@@ -101,3 +101,67 @@ func TestValidateChannelRejectsInvalidMonitorThresholds(t *testing.T) {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
+
+func TestHasChannelSpecificMonitorConfig(t *testing.T) {
+	channel := &model.Channel{}
+	if hasChannelSpecificMonitorConfig(channel) {
+		t.Fatalf("expected empty channel monitor config to be false")
+	}
+
+	channel.SetSetting(dto.ChannelSettings{
+		MonitorEnableThreshold: 1.5,
+	})
+	if !hasChannelSpecificMonitorConfig(channel) {
+		t.Fatalf("expected channel monitor config override to be detected")
+	}
+}
+
+func TestShouldRunAutomaticChannelTestForChannelIgnoresGlobalWhenChannelConfigured(t *testing.T) {
+	monitorSetting := operation_setting.GetMonitorSetting()
+	originalEnabled := monitorSetting.AutoTestChannelEnabled
+	t.Cleanup(func() {
+		monitorSetting.AutoTestChannelEnabled = originalEnabled
+	})
+
+	monitorSetting.AutoTestChannelEnabled = false
+
+	channel := &model.Channel{}
+	channel.SetSetting(dto.ChannelSettings{
+		MonitorIntervalMinutes: 3,
+	})
+	if !shouldRunAutomaticChannelTestForChannel(channel) {
+		t.Fatalf("expected channel-specific monitor config to enable auto test")
+	}
+}
+
+func TestShouldAutomaticallyEnableChannelForChannelIgnoresGlobalWhenChannelConfigured(t *testing.T) {
+	original := common.AutomaticEnableChannelEnabled
+	t.Cleanup(func() {
+		common.AutomaticEnableChannelEnabled = original
+	})
+
+	common.AutomaticEnableChannelEnabled = false
+	channel := &model.Channel{}
+	channel.SetSetting(dto.ChannelSettings{
+		MonitorModels: []string{"gpt-4o"},
+	})
+	if !shouldAutomaticallyEnableChannelForChannel(channel) {
+		t.Fatalf("expected channel-specific monitor config to enable auto enable")
+	}
+}
+
+func TestShouldAutomaticallyDisableByThresholdForChannelIgnoresGlobalWhenChannelConfigured(t *testing.T) {
+	original := common.AutomaticDisableChannelEnabled
+	t.Cleanup(func() {
+		common.AutomaticDisableChannelEnabled = original
+	})
+
+	common.AutomaticDisableChannelEnabled = false
+	channel := &model.Channel{}
+	channel.SetSetting(dto.ChannelSettings{
+		MonitorDisableThreshold: 2.5,
+	})
+	if !shouldAutomaticallyDisableByThresholdForChannel(channel) {
+		t.Fatalf("expected channel-specific monitor config to enable threshold auto disable")
+	}
+}

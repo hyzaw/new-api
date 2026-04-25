@@ -655,8 +655,8 @@ const RegisterForm = () => {
                     {renderTurnstileBlock()}
                     <Form.Input
                       field='verification_code'
-                      label={t('验证码')}
-                      placeholder={t('输入验证码')}
+                      label={t('邮箱验证码')}
+                      placeholder={t('输入邮箱验证码')}
                       name='verification_code'
                       onChange={(value) =>
                         handleChange('verification_code', value)
