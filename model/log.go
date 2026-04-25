@@ -50,8 +50,16 @@ type LogDetail struct {
 	LogId                int    `json:"log_id" gorm:"uniqueIndex"`
 	RequestBodyEncoding  string `json:"request_body_encoding" gorm:"type:varchar(16);default:''"`
 	RequestBody          string `json:"request_body" gorm:"type:text"`
+	RequestBodyStorage   string `json:"request_body_storage,omitempty" gorm:"type:varchar(16);default:''"`
+	RequestBodyRef       string `json:"request_body_ref,omitempty" gorm:"type:varchar(512);default:''"`
+	RequestBodySize      int64  `json:"request_body_size,omitempty" gorm:"default:0"`
+	RequestBodyHash      string `json:"request_body_hash,omitempty" gorm:"type:char(64);default:''"`
 	ResponseBodyEncoding string `json:"response_body_encoding" gorm:"type:varchar(16);default:''"`
 	ResponseBody         string `json:"response_body" gorm:"type:text"`
+	ResponseBodyStorage  string `json:"response_body_storage,omitempty" gorm:"type:varchar(16);default:''"`
+	ResponseBodyRef      string `json:"response_body_ref,omitempty" gorm:"type:varchar(512);default:''"`
+	ResponseBodySize     int64  `json:"response_body_size,omitempty" gorm:"default:0"`
+	ResponseBodyHash     string `json:"response_body_hash,omitempty" gorm:"type:char(64);default:''"`
 }
 
 const edgeOneClientIPCountryHeader = "EO-Client-IPCountry12"
@@ -316,11 +324,22 @@ func upsertLogDetails(details []*LogDetail) error {
 			if detail == nil || detail.LogId <= 0 {
 				continue
 			}
+			if err := prepareLogDetailForStorage(detail); err != nil {
+				return err
+			}
 			updates := map[string]interface{}{
 				"request_body_encoding":  detail.RequestBodyEncoding,
 				"request_body":           detail.RequestBody,
+				"request_body_storage":   detail.RequestBodyStorage,
+				"request_body_ref":       detail.RequestBodyRef,
+				"request_body_size":      detail.RequestBodySize,
+				"request_body_hash":      detail.RequestBodyHash,
 				"response_body_encoding": detail.ResponseBodyEncoding,
 				"response_body":          detail.ResponseBody,
+				"response_body_storage":  detail.ResponseBodyStorage,
+				"response_body_ref":      detail.ResponseBodyRef,
+				"response_body_size":     detail.ResponseBodySize,
+				"response_body_hash":     detail.ResponseBodyHash,
 			}
 
 			var existing LogDetail
@@ -347,6 +366,10 @@ func createLogDetail(logId int, detail *LogDetail) {
 		return
 	}
 	detail.LogId = logId
+	if err := prepareLogDetailForStorage(detail); err != nil {
+		common.SysLog("failed to prepare log detail storage: " + err.Error())
+		return
+	}
 	if logDetailRedisEnabled() {
 		if err := cacheLogDetail(detail, true); err != nil {
 			common.SysLog("failed to cache log detail: " + err.Error())
@@ -421,6 +444,9 @@ func GetLogDetail(logId int) (*LogDetail, error) {
 	if logDetailRedisEnabled() {
 		detail, err := getLogDetailFromRedis(logId)
 		if err == nil {
+			if err = hydrateLogDetailBodies(detail); err != nil {
+				return nil, err
+			}
 			return detail, nil
 		}
 		if !errors.Is(err, redis.Nil) {
@@ -439,6 +465,9 @@ func GetLogDetail(logId int) (*LogDetail, error) {
 		if err := cacheLogDetail(&detail, false); err != nil {
 			common.SysLog("failed to backfill log detail cache: " + err.Error())
 		}
+	}
+	if err := hydrateLogDetailBodies(&detail); err != nil {
+		return nil, err
 	}
 	return &detail, nil
 }
