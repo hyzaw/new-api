@@ -20,11 +20,11 @@ import (
 
 type Channel struct {
 	Id                 int     `json:"id"`
-	Type               int     `json:"type" gorm:"default:0"`
+	Type               int     `json:"type" gorm:"default:0;index;index:idx_channels_type_status,priority:1"`
 	Key                string  `json:"key" gorm:"not null"`
 	OpenAIOrganization *string `json:"openai_organization"`
 	TestModel          *string `json:"test_model"`
-	Status             int     `json:"status" gorm:"default:1"`
+	Status             int     `json:"status" gorm:"default:1;index;index:idx_channels_type_status,priority:2"`
 	Name               string  `json:"name" gorm:"index"`
 	Weight             *uint   `json:"weight" gorm:"default:0"`
 	CreatedTime        int64   `json:"created_time" gorm:"bigint"`

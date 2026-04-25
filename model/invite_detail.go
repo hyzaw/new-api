@@ -14,14 +14,14 @@ const (
 )
 
 type InviteDetail struct {
-	Id                  int     `json:"id"`
+	Id                  int     `json:"id" gorm:"index:idx_invite_details_inviter_type_invite_time_id,priority:4;index:idx_invite_details_inviter_type_rebate_time_id,priority:4"`
 	DetailKey           string  `json:"detail_key" gorm:"type:varchar(64);uniqueIndex"`
-	DetailType          string  `json:"detail_type" gorm:"type:varchar(16);index"`
-	InviterId           int     `json:"inviter_id" gorm:"index"`
-	InviteeId           int     `json:"invitee_id" gorm:"index"`
+	DetailType          string  `json:"detail_type" gorm:"type:varchar(16);index;index:idx_invite_details_inviter_type_invite_time_id,priority:2;index:idx_invite_details_inviter_type_rebate_time_id,priority:2;index:idx_invite_details_type_invitee_id,priority:1"`
+	InviterId           int     `json:"inviter_id" gorm:"index;index:idx_invite_details_inviter_type_invite_time_id,priority:1;index:idx_invite_details_inviter_type_rebate_time_id,priority:1"`
+	InviteeId           int     `json:"invitee_id" gorm:"index;index:idx_invite_details_type_invitee_id,priority:2"`
 	InviteeUsername     string  `json:"invitee_username" gorm:"type:varchar(64);default:''"`
 	InviteeDisplayName  string  `json:"invitee_display_name" gorm:"type:varchar(64);default:''"`
-	InviteTime          int64   `json:"invite_time" gorm:"bigint;default:0;index"`
+	InviteTime          int64   `json:"invite_time" gorm:"bigint;default:0;index;index:idx_invite_details_inviter_type_invite_time_id,priority:3"`
 	TopUpId             int     `json:"top_up_id" gorm:"default:0;index"`
 	TopUpTradeNo        string  `json:"top_up_trade_no" gorm:"type:varchar(255);default:'';index"`
 	TopUpAmount         int64   `json:"top_up_amount" gorm:"default:0"`
@@ -30,7 +30,7 @@ type InviteDetail struct {
 	PaymentMethod       string  `json:"payment_method" gorm:"type:varchar(50);default:''"`
 	RebateQuota         int     `json:"rebate_quota" gorm:"default:0"`
 	RebateRefundedQuota int     `json:"rebate_refunded_quota" gorm:"default:0"`
-	RebateTime          int64   `json:"rebate_time" gorm:"bigint;default:0;index"`
+	RebateTime          int64   `json:"rebate_time" gorm:"bigint;default:0;index;index:idx_invite_details_inviter_type_rebate_time_id,priority:3"`
 	CreatedAt           int64   `json:"created_at" gorm:"bigint;default:0"`
 	UpdatedAt           int64   `json:"updated_at" gorm:"bigint;default:0"`
 }

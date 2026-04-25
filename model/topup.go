@@ -15,15 +15,15 @@ import (
 const defaultPendingTopUpExpireAfterSeconds int64 = 2 * 60 * 60
 
 type TopUp struct {
-	Id                        int     `json:"id"`
-	UserId                    int     `json:"user_id" gorm:"index"`
+	Id                        int     `json:"id" gorm:"index:idx_topups_user_create_time_id,priority:3;index:idx_topups_status_create_time_id,priority:3"`
+	UserId                    int     `json:"user_id" gorm:"index;index:idx_topups_user_create_time_id,priority:1"`
 	Amount                    int64   `json:"amount"`
 	Money                     float64 `json:"money"`
 	TradeNo                   string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod             string  `json:"payment_method" gorm:"type:varchar(50)"`
-	CreateTime                int64   `json:"create_time"`
+	CreateTime                int64   `json:"create_time" gorm:"bigint;index;index:idx_topups_user_create_time_id,priority:2;index:idx_topups_status_create_time_id,priority:2"`
 	CompleteTime              int64   `json:"complete_time"`
-	Status                    string  `json:"status"`
+	Status                    string  `json:"status" gorm:"type:varchar(32);index;index:idx_topups_status_create_time_id,priority:1"`
 	InviteRebateUserId        int     `json:"invite_rebate_user_id" gorm:"index"`
 	InviteRebateRatio         float64 `json:"invite_rebate_ratio"`
 	InviteRebateQuota         int     `json:"invite_rebate_quota"`

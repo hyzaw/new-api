@@ -26,15 +26,15 @@ const (
 )
 
 type InviteWithdrawal struct {
-	Id           int     `json:"id"`
-	UserId       int     `json:"user_id" gorm:"index"`
+	Id           int     `json:"id" gorm:"index:idx_invite_withdrawals_user_id_id,priority:2;index:idx_invite_withdrawals_status_id,priority:2"`
+	UserId       int     `json:"user_id" gorm:"index;index:idx_invite_withdrawals_user_id_id,priority:1"`
 	Username     string  `json:"username" gorm:"type:varchar(64);index;default:''"`
 	Amount       float64 `json:"amount"`
 	Quota        int     `json:"quota"`
 	ReceiptCode  string  `json:"receipt_code" gorm:"type:longtext"`
 	UserRemark   string  `json:"user_remark" gorm:"type:varchar(255);default:''"`
 	AdminRemark  string  `json:"admin_remark" gorm:"type:varchar(255);default:''"`
-	Status       string  `json:"status" gorm:"type:varchar(32);index"`
+	Status       string  `json:"status" gorm:"type:varchar(32);index;index:idx_invite_withdrawals_status_id,priority:1"`
 	OperatorId   int     `json:"operator_id" gorm:"index"`
 	OperatorName string  `json:"operator_name" gorm:"type:varchar(64);default:''"`
 	ProcessedAt  int64   `json:"processed_at" gorm:"bigint;default:0;index"`

@@ -26,9 +26,9 @@ const (
 )
 
 type InviteWalletRecord struct {
-	Id                 int     `json:"id"`
+	Id                 int     `json:"id" gorm:"index:idx_invite_wallet_user_created_id,priority:3"`
 	RecordKey          string  `json:"record_key" gorm:"type:varchar(128);uniqueIndex"`
-	UserId             int     `json:"user_id" gorm:"index"`
+	UserId             int     `json:"user_id" gorm:"index;index:idx_invite_wallet_user_created_id,priority:1"`
 	Username           string  `json:"username" gorm:"type:varchar(64);default:'';index"`
 	ChangeType         string  `json:"change_type" gorm:"type:varchar(32);index"`
 	AffQuotaDelta      int     `json:"aff_quota_delta"`
@@ -53,7 +53,7 @@ type InviteWalletRecord struct {
 	OperatorId         int     `json:"operator_id" gorm:"index"`
 	OperatorName       string  `json:"operator_name" gorm:"type:varchar(64);default:''"`
 	Remark             string  `json:"remark" gorm:"type:text"`
-	CreatedAt          int64   `json:"created_at" gorm:"bigint;index"`
+	CreatedAt          int64   `json:"created_at" gorm:"bigint;index;index:idx_invite_wallet_user_created_id,priority:2"`
 	UpdatedAt          int64   `json:"updated_at" gorm:"bigint"`
 }
 
