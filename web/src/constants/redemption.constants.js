@@ -55,3 +55,8 @@ export const REDEMPTION_LOTTERY_MODES = {
   RANGE: 'range',
   CHOICES: 'choices',
 };
+
+export const REDEMPTION_LOTTERY_BALANCE_TYPES = {
+  QUOTA: 'quota',
+  GIFT_QUOTA: 'gift_quota',
+};

@@ -25,6 +25,7 @@ import {
   REDEMPTION_STATUS,
   REDEMPTION_STATUS_MAP,
   REDEMPTION_ACTIONS,
+  REDEMPTION_LOTTERY_BALANCE_TYPES,
   REDEMPTION_LOTTERY_MODES,
   REDEMPTION_TYPES,
 } from '../../../constants/redemption.constants';
@@ -100,12 +101,16 @@ const renderLotteryConfig = (record, t) => {
   if (record.type !== REDEMPTION_TYPES.LOTTERY) {
     return t('无');
   }
+  const balanceType =
+    record.lottery_balance_type === REDEMPTION_LOTTERY_BALANCE_TYPES.GIFT_QUOTA
+      ? t('赠送余额')
+      : t('通用余额');
   if (record.lottery_mode === REDEMPTION_LOTTERY_MODES.CHOICES) {
     return record.lottery_quota_choices
-      ? `${t('额度:权重')} ${record.lottery_quota_choices}`
+      ? `${balanceType} ${t('额度:权重')} ${record.lottery_quota_choices}`
       : t('未配置');
   }
-  return `${renderQuota(record.lottery_quota_min || 0)} - ${renderQuota(
+  return `${balanceType} ${renderQuota(record.lottery_quota_min || 0)} - ${renderQuota(
     record.lottery_quota_max || 0,
   )}`;
 };

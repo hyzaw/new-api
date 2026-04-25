@@ -129,6 +129,42 @@ func TestRedeemLotteryRange(t *testing.T) {
 	}
 }
 
+func TestRedeemLotteryGiftBalance(t *testing.T) {
+	truncateTables(t)
+
+	user := createRedemptionTestUser(t, "redeem-lottery-gift")
+	redemption := Redemption{
+		UserId:              1,
+		Key:                 "lottery-redemption-code-gift",
+		Status:              common.RedemptionCodeStatusEnabled,
+		Name:                "lottery-gift",
+		Type:                RedemptionTypeLottery,
+		LotteryMode:         RedemptionLotteryModeChoices,
+		LotteryQuotaChoices: "300:1",
+		LotteryBalanceType:  RedemptionLotteryBalanceGift,
+		CreatedTime:         common.GetTimestamp(),
+	}
+	if err := redemption.Insert(); err != nil {
+		t.Fatalf("failed to create lottery redemption: %v", err)
+	}
+
+	result, err := Redeem(redemption.Key, user.Id)
+	if err != nil {
+		t.Fatalf("lottery gift redeem failed: %v", err)
+	}
+	if result.Quota != 0 || result.GiftQuota != 300 || result.TotalQuota != 300 {
+		t.Fatalf("unexpected lottery gift result: %+v", result)
+	}
+
+	var refreshed User
+	if err = DB.First(&refreshed, user.Id).Error; err != nil {
+		t.Fatalf("failed to reload user: %v", err)
+	}
+	if refreshed.Quota != 0 || refreshed.GiftQuota != 300 {
+		t.Fatalf("unexpected user balances: quota=%d gift_quota=%d", refreshed.Quota, refreshed.GiftQuota)
+	}
+}
+
 func TestRedeemLotteryMaxRedeemCount(t *testing.T) {
 	truncateTables(t)
 

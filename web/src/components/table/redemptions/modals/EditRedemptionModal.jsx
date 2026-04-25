@@ -32,6 +32,7 @@ import {
   displayAmountToQuota,
 } from '../../../../helpers/quota';
 import {
+  REDEMPTION_LOTTERY_BALANCE_TYPES,
   REDEMPTION_LOTTERY_MODES,
   REDEMPTION_TYPES,
 } from '../../../../constants/redemption.constants';
@@ -84,6 +85,7 @@ const EditRedemptionModal = (props) => {
     lottery_max_amount: 0,
     lottery_quota_choices: '',
     lottery_amount_choices: '',
+    lottery_balance_type: REDEMPTION_LOTTERY_BALANCE_TYPES.QUOTA,
     max_redeem_count: 0,
   });
 
@@ -189,6 +191,10 @@ const EditRedemptionModal = (props) => {
     if (localInputs.type === REDEMPTION_TYPES.LOTTERY) {
       localInputs.count = 1;
       localInputs.quota = 0;
+      localInputs.gift_quota = 0;
+      localInputs.lottery_balance_type =
+        localInputs.lottery_balance_type ||
+        REDEMPTION_LOTTERY_BALANCE_TYPES.QUOTA;
       localInputs.lottery_quota_min = displayAmountToQuota(
         localInputs.lottery_min_amount,
       );
@@ -503,6 +509,24 @@ const EditRedemptionModal = (props) => {
                       <>
                         <Col span={24}>
                           <Form.Select
+                            field='lottery_balance_type'
+                            label={t('发放余额类型')}
+                            style={{ width: '100%' }}
+                            optionList={[
+                              {
+                                label: t('通用余额'),
+                                value: REDEMPTION_LOTTERY_BALANCE_TYPES.QUOTA,
+                              },
+                              {
+                                label: t('赠送余额'),
+                                value:
+                                  REDEMPTION_LOTTERY_BALANCE_TYPES.GIFT_QUOTA,
+                              },
+                            ]}
+                          />
+                        </Col>
+                        <Col span={24}>
+                          <Form.Select
                             field='lottery_mode'
                             label={t('抽奖额度模式')}
                             style={{ width: '100%' }}
@@ -568,47 +592,51 @@ const EditRedemptionModal = (props) => {
                         )}
                       </>
                     )}
-                    <Col span={24}>
-                      <Form.InputNumber
-                        field='gift_amount'
-                        label={t('赠送余额金额')}
-                        prefix={getCurrencyConfig().symbol}
-                        placeholder={t('输入赠送余额金额')}
-                        precision={6}
-                        min={0}
-                        step={0.000001}
-                        style={{ width: '100%' }}
-                        onChange={(val) => {
-                          const amount = val === '' || val == null ? 0 : val;
-                          formApiRef.current?.setValue('gift_amount', amount);
-                          formApiRef.current?.setValue(
-                            'gift_quota',
-                            displayAmountToQuota(amount),
-                          );
-                        }}
-                        showClear
-                      />
-                      <div
-                        style={{ display: showQuotaInput ? 'block' : 'none' }}
-                        className='mt-2'
-                      >
+                    {values.type !== REDEMPTION_TYPES.LOTTERY && (
+                      <Col span={24}>
                         <Form.InputNumber
-                          field='gift_quota'
-                          label={t('赠送余额额度')}
-                          placeholder={t('输入赠送余额额度')}
+                          field='gift_amount'
+                          label={t('赠送余额金额')}
+                          prefix={getCurrencyConfig().symbol}
+                          placeholder={t('输入赠送余额金额')}
+                          precision={6}
+                          min={0}
+                          step={0.000001}
+                          style={{ width: '100%' }}
                           onChange={(val) => {
-                            const quota = val === '' || val == null ? 0 : val;
-                            formApiRef.current?.setValue('gift_quota', quota);
+                            const amount = val === '' || val == null ? 0 : val;
+                            formApiRef.current?.setValue('gift_amount', amount);
                             formApiRef.current?.setValue(
-                              'gift_amount',
-                              Number(quotaToDisplayAmount(quota).toFixed(6)),
+                              'gift_quota',
+                              displayAmountToQuota(amount),
                             );
                           }}
-                          style={{ width: '100%' }}
                           showClear
                         />
-                      </div>
-                    </Col>
+                        <div
+                          style={{
+                            display: showQuotaInput ? 'block' : 'none',
+                          }}
+                          className='mt-2'
+                        >
+                          <Form.InputNumber
+                            field='gift_quota'
+                            label={t('赠送余额额度')}
+                            placeholder={t('输入赠送余额额度')}
+                            onChange={(val) => {
+                              const quota = val === '' || val == null ? 0 : val;
+                              formApiRef.current?.setValue('gift_quota', quota);
+                              formApiRef.current?.setValue(
+                                'gift_amount',
+                                Number(quotaToDisplayAmount(quota).toFixed(6)),
+                              );
+                            }}
+                            style={{ width: '100%' }}
+                            showClear
+                          />
+                        </div>
+                      </Col>
+                    )}
                     {!isEdit && values.type !== REDEMPTION_TYPES.LOTTERY && (
                       <Col span={12}>
                         <Form.InputNumber

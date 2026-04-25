@@ -25,6 +25,9 @@ const (
 
 	RedemptionLotteryModeRange   = "range"
 	RedemptionLotteryModeChoices = "choices"
+
+	RedemptionLotteryBalanceQuota = "quota"
+	RedemptionLotteryBalanceGift  = "gift_quota"
 )
 
 type Redemption struct {
@@ -46,6 +49,7 @@ type Redemption struct {
 	LotteryQuotaMin     int            `json:"lottery_quota_min" gorm:"default:0"`
 	LotteryQuotaMax     int            `json:"lottery_quota_max" gorm:"default:0"`
 	LotteryQuotaChoices string         `json:"lottery_quota_choices" gorm:"type:text"`
+	LotteryBalanceType  string         `json:"lottery_balance_type" gorm:"type:varchar(20);default:'quota'"`
 	MaxRedeemCount      int            `json:"max_redeem_count" gorm:"default:0"`
 	RedeemedCount       int            `json:"redeemed_count" gorm:"default:0"`
 }
@@ -164,6 +168,9 @@ func (redemption *Redemption) NormalizeType() {
 	if redemption.Type == "" {
 		redemption.Type = RedemptionTypeNormal
 	}
+	if redemption.LotteryBalanceType == "" {
+		redemption.LotteryBalanceType = RedemptionLotteryBalanceQuota
+	}
 }
 
 func ParseLotteryQuotaChoices(raw string) ([]LotteryQuotaChoice, error) {
@@ -220,6 +227,9 @@ func ValidateLotteryRedemption(redemption *Redemption) error {
 		return ErrInvalidLotteryRedemptionQuota
 	}
 	if redemption.MaxRedeemCount < 0 {
+		return ErrInvalidLotteryRedemptionQuota
+	}
+	if redemption.LotteryBalanceType != RedemptionLotteryBalanceQuota && redemption.LotteryBalanceType != RedemptionLotteryBalanceGift {
 		return ErrInvalidLotteryRedemptionQuota
 	}
 	return nil
@@ -296,7 +306,11 @@ func redeemLottery(tx *gorm.DB, redemption *Redemption, userId int) (*RedeemResu
 	if err != nil {
 		return nil, err
 	}
-	giftQuota := redemption.GiftQuota
+	giftQuota := 0
+	if redemption.LotteryBalanceType == RedemptionLotteryBalanceGift {
+		giftQuota = quota
+		quota = 0
+	}
 	record := RedemptionRecord{
 		RedemptionId: redemption.Id,
 		UserId:       userId,
@@ -418,7 +432,7 @@ func (redemption *Redemption) SelectUpdate() error {
 func (redemption *Redemption) Update() error {
 	redemption.NormalizeType()
 	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "gift_quota", "redeemed_time", "expired_time", "type", "lottery_mode", "lottery_quota_min", "lottery_quota_max", "lottery_quota_choices", "max_redeem_count").Updates(redemption).Error
+	err = DB.Model(redemption).Select("name", "status", "quota", "gift_quota", "redeemed_time", "expired_time", "type", "lottery_mode", "lottery_quota_min", "lottery_quota_max", "lottery_quota_choices", "lottery_balance_type", "max_redeem_count").Updates(redemption).Error
 	return err
 }
 

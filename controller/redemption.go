@@ -85,6 +85,7 @@ func AddRedemption(c *gin.Context) {
 	if redemption.IsLottery() {
 		redemption.Count = 1
 		redemption.Quota = 0
+		redemption.GiftQuota = 0
 		if utf8.RuneCountInString(redemption.Key) > 64 {
 			common.ApiError(c, model.ErrInvalidLotteryRedemptionQuota)
 			return
@@ -117,6 +118,7 @@ func AddRedemption(c *gin.Context) {
 			LotteryQuotaMin:     redemption.LotteryQuotaMin,
 			LotteryQuotaMax:     redemption.LotteryQuotaMax,
 			LotteryQuotaChoices: redemption.LotteryQuotaChoices,
+			LotteryBalanceType:  redemption.LotteryBalanceType,
 			MaxRedeemCount:      redemption.MaxRedeemCount,
 		}
 		err = cleanRedemption.Insert()
@@ -181,9 +183,11 @@ func UpdateRedemption(c *gin.Context) {
 		cleanRedemption.LotteryQuotaMin = redemption.LotteryQuotaMin
 		cleanRedemption.LotteryQuotaMax = redemption.LotteryQuotaMax
 		cleanRedemption.LotteryQuotaChoices = redemption.LotteryQuotaChoices
+		cleanRedemption.LotteryBalanceType = redemption.LotteryBalanceType
 		cleanRedemption.MaxRedeemCount = redemption.MaxRedeemCount
 		if cleanRedemption.IsLottery() {
 			cleanRedemption.Quota = 0
+			cleanRedemption.GiftQuota = 0
 		}
 		if err := model.ValidateLotteryRedemption(cleanRedemption); err != nil {
 			common.ApiError(c, err)
