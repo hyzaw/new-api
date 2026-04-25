@@ -284,7 +284,7 @@ func EnsureSessionSecret() error {
 	}
 
 	var option Option
-	err := DB.Where("key = ?", sessionSecretOptionKey).First(&option).Error
+	err := DB.Where(commonKeyCol+" = ?", sessionSecretOptionKey).First(&option).Error
 	if err == nil {
 		persistedSecret := strings.TrimSpace(option.Value)
 		if persistedSecret != "" {
