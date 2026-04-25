@@ -43,6 +43,7 @@ type Log struct {
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
 	HasDetail        bool   `json:"has_detail,omitempty" gorm:"-"`
+	LogDetailStorage string `json:"log_detail_storage,omitempty" gorm:"-"`
 }
 
 type LogDetail struct {
@@ -398,29 +399,25 @@ func markLogsHasDetail(logs []*Log) {
 	}
 	remainingLogIds := logIds
 	if logDetailRedisEnabled() {
-		ctx := context.Background()
-		pipeline := common.RDB.Pipeline()
-		cmdByLogID := make(map[int]*redis.IntCmd, len(logIds))
-		for _, logId := range logIds {
-			cmdByLogID[logId] = pipeline.Exists(ctx, getLogDetailCacheKey(logId))
-		}
-		if _, err := pipeline.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		cachedDetails, err := loadLogDetailsBatchFromRedis(logIds)
+		cachedLogIds := make(map[int]struct{}, len(cachedDetails))
+		if err != nil {
 			common.SysLog("failed to query redis log detail flags: " + err.Error())
 		} else {
-			remainingLogIds = make([]int, 0, len(logIds))
-			for _, logId := range logIds {
-				cmd := cmdByLogID[logId]
-				if cmd == nil {
-					remainingLogIds = append(remainingLogIds, logId)
+			for _, detail := range cachedDetails {
+				if detail == nil || detail.LogId <= 0 {
 					continue
 				}
-				exists, cmdErr := cmd.Result()
-				if cmdErr == nil && exists > 0 {
-					if item := logById[logId]; item != nil {
-						item.HasDetail = true
-					}
-					continue
+				cachedLogIds[detail.LogId] = struct{}{}
+				if item := logById[detail.LogId]; item != nil {
+					item.HasDetail = true
+					item.LogDetailStorage = getLogDetailStorageSummary(detail)
 				}
+			}
+		}
+		remainingLogIds = make([]int, 0, len(logIds))
+		for _, logId := range logIds {
+			if _, ok := cachedLogIds[logId]; !ok {
 				remainingLogIds = append(remainingLogIds, logId)
 			}
 		}
@@ -428,14 +425,18 @@ func markLogsHasDetail(logs []*Log) {
 	if len(remainingLogIds) == 0 {
 		return
 	}
-	var detailLogIds []int
-	if err := LOG_DB.Model(&LogDetail{}).Where("log_id IN ?", remainingLogIds).Pluck("log_id", &detailLogIds).Error; err != nil {
+	var details []LogDetail
+	if err := LOG_DB.Model(&LogDetail{}).
+		Select("log_id", "request_body_storage", "response_body_storage").
+		Where("log_id IN ?", remainingLogIds).
+		Find(&details).Error; err != nil {
 		common.SysLog("failed to query log detail flags: " + err.Error())
 		return
 	}
-	for _, logId := range detailLogIds {
-		if item := logById[logId]; item != nil {
+	for i := range details {
+		if item := logById[details[i].LogId]; item != nil {
 			item.HasDetail = true
+			item.LogDetailStorage = getLogDetailStorageSummary(&details[i])
 		}
 	}
 }

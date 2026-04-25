@@ -55,6 +55,15 @@ func TestLogDetailGzipRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGetLogDetailStorageSummary(t *testing.T) {
+	if got := getLogDetailStorageSummary(&LogDetail{}); got != logDetailStorageInline {
+		t.Fatalf("empty detail storage summary = %q, want %q", got, logDetailStorageInline)
+	}
+	if got := getLogDetailStorageSummary(&LogDetail{RequestBodyStorage: logDetailStorageCOSGzip}); got != logDetailStorageCOS {
+		t.Fatalf("COS detail storage summary = %q, want %q", got, logDetailStorageCOS)
+	}
+}
+
 func TestBuildLogDetailCOSObjectKeyUsesShanghaiPath(t *testing.T) {
 	key := buildLogDetailCOSObjectKey("log-details", 123, "request", "0123456789abcdef0123", ".gz")
 

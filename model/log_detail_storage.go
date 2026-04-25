@@ -260,6 +260,16 @@ func isLogDetailCOSStorage(storage string) bool {
 	return storage == logDetailStorageCOS || storage == logDetailStorageCOSGzip
 }
 
+func getLogDetailStorageSummary(detail *LogDetail) string {
+	if detail == nil {
+		return ""
+	}
+	if isLogDetailCOSStorage(detail.RequestBodyStorage) || isLogDetailCOSStorage(detail.ResponseBodyStorage) {
+		return logDetailStorageCOS
+	}
+	return logDetailStorageInline
+}
+
 func buildLogDetailCOSObjectKey(basePath string, logId int, part string, hash string, extension string) string {
 	if part != "request" && part != "response" {
 		part = "body"

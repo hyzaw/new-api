@@ -140,6 +140,9 @@ func TestRecordConsumeLogStoresLogDetail(t *testing.T) {
 	if !log.HasDetail {
 		t.Fatalf("expected log has_detail to be true")
 	}
+	if log.LogDetailStorage != logDetailStorageInline {
+		t.Fatalf("expected inline log detail storage, got %q", log.LogDetailStorage)
+	}
 	formatUserLogs([]*Log{&log}, 0)
 	userOther, err := common.StrToMap(log.Other)
 	if err != nil {
@@ -199,5 +202,8 @@ func TestRecordErrorLogStoresLogDetail(t *testing.T) {
 	markLogsHasDetail([]*Log{&log})
 	if !log.HasDetail {
 		t.Fatalf("expected log has_detail to be true")
+	}
+	if log.LogDetailStorage != logDetailStorageInline {
+		t.Fatalf("expected inline log detail storage, got %q", log.LogDetailStorage)
 	}
 }
