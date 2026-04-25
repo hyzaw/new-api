@@ -31,7 +31,7 @@ type InviteWithdrawal struct {
 	Username     string  `json:"username" gorm:"type:varchar(64);index;default:''"`
 	Amount       float64 `json:"amount"`
 	Quota        int     `json:"quota"`
-	ReceiptCode  string  `json:"receipt_code" gorm:"type:text"`
+	ReceiptCode  string  `json:"receipt_code" gorm:"type:longtext"`
 	UserRemark   string  `json:"user_remark" gorm:"type:varchar(255);default:''"`
 	AdminRemark  string  `json:"admin_remark" gorm:"type:varchar(255);default:''"`
 	Status       string  `json:"status" gorm:"type:varchar(32);index"`
