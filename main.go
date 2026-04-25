@@ -96,6 +96,9 @@ func main() {
 	// 数据看板
 	go model.UpdateQuotaData()
 
+	// 日志详情先写 Redis，再后台渐进落库
+	model.StartLogDetailSyncTask()
+
 	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))
 		if err != nil {

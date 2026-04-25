@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -13,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/go-redis/redis/v8"
 	"gorm.io/gorm"
 	"time"
 )
@@ -52,6 +56,19 @@ type LogDetail struct {
 
 const edgeOneClientIPCountryHeader = "EO-Client-IPCountry12"
 const maxLoggedUserAgentLength = 1024
+
+const (
+	logDetailRedisKeyPrefix       = "log_detail:"
+	logDetailSyncQueueKey         = "log_detail:pending_sync"
+	defaultLogDetailCacheTTL      = 7 * 24 * time.Hour
+	defaultLogDetailSyncInterval  = 5 * time.Second
+	defaultLogDetailSyncBatchSize = 50
+)
+
+var (
+	logDetailSyncOnce    sync.Once
+	logDetailSyncRunning atomic.Bool
+)
 
 // don't use iota, avoid change log type value
 const (
@@ -146,12 +163,197 @@ func buildLogDetailFromContext(c *gin.Context) *LogDetail {
 	return detail
 }
 
+func logDetailRedisEnabled() bool {
+	return common.RedisEnabled && common.RDB != nil
+}
+
+func getLogDetailCacheKey(logId int) string {
+	return fmt.Sprintf("%s%d", logDetailRedisKeyPrefix, logId)
+}
+
+func getLogDetailCacheTTL() time.Duration {
+	ttlSeconds := common.GetEnvOrDefault("LOG_DETAIL_CACHE_TTL_SECONDS", int(defaultLogDetailCacheTTL/time.Second))
+	if ttlSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(ttlSeconds) * time.Second
+}
+
+func getLogDetailSyncInterval() time.Duration {
+	intervalSeconds := common.GetEnvOrDefault("LOG_DETAIL_SYNC_INTERVAL_SECONDS", int(defaultLogDetailSyncInterval/time.Second))
+	if intervalSeconds <= 0 {
+		intervalSeconds = 1
+	}
+	return time.Duration(intervalSeconds) * time.Second
+}
+
+func getLogDetailSyncBatchSize() int {
+	batchSize := common.GetEnvOrDefault("LOG_DETAIL_SYNC_BATCH_SIZE", defaultLogDetailSyncBatchSize)
+	if batchSize <= 0 {
+		return defaultLogDetailSyncBatchSize
+	}
+	return batchSize
+}
+
+func cacheLogDetail(detail *LogDetail, enqueueSync bool) error {
+	if detail == nil {
+		return nil
+	}
+	payload, err := common.Marshal(detail)
+	if err != nil {
+		return err
+	}
+	if err = common.RedisSet(getLogDetailCacheKey(detail.LogId), string(payload), getLogDetailCacheTTL()); err != nil {
+		return err
+	}
+	if enqueueSync {
+		return enqueueLogDetailSyncIDs([]int{detail.LogId})
+	}
+	return nil
+}
+
+func enqueueLogDetailSyncIDs(logIds []int) error {
+	if !logDetailRedisEnabled() || len(logIds) == 0 {
+		return nil
+	}
+	nowScore := float64(time.Now().UnixMilli())
+	members := make([]*redis.Z, 0, len(logIds))
+	for _, logId := range logIds {
+		if logId <= 0 {
+			continue
+		}
+		members = append(members, &redis.Z{
+			Score:  nowScore,
+			Member: strconv.Itoa(logId),
+		})
+	}
+	if len(members) == 0 {
+		return nil
+	}
+	return common.RDB.ZAdd(context.Background(), logDetailSyncQueueKey, members...).Err()
+}
+
+func getLogDetailFromRedis(logId int) (*LogDetail, error) {
+	payload, err := common.RedisGet(getLogDetailCacheKey(logId))
+	if err != nil {
+		return nil, err
+	}
+	var detail LogDetail
+	if err = common.UnmarshalJsonStr(payload, &detail); err != nil {
+		return nil, err
+	}
+	if detail.LogId == 0 {
+		detail.LogId = logId
+	}
+	return &detail, nil
+}
+
+func loadLogDetailsBatchFromRedis(logIds []int) ([]*LogDetail, error) {
+	if !logDetailRedisEnabled() || len(logIds) == 0 {
+		return nil, nil
+	}
+	keys := make([]string, 0, len(logIds))
+	for _, logId := range logIds {
+		if logId > 0 {
+			keys = append(keys, getLogDetailCacheKey(logId))
+		}
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	values, err := common.RDB.MGet(context.Background(), keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+	details := make([]*LogDetail, 0, len(values))
+	for idx, value := range values {
+		if value == nil {
+			continue
+		}
+		var payload string
+		switch typed := value.(type) {
+		case string:
+			payload = typed
+		case []byte:
+			payload = string(typed)
+		default:
+			payload = fmt.Sprint(typed)
+		}
+		var detail LogDetail
+		if err = common.UnmarshalJsonStr(payload, &detail); err != nil {
+			common.SysLog(fmt.Sprintf("failed to unmarshal cached log detail: log_id=%d err=%v", logIds[idx], err))
+			continue
+		}
+		if detail.LogId == 0 {
+			detail.LogId = logIds[idx]
+		}
+		details = append(details, &detail)
+	}
+	return details, nil
+}
+
+func parseLogDetailSyncMember(member interface{}) (int, error) {
+	switch typed := member.(type) {
+	case string:
+		return strconv.Atoi(typed)
+	case []byte:
+		return strconv.Atoi(string(typed))
+	case int:
+		return typed, nil
+	case int64:
+		return int(typed), nil
+	default:
+		return 0, fmt.Errorf("unsupported log detail sync member type %T", member)
+	}
+}
+
+func upsertLogDetails(details []*LogDetail) error {
+	if len(details) == 0 {
+		return nil
+	}
+	return LOG_DB.Transaction(func(tx *gorm.DB) error {
+		for _, detail := range details {
+			if detail == nil || detail.LogId <= 0 {
+				continue
+			}
+			updates := map[string]interface{}{
+				"request_body_encoding":  detail.RequestBodyEncoding,
+				"request_body":           detail.RequestBody,
+				"response_body_encoding": detail.ResponseBodyEncoding,
+				"response_body":          detail.ResponseBody,
+			}
+
+			var existing LogDetail
+			err := tx.Where("log_id = ?", detail.LogId).Take(&existing).Error
+			if err == nil {
+				if updateErr := tx.Model(&existing).Updates(updates).Error; updateErr != nil {
+					return updateErr
+				}
+				continue
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if createErr := tx.Create(detail).Error; createErr != nil {
+				return createErr
+			}
+		}
+		return nil
+	})
+}
+
 func createLogDetail(logId int, detail *LogDetail) {
 	if logId == 0 || detail == nil {
 		return
 	}
 	detail.LogId = logId
-	if err := LOG_DB.Create(detail).Error; err != nil {
+	if logDetailRedisEnabled() {
+		if err := cacheLogDetail(detail, true); err != nil {
+			common.SysLog("failed to cache log detail: " + err.Error())
+		}
+		return
+	}
+	if err := upsertLogDetails([]*LogDetail{detail}); err != nil {
 		common.SysLog("failed to record log detail: " + err.Error())
 	}
 }
@@ -171,8 +373,40 @@ func markLogsHasDetail(logs []*Log) {
 	if len(logIds) == 0 {
 		return
 	}
+	remainingLogIds := logIds
+	if logDetailRedisEnabled() {
+		ctx := context.Background()
+		pipeline := common.RDB.Pipeline()
+		cmdByLogID := make(map[int]*redis.IntCmd, len(logIds))
+		for _, logId := range logIds {
+			cmdByLogID[logId] = pipeline.Exists(ctx, getLogDetailCacheKey(logId))
+		}
+		if _, err := pipeline.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+			common.SysLog("failed to query redis log detail flags: " + err.Error())
+		} else {
+			remainingLogIds = make([]int, 0, len(logIds))
+			for _, logId := range logIds {
+				cmd := cmdByLogID[logId]
+				if cmd == nil {
+					remainingLogIds = append(remainingLogIds, logId)
+					continue
+				}
+				exists, cmdErr := cmd.Result()
+				if cmdErr == nil && exists > 0 {
+					if item := logById[logId]; item != nil {
+						item.HasDetail = true
+					}
+					continue
+				}
+				remainingLogIds = append(remainingLogIds, logId)
+			}
+		}
+	}
+	if len(remainingLogIds) == 0 {
+		return
+	}
 	var detailLogIds []int
-	if err := LOG_DB.Model(&LogDetail{}).Where("log_id IN ?", logIds).Pluck("log_id", &detailLogIds).Error; err != nil {
+	if err := LOG_DB.Model(&LogDetail{}).Where("log_id IN ?", remainingLogIds).Pluck("log_id", &detailLogIds).Error; err != nil {
 		common.SysLog("failed to query log detail flags: " + err.Error())
 		return
 	}
@@ -184,11 +418,132 @@ func markLogsHasDetail(logs []*Log) {
 }
 
 func GetLogDetail(logId int) (*LogDetail, error) {
+	if logDetailRedisEnabled() {
+		detail, err := getLogDetailFromRedis(logId)
+		if err == nil {
+			return detail, nil
+		}
+		if !errors.Is(err, redis.Nil) {
+			common.SysLog("failed to get log detail from redis: " + err.Error())
+		}
+	}
 	var detail LogDetail
 	if err := LOG_DB.Where("log_id = ?", logId).First(&detail).Error; err != nil {
 		return nil, err
 	}
+	if logDetailRedisEnabled() {
+		if err := cacheLogDetail(&detail, false); err != nil {
+			common.SysLog("failed to backfill log detail cache: " + err.Error())
+		}
+	}
 	return &detail, nil
+}
+
+func deleteLogDetailsCache(logIds []int) {
+	if !logDetailRedisEnabled() || len(logIds) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(logIds))
+	members := make([]interface{}, 0, len(logIds))
+	for _, logId := range logIds {
+		if logId <= 0 {
+			continue
+		}
+		keys = append(keys, getLogDetailCacheKey(logId))
+		members = append(members, strconv.Itoa(logId))
+	}
+	if len(keys) == 0 && len(members) == 0 {
+		return
+	}
+	ctx := context.Background()
+	pipeline := common.RDB.Pipeline()
+	if len(keys) > 0 {
+		pipeline.Del(ctx, keys...)
+	}
+	if len(members) > 0 {
+		pipeline.ZRem(ctx, logDetailSyncQueueKey, members...)
+	}
+	if _, err := pipeline.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
+		common.SysLog("failed to delete log detail cache: " + err.Error())
+	}
+}
+
+func StartLogDetailSyncTask() {
+	logDetailSyncOnce.Do(func() {
+		if !common.IsMasterNode || !logDetailRedisEnabled() {
+			return
+		}
+		gopool.Go(func() {
+			interval := getLogDetailSyncInterval()
+			logger.LogInfo(context.Background(), fmt.Sprintf("log detail sync task started: tick=%s batch=%d", interval, getLogDetailSyncBatchSize()))
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			runLogDetailSyncOnce()
+			for range ticker.C {
+				runLogDetailSyncOnce()
+			}
+		})
+	})
+}
+
+func runLogDetailSyncOnce() {
+	if !logDetailRedisEnabled() {
+		return
+	}
+	if !logDetailSyncRunning.CompareAndSwap(false, true) {
+		return
+	}
+	defer logDetailSyncRunning.Store(false)
+
+	batchSize := getLogDetailSyncBatchSize()
+	if batchSize <= 0 {
+		return
+	}
+	ctx := context.Background()
+	entries, err := common.RDB.ZPopMin(ctx, logDetailSyncQueueKey, int64(batchSize)).Result()
+	if err != nil {
+		if !errors.Is(err, redis.Nil) {
+			logger.LogWarn(ctx, fmt.Sprintf("log detail sync: pop queue failed: %v", err))
+		}
+		return
+	}
+	if len(entries) == 0 {
+		return
+	}
+
+	logIds := make([]int, 0, len(entries))
+	for _, entry := range entries {
+		logId, parseErr := parseLogDetailSyncMember(entry.Member)
+		if parseErr != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("log detail sync: invalid queue member=%v err=%v", entry.Member, parseErr))
+			continue
+		}
+		if logId > 0 {
+			logIds = append(logIds, logId)
+		}
+	}
+	if len(logIds) == 0 {
+		return
+	}
+
+	details, err := loadLogDetailsBatchFromRedis(logIds)
+	if err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("log detail sync: load cache failed: %v", err))
+		_ = enqueueLogDetailSyncIDs(logIds)
+		return
+	}
+	if len(details) == 0 {
+		return
+	}
+	if err = upsertLogDetails(details); err != nil {
+		logger.LogWarn(ctx, fmt.Sprintf("log detail sync: flush db failed: %v", err))
+		_ = enqueueLogDetailSyncIDs(logIds)
+		return
+	}
+	if common.DebugEnabled {
+		logger.LogDebug(ctx, "log detail sync: flushed=%d", len(details))
+	}
 }
 
 func formatUserLogs(logs []*Log, startIdx int) {
@@ -699,6 +1054,7 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 		if len(logIds) == 0 {
 			break
 		}
+		deleteLogDetailsCache(logIds)
 		if err := LOG_DB.Where("log_id IN ?", logIds).Delete(&LogDetail{}).Error; err != nil {
 			return total, err
 		}
