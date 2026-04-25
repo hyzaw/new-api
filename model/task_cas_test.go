@@ -40,6 +40,8 @@ func TestMain(m *testing.M) {
 		&Log{},
 		&LogDetail{},
 		&Channel{},
+		&Redemption{},
+		&RedemptionRecord{},
 		&TopUp{},
 		&TopUpRefund{},
 		&InviteDetail{},
@@ -64,6 +66,8 @@ func truncateTables(t *testing.T) {
 		DB.Exec("DELETE FROM logs")
 		DB.Exec("DELETE FROM log_details")
 		DB.Exec("DELETE FROM channels")
+		DB.Exec("DELETE FROM redemption_records")
+		DB.Exec("DELETE FROM redemptions")
 		DB.Exec("DELETE FROM top_ups")
 		DB.Exec("DELETE FROM top_up_refunds")
 		DB.Exec("DELETE FROM invite_details")

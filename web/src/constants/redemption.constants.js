@@ -45,3 +45,13 @@ export const REDEMPTION_ACTIONS = {
   ENABLE: 'enable',
   DISABLE: 'disable',
 };
+
+export const REDEMPTION_TYPES = {
+  NORMAL: 'normal',
+  LOTTERY: 'lottery',
+};
+
+export const REDEMPTION_LOTTERY_MODES = {
+  RANGE: 'range',
+  CHOICES: 'choices',
+};

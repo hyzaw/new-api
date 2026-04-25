@@ -25,6 +25,8 @@ import {
   REDEMPTION_STATUS,
   REDEMPTION_STATUS_MAP,
   REDEMPTION_ACTIONS,
+  REDEMPTION_LOTTERY_MODES,
+  REDEMPTION_TYPES,
 } from '../../../constants/redemption.constants';
 
 /**
@@ -73,6 +75,41 @@ const renderStatus = (status, record, t) => {
   );
 };
 
+const renderRedemptionType = (record, t) => {
+  if (record.type === REDEMPTION_TYPES.LOTTERY) {
+    return (
+      <Space>
+        <Tag color='violet' shape='circle'>
+          {t('抽奖兑换码')}
+        </Tag>
+        <Tag color='grey' shape='circle'>
+          {record.redeemed_count || 0}
+          {record.max_redeem_count > 0 ? `/${record.max_redeem_count}` : ''}
+        </Tag>
+      </Space>
+    );
+  }
+  return (
+    <Tag color='blue' shape='circle'>
+      {t('普通兑换码')}
+    </Tag>
+  );
+};
+
+const renderLotteryConfig = (record, t) => {
+  if (record.type !== REDEMPTION_TYPES.LOTTERY) {
+    return t('无');
+  }
+  if (record.lottery_mode === REDEMPTION_LOTTERY_MODES.CHOICES) {
+    return record.lottery_quota_choices
+      ? `${t('额度:权重')} ${record.lottery_quota_choices}`
+      : t('未配置');
+  }
+  return `${renderQuota(record.lottery_quota_min || 0)} - ${renderQuota(
+    record.lottery_quota_max || 0,
+  )}`;
+};
+
 /**
  * Get redemption code table column definitions
  */
@@ -102,6 +139,20 @@ export const getRedemptionsColumns = ({
       key: 'status',
       render: (text, record) => {
         return <div>{renderStatus(text, record, t)}</div>;
+      },
+    },
+    {
+      title: t('类型'),
+      dataIndex: 'type',
+      render: (text, record) => {
+        return renderRedemptionType(record, t);
+      },
+    },
+    {
+      title: t('抽奖配置'),
+      dataIndex: 'lottery_mode',
+      render: (text, record) => {
+        return <div>{renderLotteryConfig(record, t)}</div>;
       },
     },
     {

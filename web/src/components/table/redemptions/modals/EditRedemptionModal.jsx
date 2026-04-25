@@ -31,6 +31,10 @@ import {
   quotaToDisplayAmount,
   displayAmountToQuota,
 } from '../../../../helpers/quota';
+import {
+  REDEMPTION_LOTTERY_MODES,
+  REDEMPTION_TYPES,
+} from '../../../../constants/redemption.constants';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
   Button,
@@ -66,13 +70,64 @@ const EditRedemptionModal = (props) => {
 
   const getInitValues = () => ({
     name: '',
+    type: REDEMPTION_TYPES.NORMAL,
     quota: 100000,
     amount: Number(quotaToDisplayAmount(100000).toFixed(6)),
     gift_quota: 0,
     gift_amount: 0,
     count: 1,
     expired_time: null,
+    lottery_mode: REDEMPTION_LOTTERY_MODES.RANGE,
+    lottery_quota_min: 0,
+    lottery_quota_max: 0,
+    lottery_min_amount: 0,
+    lottery_max_amount: 0,
+    lottery_quota_choices: '',
+    lottery_amount_choices: '',
+    max_redeem_count: 0,
   });
+
+  const splitAmountChoices = (value) =>
+    String(value || '')
+      .split(/[\s,，]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const quotaChoicesToAmountChoices = (value) => {
+    return splitAmountChoices(value)
+      .map((item) => {
+        const [quotaPart, weightPart] = item.split(':');
+        const quota = parseInt(quotaPart, 10);
+        if (!Number.isFinite(quota) || quota <= 0) {
+          return '';
+        }
+        const amount = Number(quotaToDisplayAmount(quota).toFixed(6));
+        const weight = parseInt(weightPart, 10);
+        return Number.isFinite(weight) && weight > 0
+          ? `${amount}:${weight}`
+          : `${amount}`;
+      })
+      .filter((item) => item !== '')
+      .join(', ');
+  };
+
+  const amountChoicesToQuotaChoices = (value) => {
+    return splitAmountChoices(value)
+      .map((item) => {
+        const [amountPart, weightPart] = item.split(':');
+        const amount = Number(amountPart);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          return '';
+        }
+        const quota = displayAmountToQuota(amount);
+        const weight = parseInt(weightPart, 10);
+        return Number.isFinite(weight) && weight > 0
+          ? `${quota}:${weight}`
+          : `${quota}`;
+      })
+      .filter(Boolean)
+      .join(',');
+  };
 
   const handleCancel = () => {
     props.handleClose();
@@ -91,6 +146,15 @@ const EditRedemptionModal = (props) => {
       data.amount = Number(quotaToDisplayAmount(data.quota || 0).toFixed(6));
       data.gift_amount = Number(
         quotaToDisplayAmount(data.gift_quota || 0).toFixed(6),
+      );
+      data.lottery_min_amount = Number(
+        quotaToDisplayAmount(data.lottery_quota_min || 0).toFixed(6),
+      );
+      data.lottery_max_amount = Number(
+        quotaToDisplayAmount(data.lottery_quota_max || 0).toFixed(6),
+      );
+      data.lottery_amount_choices = quotaChoicesToAmountChoices(
+        data.lottery_quota_choices,
       );
       formApiRef.current?.setValues({ ...getInitValues(), ...data });
     } else {
@@ -119,7 +183,46 @@ const EditRedemptionModal = (props) => {
     localInputs.count = parseInt(localInputs.count) || 0;
     localInputs.quota = displayAmountToQuota(localInputs.amount);
     localInputs.gift_quota = displayAmountToQuota(localInputs.gift_amount);
-    if (localInputs.quota <= 0 && localInputs.gift_quota <= 0) {
+    localInputs.type = localInputs.type || REDEMPTION_TYPES.NORMAL;
+    localInputs.lottery_mode =
+      localInputs.lottery_mode || REDEMPTION_LOTTERY_MODES.RANGE;
+    if (localInputs.type === REDEMPTION_TYPES.LOTTERY) {
+      localInputs.count = 1;
+      localInputs.quota = 0;
+      localInputs.lottery_quota_min = displayAmountToQuota(
+        localInputs.lottery_min_amount,
+      );
+      localInputs.lottery_quota_max = displayAmountToQuota(
+        localInputs.lottery_max_amount,
+      );
+      localInputs.lottery_quota_choices = amountChoicesToQuotaChoices(
+        localInputs.lottery_amount_choices,
+      );
+      if (
+        localInputs.lottery_mode === REDEMPTION_LOTTERY_MODES.RANGE &&
+        (localInputs.lottery_quota_min <= 0 ||
+          localInputs.lottery_quota_max < localInputs.lottery_quota_min)
+      ) {
+        showError(t('请填写有效的抽奖额度区间'));
+        setLoading(false);
+        return;
+      }
+      if (
+        localInputs.lottery_mode === REDEMPTION_LOTTERY_MODES.CHOICES &&
+        !localInputs.lottery_quota_choices
+      ) {
+        showError(t('请填写至少一个抽奖额度'));
+        setLoading(false);
+        return;
+      }
+      localInputs.max_redeem_count =
+        parseInt(localInputs.max_redeem_count, 10) || 0;
+      if (localInputs.max_redeem_count < 0) {
+        showError(t('最大领取数量不能小于0'));
+        setLoading(false);
+        return;
+      }
+    } else if (localInputs.quota <= 0 && localInputs.gift_quota <= 0) {
       showError(t('请至少填写一种余额'));
       setLoading(false);
       return;
@@ -271,6 +374,34 @@ const EditRedemptionModal = (props) => {
                       />
                     </Col>
                     <Col span={24}>
+                      <Form.Select
+                        field='type'
+                        label={t('兑换码类型')}
+                        style={{ width: '100%' }}
+                        optionList={[
+                          {
+                            label: t('普通兑换码'),
+                            value: REDEMPTION_TYPES.NORMAL,
+                          },
+                          {
+                            label: t('抽奖兑换码'),
+                            value: REDEMPTION_TYPES.LOTTERY,
+                          },
+                        ]}
+                      />
+                    </Col>
+                    {!isEdit && values.type === REDEMPTION_TYPES.LOTTERY && (
+                      <Col span={24}>
+                        <Form.Input
+                          field='key'
+                          label={t('兑换码密钥')}
+                          placeholder={t('留空则自动生成')}
+                          style={{ width: '100%' }}
+                          showClear
+                        />
+                      </Col>
+                    )}
+                    <Col span={24}>
                       <Form.DatePicker
                         field='expired_time'
                         label={t('过期时间')}
@@ -304,64 +435,139 @@ const EditRedemptionModal = (props) => {
                   </div>
 
                   <Row gutter={12}>
-                    <Col span={24}>
-                      <Form.InputNumber
-                        field='amount'
-                        label={t('通用余额金额')}
-                        prefix={getCurrencyConfig().symbol}
-                        placeholder={t('输入金额')}
-                        precision={6}
-                        min={0}
-                        step={0.000001}
-                        style={{ width: '100%' }}
-                        onChange={(val) => {
-                          const amount = val === '' || val == null ? 0 : val;
-                          formApiRef.current?.setValue('amount', amount);
-                          formApiRef.current?.setValue(
-                            'quota',
-                            displayAmountToQuota(amount),
-                          );
-                        }}
-                        showClear
-                      />
-                      <div
-                        className='text-xs cursor-pointer mt-1'
-                        style={{ color: 'var(--semi-color-text-2)' }}
-                        onClick={() => setShowQuotaInput((v) => !v)}
-                      >
-                        {showQuotaInput
-                          ? `▾ ${t('收起原生额度输入')}`
-                          : `▸ ${t('使用原生额度输入')}`}
-                      </div>
-                      <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
+                    {values.type !== REDEMPTION_TYPES.LOTTERY ? (
+                      <Col span={24}>
                         <Form.InputNumber
-                          field='quota'
-                          label={t('通用余额额度')}
-                          placeholder={t('输入额度')}
-                          rules={[
-                            { required: true, message: t('请输入额度') },
-                            {
-                              validator: (rule, v) => {
-                                const num = parseInt(v, 10);
-                                return num > 0
-                                  ? Promise.resolve()
-                                  : Promise.reject(t('额度必须大于0'));
-                              },
-                            },
-                          ]}
+                          field='amount'
+                          label={t('通用余额金额')}
+                          prefix={getCurrencyConfig().symbol}
+                          placeholder={t('输入金额')}
+                          precision={6}
+                          min={0}
+                          step={0.000001}
+                          style={{ width: '100%' }}
                           onChange={(val) => {
-                            const quota = val === '' || val == null ? 0 : val;
-                            formApiRef.current?.setValue('quota', quota);
+                            const amount = val === '' || val == null ? 0 : val;
+                            formApiRef.current?.setValue('amount', amount);
                             formApiRef.current?.setValue(
-                              'amount',
-                              Number(quotaToDisplayAmount(quota).toFixed(6)),
+                              'quota',
+                              displayAmountToQuota(amount),
                             );
                           }}
-                          style={{ width: '100%' }}
                           showClear
                         />
-                      </div>
-                    </Col>
+                        <div
+                          className='text-xs cursor-pointer mt-1'
+                          style={{ color: 'var(--semi-color-text-2)' }}
+                          onClick={() => setShowQuotaInput((v) => !v)}
+                        >
+                          {showQuotaInput
+                            ? `▾ ${t('收起原生额度输入')}`
+                            : `▸ ${t('使用原生额度输入')}`}
+                        </div>
+                        <div
+                          style={{
+                            display: showQuotaInput ? 'block' : 'none',
+                          }}
+                          className='mt-2'
+                        >
+                          <Form.InputNumber
+                            field='quota'
+                            label={t('通用余额额度')}
+                            placeholder={t('输入额度')}
+                            rules={[
+                              { required: true, message: t('请输入额度') },
+                              {
+                                validator: (rule, v) => {
+                                  const num = parseInt(v, 10);
+                                  return num > 0
+                                    ? Promise.resolve()
+                                    : Promise.reject(t('额度必须大于0'));
+                                },
+                              },
+                            ]}
+                            onChange={(val) => {
+                              const quota = val === '' || val == null ? 0 : val;
+                              formApiRef.current?.setValue('quota', quota);
+                              formApiRef.current?.setValue(
+                                'amount',
+                                Number(quotaToDisplayAmount(quota).toFixed(6)),
+                              );
+                            }}
+                            style={{ width: '100%' }}
+                            showClear
+                          />
+                        </div>
+                      </Col>
+                    ) : (
+                      <>
+                        <Col span={24}>
+                          <Form.Select
+                            field='lottery_mode'
+                            label={t('抽奖额度模式')}
+                            style={{ width: '100%' }}
+                            optionList={[
+                              {
+                                label: t('随机区间'),
+                                value: REDEMPTION_LOTTERY_MODES.RANGE,
+                              },
+                              {
+                                label: t('指定额度随机'),
+                                value: REDEMPTION_LOTTERY_MODES.CHOICES,
+                              },
+                            ]}
+                          />
+                        </Col>
+                        <Col span={24}>
+                          <Form.InputNumber
+                            field='max_redeem_count'
+                            label={t('最大领取数量')}
+                            placeholder={t('0 表示不限制总领取次数')}
+                            min={0}
+                            style={{ width: '100%' }}
+                            showClear
+                          />
+                        </Col>
+                        {values.lottery_mode !==
+                        REDEMPTION_LOTTERY_MODES.CHOICES ? (
+                          <>
+                            <Col span={12}>
+                              <Form.InputNumber
+                                field='lottery_min_amount'
+                                label={t('最小随机金额')}
+                                prefix={getCurrencyConfig().symbol}
+                                precision={6}
+                                min={0}
+                                step={0.000001}
+                                style={{ width: '100%' }}
+                              />
+                            </Col>
+                            <Col span={12}>
+                              <Form.InputNumber
+                                field='lottery_max_amount'
+                                label={t('最大随机金额')}
+                                prefix={getCurrencyConfig().symbol}
+                                precision={6}
+                                min={0}
+                                step={0.000001}
+                                style={{ width: '100%' }}
+                              />
+                            </Col>
+                          </>
+                        ) : (
+                          <Col span={24}>
+                            <Form.TextArea
+                              field='lottery_amount_choices'
+                              label={t('随机额度列表')}
+                              placeholder={t(
+                                '例如：1:70, 5:20, 10:10，冒号后是概率权重',
+                              )}
+                              autosize
+                            />
+                          </Col>
+                        )}
+                      </>
+                    )}
                     <Col span={24}>
                       <Form.InputNumber
                         field='gift_amount'
@@ -382,7 +588,10 @@ const EditRedemptionModal = (props) => {
                         }}
                         showClear
                       />
-                      <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
+                      <div
+                        style={{ display: showQuotaInput ? 'block' : 'none' }}
+                        className='mt-2'
+                      >
                         <Form.InputNumber
                           field='gift_quota'
                           label={t('赠送余额额度')}
@@ -400,7 +609,7 @@ const EditRedemptionModal = (props) => {
                         />
                       </div>
                     </Col>
-                    {!isEdit && (
+                    {!isEdit && values.type !== REDEMPTION_TYPES.LOTTERY && (
                       <Col span={12}>
                         <Form.InputNumber
                           field='count'
