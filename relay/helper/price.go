@@ -224,19 +224,7 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 }
 
 func ContainPriceOrRatio(modelName string) bool {
-	_, ok := ratio_setting.GetModelPrice(modelName, false)
-	if ok {
-		return true
-	}
-	_, ok, _ = ratio_setting.GetModelRatio(modelName)
-	if ok {
-		return true
-	}
-	if billing_setting.GetBillingMode(modelName) == billing_setting.BillingModeTieredExpr {
-		_, ok = billing_setting.GetBillingExpr(modelName)
-		return ok
-	}
-	return false
+	return model.HasModelBillingConfig(modelName)
 }
 
 func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta, groupRatioInfo types.GroupRatioInfo) (types.PriceData, error) {
@@ -256,8 +244,9 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 	}
 
 	rawCost, trace, err := billingexpr.RunExprWithRequest(exprStr, billingexpr.TokenParams{
-		P: float64(promptTokens),
-		C: float64(estimatedCompletionTokens),
+		P:   float64(promptTokens),
+		C:   float64(estimatedCompletionTokens),
+		Len: float64(promptTokens),
 	}, requestInput)
 	if err != nil {
 		return types.PriceData{}, fmt.Errorf("model %s tiered expr run failed: %w", info.OriginModelName, err)

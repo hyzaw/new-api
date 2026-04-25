@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/moonshot"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -110,6 +111,17 @@ func init() {
 func ListModels(c *gin.Context, modelType int) {
 	userOpenAiModels := make([]dto.OpenAIModels, 0)
 
+	acceptUnsetRatioModel := operation_setting.SelfUseModeEnabled
+	if !acceptUnsetRatioModel {
+		userId := c.GetInt("id")
+		if userId > 0 {
+			userSettings, _ := model.GetUserSetting(userId, false)
+			if userSettings.AcceptUnsetRatioModel {
+				acceptUnsetRatioModel = true
+			}
+		}
+	}
+
 	modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
 	if modelLimitEnable {
 		s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
@@ -120,6 +132,11 @@ func ListModels(c *gin.Context, modelType int) {
 			tokenModelLimit = map[string]bool{}
 		}
 		for allowModel := range tokenModelLimit {
+			if !acceptUnsetRatioModel {
+				if !model.HasModelBillingConfig(allowModel) {
+					continue
+				}
+			}
 			if oaiModel, ok := openAIModelsMap[allowModel]; ok {
 				oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(allowModel)
 				userOpenAiModels = append(userOpenAiModels, oaiModel)
@@ -162,6 +179,11 @@ func ListModels(c *gin.Context, modelType int) {
 			models = model.GetGroupEnabledModels(group)
 		}
 		for _, modelName := range models {
+			if !acceptUnsetRatioModel {
+				if !model.HasModelBillingConfig(modelName) {
+					continue
+				}
+			}
 			if oaiModel, ok := openAIModelsMap[modelName]; ok {
 				oaiModel.SupportedEndpointTypes = model.GetModelSupportEndpointTypes(modelName)
 				userOpenAiModels = append(userOpenAiModels, oaiModel)

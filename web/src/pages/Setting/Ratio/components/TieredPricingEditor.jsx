@@ -31,8 +31,9 @@ import {
   TextArea,
   Typography,
 } from '@douyinfe/semi-ui';
-import { IconDelete, IconPlus } from '@douyinfe/semi-icons';
+import { IconCopy, IconDelete, IconPlus } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../../../helpers/render';
+import { copy, showSuccess } from '../../../../helpers';
 import { BILLING_EXTRA_VARS, BILLING_CACHE_VAR_MAP } from '../../../../constants';
 import {
   createEmptyCondition,
@@ -69,10 +70,12 @@ function priceToUnitCost(price) {
 }
 
 const OPS = ['<', '<=', '>', '>='];
+const CONDITION_VAR_LEN = 'len';
 const CONDITION_VAR_P = 'p';
 const CONDITION_VAR_C = 'c';
 const CONDITION_VAR_P_PLUS_CR = 'p_plus_cr';
 const VAR_OPTIONS = [
+  { value: CONDITION_VAR_LEN, label: 'len (长度)' },
   { value: CONDITION_VAR_P, label: 'p (输入)' },
   { value: CONDITION_VAR_C, label: 'c (输出)' },
   { value: CONDITION_VAR_P_PLUS_CR, label: 'p + cr (输入+缓存读)' },
@@ -92,6 +95,8 @@ function formatTokenHint(n) {
 
 function conditionVarToExprVar(varName) {
   switch (varName) {
+    case CONDITION_VAR_LEN:
+      return 'len';
     case CONDITION_VAR_P_PLUS_CR:
       return '(p + cr)';
     case CONDITION_VAR_C:
@@ -104,13 +109,16 @@ function conditionVarToExprVar(varName) {
 
 function exprVarToConditionVar(exprVar) {
   const normalized = String(exprVar || '').replace(/\s+/g, '');
+  if (normalized === 'len') {
+    return CONDITION_VAR_LEN;
+  }
   if (normalized === 'p+cr' || normalized === '(p+cr)') {
     return CONDITION_VAR_P_PLUS_CR;
   }
   if (normalized === 'c') {
     return CONDITION_VAR_C;
   }
-  return CONDITION_VAR_P;
+  return CONDITION_VAR_LEN;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +259,7 @@ function tryParseVisualConfig(exprStr) {
     }
 
     // Multi-tier: cond1 ? tier(body) : cond2 ? tier(body) : tier(body)
-    const condOperand = `(?:\\(?\\s*p\\s*\\+\\s*cr\\s*\\)?|p|c)`;
+    const condOperand = `(?:len|\\(?\\s*p\\s*\\+\\s*cr\\s*\\)?|p|c)`;
     const condGroup = `((?:${condOperand})\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+(?:\\s*&&\\s*(?:${condOperand})\\s*(?:<|<=|>|>=)\\s*[\\d.eE+]+)*)`;
     const tierRe = new RegExp(
       `(?:${condGroup}\\s*\\?\\s*)?tier\\("([^"]*)",\\s*${bodyPat}\\)`,
@@ -267,7 +275,7 @@ function tryParseVisualConfig(exprStr) {
         for (const cp of condParts) {
           const cm = cp
             .trim()
-            .match(/^(\(?\s*p\s*\+\s*cr\s*\)?|p|c)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/);
+            .match(/^(len|\(?\s*p\s*\+\s*cr\s*\)?|p|c)\s*(<|<=|>|>=)\s*([\d.eE+]+)$/);
           if (cm) {
             conditions.push({
               var: exprVarToConditionVar(cm[1]),
@@ -317,7 +325,7 @@ function ConditionRow({ cond, onChange, onRemove, t }) {
     }}>
       <Select
         size='small'
-        value={cond.var || 'p'}
+        value={cond.var || CONDITION_VAR_LEN}
         onChange={(val) => onChange({ ...cond, var: val })}
       >
         {VAR_OPTIONS.map((v) => (
@@ -535,6 +543,7 @@ function VisualTierCard({ tier, index, isLast, isOnly, onUpdate, onRemove, t }) 
   const conditions = tier.conditions || [];
 
   const varLabel = {
+    [CONDITION_VAR_LEN]: t('长度'),
     [CONDITION_VAR_P]: t('输入'),
     [CONDITION_VAR_C]: t('输出'),
     [CONDITION_VAR_P_PLUS_CR]: t('输入+缓存读'),
@@ -565,7 +574,7 @@ function VisualTierCard({ tier, index, isLast, isOnly, onUpdate, onRemove, t }) 
     const usedVars = conditions.map((c) => c.var);
     const nextVar =
       VAR_OPTIONS.find((option) => !usedVars.includes(option.value))?.value ||
-      CONDITION_VAR_P;
+      CONDITION_VAR_LEN;
     onUpdate(index, 'conditions', [
       ...conditions,
       { var: nextVar, op: '<', value: 200000 },
@@ -732,11 +741,11 @@ function VisualEditor({ visualConfig, onChange, t }) {
       (!newTiers[newTiers.length - 1].conditions ||
         newTiers[newTiers.length - 1].conditions.length === 0)
     ) {
-        newTiers[newTiers.length - 1] = {
-          ...newTiers[newTiers.length - 1],
-          conditions: [{ var: CONDITION_VAR_P, op: '<', value: 200000 }],
-        };
-      }
+      newTiers[newTiers.length - 1] = {
+        ...newTiers[newTiers.length - 1],
+        conditions: [{ var: CONDITION_VAR_LEN, op: '<', value: 200000 }],
+      };
+    }
     newTiers.push({
       conditions: [],
       input_unit_cost: 0,
@@ -763,7 +772,7 @@ function VisualEditor({ visualConfig, onChange, t }) {
     <div>
       <Banner
         type='info'
-        description={t('每个档位可设置 0~2 个条件（支持 p、c、p+cr），最后一档为兜底档无需条件。')}
+        description={t('每个档位可设置 0~2 个条件（支持 len、p、c、p+cr），最后一档为兜底档无需条件。len 为输入上下文总长度（含缓存），推荐用于阶梯条件。')}
         style={{ marginBottom: 12 }}
       />
 
@@ -802,16 +811,16 @@ const PRESET_GROUPS = [
     presets: [
       { key: 'flat', label: 'Flat', expr: 'tier("base", p * 2 + c * 4)' },
       { key: 'claude-opus', label: 'Claude Opus 4.6', expr: 'tier("base", p * 5 + c * 25 + cr * 0.5 + cc * 6.25 + cc1h * 10)' },
-      { key: 'gpt-5.4', label: 'GPT-5.4', expr: 'p <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)' },
+      { key: 'gpt-5.4', label: 'GPT-5.4', expr: 'len <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)' },
     ],
   },
   {
     group: '阶梯计费',
     presets: [
-      { key: 'claude-sonnet', label: 'Claude Sonnet 4.5', expr: 'p <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12)' },
-      { key: 'qwen3-max', label: 'Qwen3 Max', expr: 'p <= 32000 ? tier("short", p * 1.2 + c * 6 + cr * 0.24 + cc * 1.5) : p <= 128000 ? tier("mid", p * 2.4 + c * 12 + cr * 0.48 + cc * 3) : tier("long", p * 3 + c * 15 + cr * 0.6 + cc * 3.75)' },
-      { key: 'glm-4.5-air', label: 'GLM-4.5 Air', expr: 'p < 32000 && c < 200 ? tier("short_output", p * 0.8 + c * 2 + cr * 0.16) : p < 32000 && c >= 200 ? tier("long_output", p * 0.8 + c * 6 + cr * 0.16) : tier("mid_context", p * 1.2 + c * 8 + cr * 0.24)' },
-      { key: 'doubao-seed-1.8', label: 'Doubao Seed 1.8', expr: 'p <= 32000 && c <= 200 ? tier("discount", p * 0.8 + c * 2 + cr * 0.16 + cc * 0.17) : p <= 32000 ? tier("short", p * 0.8 + c * 8 + cr * 0.16 + cc * 0.17) : p <= 128000 ? tier("mid", p * 1.2 + c * 16 + cr * 0.16 + cc * 0.17) : tier("long", p * 2.4 + c * 24 + cr * 0.16 + cc * 0.17)' },
+      { key: 'claude-sonnet', label: 'Claude Sonnet 4.5', expr: 'len <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12)' },
+      { key: 'qwen3-max', label: 'Qwen3 Max', expr: 'len <= 32000 ? tier("short", p * 1.2 + c * 6 + cr * 0.24 + cc * 1.5) : len <= 128000 ? tier("mid", p * 2.4 + c * 12 + cr * 0.48 + cc * 3) : tier("long", p * 3 + c * 15 + cr * 0.6 + cc * 3.75)' },
+      { key: 'glm-4.5-air', label: 'GLM-4.5 Air', expr: 'len < 32000 && c < 200 ? tier("short_output", p * 0.8 + c * 2 + cr * 0.16) : len < 32000 && c >= 200 ? tier("long_output", p * 0.8 + c * 6 + cr * 0.16) : tier("mid_context", p * 1.2 + c * 8 + cr * 0.24)' },
+      { key: 'doubao-seed-1.8', label: 'Doubao Seed 1.8', expr: 'len <= 32000 && c <= 200 ? tier("discount", p * 0.8 + c * 2 + cr * 0.16 + cc * 0.17) : len <= 32000 ? tier("short", p * 0.8 + c * 8 + cr * 0.16 + cc * 0.17) : len <= 128000 ? tier("mid", p * 1.2 + c * 16 + cr * 0.16 + cc * 0.17) : tier("long", p * 2.4 + c * 24 + cr * 0.16 + cc * 0.17)' },
     ],
   },
   {
@@ -833,7 +842,7 @@ const PRESET_GROUPS = [
       },
       {
         key: 'gpt-5.4-tiers', label: 'GPT-5.4 Priority/Flex',
-        expr: 'p <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)',
+        expr: 'len <= 272000 ? tier("standard", p * 2.5 + c * 15 + cr * 0.25) : tier("long_context", p * 5 + c * 22.5 + cr * 0.5)',
         requestRules: [
           { conditions: [{ source: SOURCE_PARAM, path: 'service_tier', mode: MATCH_EQ, value: 'priority' }], multiplier: '2' },
           { conditions: [{ source: SOURCE_PARAM, path: 'service_tier', mode: MATCH_EQ, value: 'flex' }], multiplier: '0.5' },
@@ -920,7 +929,8 @@ function RawExprEditor({ exprString, onChange, t }) {
           <div>
             <div>
               {t('变量')}: <code>p</code> ({t('输入 Token')}), <code>c</code> (
-              {t('输出 Token')}), <code>cr</code> ({t('缓存读取')}),{' '}
+              {t('输出 Token')}), <code>len</code> ({t('输入长度')}),{' '}
+              <code>cr</code> ({t('缓存读取')}),{' '}
               <code>cc</code> ({t('缓存创建')}),{' '}
               <code>cc1h</code> ({t('缓存创建-1小时')})
             </div>
@@ -1008,7 +1018,11 @@ function evalExprLocally(exprStr, p, c, extraTokenValues) {
       matchedTier = name;
       return value;
     };
-    const env = { p, c, tier: tierFn, max: Math.max, min: Math.min, abs: Math.abs, ceil: Math.ceil, floor: Math.floor };
+    const cacheReadTokens = extraTokenValues.cacheReadTokens || 0;
+    const cacheCreateTokens = extraTokenValues.cacheCreateTokens || 0;
+    const cacheCreate1hTokens = extraTokenValues.cacheCreate1hTokens || 0;
+    const len = p + cacheReadTokens + cacheCreateTokens + cacheCreate1hTokens;
+    const env = { p, c, len, tier: tierFn, max: Math.max, min: Math.min, abs: Math.abs, ceil: Math.ceil, floor: Math.floor };
     for (const field of EXTRA_ESTIMATOR_FIELDS) {
       env[field.var] = extraTokenValues[field.stateKey] || 0;
     }
@@ -1261,6 +1275,70 @@ function RuleGroupCard({ group, index, onChange, onRemove, t }) {
 }
 
 // ---------------------------------------------------------------------------
+// LLM prompt helper
+// ---------------------------------------------------------------------------
+
+const LLM_PROMPT_TEMPLATE = `你是一个 AI API 计费表达式设计助手。请根据模型官方价格生成 billing expression。
+
+规则：
+1. 价格系数使用 $/1M tokens。
+2. 每个分支必须使用 tier("name", cost) 包裹。
+3. 阶梯条件优先使用 len，不要用会被缓存/图片/音频扣减后的 p。
+4. 可用变量：p 输入计价 token，c 输出计价 token，len 输入上下文总长度，cr 缓存读取，cc 缓存创建，cc1h 1小时缓存创建，img 图片输入，img_o 图片输出，ai 音频输入，ao 音频输出。
+5. 可用函数：max、min、abs、ceil、floor、header、param、has、hour、minute、weekday、month、day。
+
+示例：
+len <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12)`;
+
+function LlmPromptHelper({ t, model }) {
+  const [open, setOpen] = useState(false);
+  const prompt = useMemo(() => {
+    const modelName = model?.name || '';
+    return modelName ? `${LLM_PROMPT_TEMPLATE}\n\n当前模型：${modelName}` : LLM_PROMPT_TEMPLATE;
+  }, [model]);
+
+  const handleCopy = useCallback(async () => {
+    const ok = await copy(prompt);
+    if (ok) showSuccess(t('已复制到剪贴板'));
+  }, [prompt, t]);
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <Button
+        theme='borderless'
+        size='small'
+        icon={<IconCopy />}
+        onClick={() => setOpen(!open)}
+        style={{ color: 'var(--semi-color-tertiary)' }}
+      >
+        {t('LLM 辅助设计提示词')}
+      </Button>
+      <Collapsible isOpen={open}>
+        <Card
+          bodyStyle={{ padding: 12 }}
+          style={{ marginTop: 8, background: 'var(--semi-color-fill-0)' }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text size='small' type='secondary'>
+              {t('复制提示词给 LLM，让它按当前表达式规则生成计费表达式')}
+            </Text>
+            <Button icon={<IconCopy />} size='small' theme='light' onClick={handleCopy}>
+              {t('复制提示词')}
+            </Button>
+          </div>
+          <TextArea
+            value={prompt}
+            readonly
+            autosize={{ minRows: 5, maxRows: 14 }}
+            style={{ fontFamily: 'monospace', fontSize: 12 }}
+          />
+        </Card>
+      </Collapsible>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -1495,6 +1573,8 @@ export default function TieredPricingEditor({ model, onExprChange, requestRuleEx
           </>
         )}
       </Card>
+
+      <LlmPromptHelper t={t} model={model} />
 
       <Card
         bodyStyle={{ padding: 16 }}

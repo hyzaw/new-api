@@ -30,7 +30,8 @@ Powered by [expr-lang/expr](https://github.com/expr-lang/expr). Expressions are 
 
 | 变量 | 含义 |
 |------|------|
-| `p` | 输入 token 数。**自动排除**表达式中单独计价的子类别（见下方说明） |
+| `p` | 输入 token 数（**计价用**）。**自动排除**表达式中单独计价的子类别（见下方说明） |
+| `len` | 输入上下文总长度（**条件判断用**）。不受自动排除影响，始终反映完整输入长度。非 Claude：等于原始 `prompt_tokens`；Claude：等于文本输入 + 缓存读取 + 缓存创建 |
 | `cr` | 缓存命中（读取）token 数 |
 | `cc` | 缓存创建 token 数（Claude 5分钟 TTL / 通用） |
 | `cc1h` | 缓存创建 token 数 — 1小时 TTL（Claude 专用） |
@@ -50,6 +51,8 @@ Powered by [expr-lang/expr](https://github.com/expr-lang/expr). Expressions are 
 `p` 和 `c` 是"兜底变量"——它们代表**所有没有被表达式单独定价的 token**。系统会根据表达式实际使用了哪些变量，自动从 `p` / `c` 中减去对应的子类别 token，避免重复计费。
 
 **规则：如果表达式使用了某个子类别变量，对应的 token 就从 `p` 或 `c` 中扣除；如果没使用，那些 token 就留在 `p` 或 `c` 里按基础价格计费。**
+
+> **重要：`len` 不受自动排除影响。** `len` 始终代表完整的输入上下文长度，不管表达式是否单独对缓存/图片/音频定价。因此**阶梯条件应优先使用 `len` 而非 `p`**，以避免缓存命中导致 `p` 降低而误判档位。
 
 举例说明（假设上游返回的原始数据：prompt_tokens=1000，其中包含 200 cache read、100 image）：
 
@@ -93,8 +96,8 @@ Powered by [expr-lang/expr](https://github.com/expr-lang/expr). Expressions are 
 # Simple flat pricing
 tier("base", p * 2.5 + c * 15 + cr * 0.25)
 
-# Multi-tier (Claude Sonnet style)
-p <= 200000
+# Multi-tier (Claude Sonnet style) — use len for tier conditions
+len <= 200000
   ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6)
   : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12)
 
@@ -198,6 +201,16 @@ The system normalizes `p` to mean "tokens not separately priced" by subtracting 
 Example: `p * 2.5 + c * 15 + cr * 0.25`
 - Expression uses `cr` → cache read tokens subtracted from `p`
 - Expression doesn't use `img` → image tokens stay in `p`, priced at $2.50
+
+### `len` — Context Length Variable
+
+`len` represents the total input context length, designed for tier condition evaluation such as `len <= 200000 ? ...`. Unlike `p`, `len` is never reduced by sub-category exclusion.
+
+Computation rules:
+- Non-Claude/GPT format: `len = prompt_tokens`, the raw total from upstream.
+- Claude format: `len = input_tokens + cache_read_tokens + cache_creation_tokens`, because Claude `input_tokens` is text-only.
+
+This prevents heavy cache usage from incorrectly matching a lower tier. For example, if a request has 300K total context but 250K is cached, `p` with cache subtracted may be only 50K while `len` remains 300K.
 
 ### Quota Conversion
 

@@ -1001,10 +1001,69 @@ func TestImageAudioZero(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// len variable tests — tier conditions based on context length
+// ---------------------------------------------------------------------------
+
+const lenTieredExpr = `len <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6)`
+
+func TestLen_StandardTier(t *testing.T) {
+	params := billingexpr.TokenParams{P: 80000, C: 5000, Len: 100000, CR: 20000}
+	cost, trace, err := billingexpr.RunExpr(lenTieredExpr, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := 80000*3 + 5000*15 + 20000*0.3
+	if math.Abs(cost-want) > 1e-6 {
+		t.Errorf("cost = %f, want %f", cost, want)
+	}
+	if trace.MatchedTier != "standard" {
+		t.Errorf("tier = %q, want standard", trace.MatchedTier)
+	}
+}
+
+func TestLen_LongContextTier(t *testing.T) {
+	params := billingexpr.TokenParams{P: 50000, C: 5000, Len: 300000, CR: 250000}
+	cost, trace, err := billingexpr.RunExpr(lenTieredExpr, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := 50000*6 + 5000*22.5 + 250000*0.6
+	if math.Abs(cost-want) > 1e-6 {
+		t.Errorf("cost = %f, want %f", cost, want)
+	}
+	if trace.MatchedTier != "long_context" {
+		t.Errorf("tier = %q, want long_context", trace.MatchedTier)
+	}
+}
+
+func TestLen_Boundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		len  float64
+		want string
+	}{
+		{name: "exact", len: 200000, want: "standard"},
+		{name: "plus_one", len: 200001, want: "long_context"},
+		{name: "zero_default", len: 0, want: "standard"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, trace, err := billingexpr.RunExpr(lenTieredExpr, billingexpr.TokenParams{P: 100000, C: 1000, Len: tc.len, CR: 100000})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if trace.MatchedTier != tc.want {
+				t.Errorf("tier = %q, want %s", trace.MatchedTier, tc.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Benchmarks: compile vs cached execution
 // ---------------------------------------------------------------------------
 
-const benchComplexExpr = `p <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6 + img * 3 + img_o * 30 + ai * 10 + ao * 40) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12 + img * 6 + img_o * 60 + ai * 20 + ao * 80)`
+const benchComplexExpr = `len <= 200000 ? tier("standard", p * 3 + c * 15 + cr * 0.3 + cc * 3.75 + cc1h * 6 + img * 3 + img_o * 30 + ai * 10 + ao * 40) : tier("long_context", p * 6 + c * 22.5 + cr * 0.6 + cc * 7.5 + cc1h * 12 + img * 6 + img_o * 60 + ai * 20 + ao * 80)`
 
 func BenchmarkExprCompile(b *testing.B) {
 	for i := 0; i < b.N; i++ {
@@ -1015,7 +1074,7 @@ func BenchmarkExprCompile(b *testing.B) {
 
 func BenchmarkExprRunCached(b *testing.B) {
 	billingexpr.CompileFromCache(benchComplexExpr)
-	params := billingexpr.TokenParams{P: 150000, C: 10000, CR: 30000, CC: 5000, Img: 2000, AI: 1000, AO: 500}
+	params := billingexpr.TokenParams{P: 150000, C: 10000, Len: 188000, CR: 30000, CC: 5000, Img: 2000, AI: 1000, AO: 500}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		billingexpr.RunExpr(benchComplexExpr, params)

@@ -174,17 +174,6 @@ type AmountRequest struct {
 	Amount int64 `json:"amount"`
 }
 
-var nonEpayPaymentMethodsForCallback = []string{
-	model.PaymentMethodStripe,
-	model.PaymentMethodCreem,
-	model.PaymentMethodWaffo,
-	model.PaymentMethodWaffoPancake,
-}
-
-func isNonEpayPaymentMethodForEpayCallback(paymentMethod string) bool {
-	return lo.Contains(nonEpayPaymentMethodsForCallback, paymentMethod)
-}
-
 func GetEpayClient() *epay.Client {
 	if operation_setting.PayAddress == "" || operation_setting.EpayId == "" || operation_setting.EpayKey == "" {
 		return nil
@@ -331,13 +320,14 @@ func RequestEpay(c *gin.Context) {
 		amount = dAmount.Div(dQuotaPerUnit).IntPart()
 	}
 	topUp := &model.TopUp{
-		UserId:        id,
-		Amount:        amount,
-		Money:         payMoney,
-		TradeNo:       tradeNo,
-		PaymentMethod: req.PaymentMethod,
-		CreateTime:    time.Now().Unix(),
-		Status:        common.TopUpStatusPending,
+		UserId:          id,
+		Amount:          amount,
+		Money:           payMoney,
+		TradeNo:         tradeNo,
+		PaymentMethod:   req.PaymentMethod,
+		PaymentProvider: model.PaymentProviderEpay,
+		CreateTime:      time.Now().Unix(),
+		Status:          common.TopUpStatusPending,
 	}
 	err = topUp.Insert()
 	if err != nil {
@@ -462,15 +452,18 @@ func EpayNotify(c *gin.Context) {
 			logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 回调订单不存在 trade_no=%s callback_type=%s client_ip=%s verify_info=%q", verifyInfo.ServiceTradeNo, verifyInfo.Type, c.ClientIP(), common.GetJsonString(verifyInfo)))
 			return
 		}
-		if isNonEpayPaymentMethodForEpayCallback(topUp.PaymentMethod) {
-			logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 订单支付方式不匹配 trade_no=%s order_payment_method=%s callback_type=%s client_ip=%s", verifyInfo.ServiceTradeNo, topUp.PaymentMethod, verifyInfo.Type, c.ClientIP()))
-			return
-		}
-		if topUp.PaymentMethod != verifyInfo.Type {
-			logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 订单支付方式不匹配 trade_no=%s order_payment_method=%s callback_type=%s client_ip=%s", verifyInfo.ServiceTradeNo, topUp.PaymentMethod, verifyInfo.Type, c.ClientIP()))
+		if topUp.PaymentProvider != model.PaymentProviderEpay {
+			logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 订单支付网关不匹配 trade_no=%s order_provider=%s callback_type=%s client_ip=%s", verifyInfo.ServiceTradeNo, topUp.PaymentProvider, verifyInfo.Type, c.ClientIP()))
 			return
 		}
 		if topUp.Status == common.TopUpStatusPending {
+			if topUp.PaymentMethod != verifyInfo.Type {
+				logger.LogInfo(c.Request.Context(), fmt.Sprintf("易支付 实际支付方式与订单不同 trade_no=%s order_payment_method=%s actual_type=%s client_ip=%s", verifyInfo.ServiceTradeNo, topUp.PaymentMethod, verifyInfo.Type, c.ClientIP()))
+				topUp.PaymentMethod = verifyInfo.Type
+				if err := topUp.Update(); err != nil {
+					logger.LogWarn(c.Request.Context(), fmt.Sprintf("易支付 更新实际支付方式失败 trade_no=%s user_id=%d client_ip=%s error=%q", topUp.TradeNo, topUp.UserId, c.ClientIP(), err.Error()))
+				}
+			}
 			completed, rechargeErr := model.RechargeEpay(verifyInfo.ServiceTradeNo, c.ClientIP())
 			if rechargeErr != nil {
 				logger.LogError(c.Request.Context(), fmt.Sprintf("易支付 回调处理失败 trade_no=%s user_id=%d callback_type=%s client_ip=%s error=%q", topUp.TradeNo, topUp.UserId, verifyInfo.Type, c.ClientIP(), rechargeErr.Error()))

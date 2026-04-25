@@ -706,6 +706,9 @@ func handleConfigUpdate(key, value string) bool {
 		if err := operation_setting.UpdateCacheHitMissMaskRulesByJSONString(value); err != nil {
 			common.SysError("failed to update cache hit miss mask rules: " + err.Error())
 		}
+	} else if configName == "billing_setting" {
+		InvalidatePricingCache()
+		ratio_setting.InvalidateExposedDataCache()
 	}
 
 	return true // 已处理
