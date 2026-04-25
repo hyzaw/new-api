@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/tencentyun/cos-go-sdk-v5"
@@ -46,8 +47,16 @@ var (
 	logDetailCOSClientOnce sync.Once
 	logDetailCOSClient     *cos.Client
 	logDetailCOSClientErr  error
-	logDetailCOSTimezone   = time.FixedZone("UTC+8", 8*60*60)
+	logDetailCOSLocation   = loadLogDetailCOSLocation()
 )
+
+func loadLogDetailCOSLocation() *time.Location {
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return time.FixedZone("Asia/Shanghai", 8*60*60)
+	}
+	return location
+}
 
 func logDetailExternalStorageEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("LOG_DETAIL_STORAGE_TYPE")), logDetailStorageCOS)
@@ -258,7 +267,7 @@ func buildLogDetailCOSObjectKey(basePath string, logId int, part string, hash st
 	if len(hash) > 16 {
 		hash = hash[:16]
 	}
-	now := time.Now().In(logDetailCOSTimezone)
+	now := time.Now().In(logDetailCOSLocation)
 	fileName := fmt.Sprintf("%s-%s-%d%s", part, hash, now.UnixNano(), extension)
 	return path.Join(basePath, now.Format("2006/01/02"), strconv.Itoa(logId), fileName)
 }
