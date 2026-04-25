@@ -47,7 +47,7 @@ type Log struct {
 
 type LogDetail struct {
 	Id                   int    `json:"id"`
-	LogId                int    `json:"log_id" gorm:"uniqueIndex;index"`
+	LogId                int    `json:"log_id" gorm:"uniqueIndex"`
 	RequestBodyEncoding  string `json:"request_body_encoding" gorm:"type:varchar(16);default:''"`
 	RequestBody          string `json:"request_body" gorm:"type:text"`
 	ResponseBodyEncoding string `json:"response_body_encoding" gorm:"type:varchar(16);default:''"`
