@@ -225,18 +225,7 @@ func validateTopupAmount(amount int64, minTopup int64) string {
 	if amount < minTopup {
 		return fmt.Sprintf("充值数量不能小于 %d", minTopup)
 	}
-
-	paymentSetting := operation_setting.GetPaymentSetting()
-	discount, hasDiscount := paymentSetting.AmountDiscount[int(amount)]
-	if !hasDiscount || discount <= 0 || len(paymentSetting.AmountOptions) == 0 {
-		return ""
-	}
-
-	if isTopupAmountOption(amount, paymentSetting.AmountOptions) {
-		return ""
-	}
-
-	return "当前充值方案已变更，请刷新页面后重试"
+	return ""
 }
 
 func isTopupAmountOption(amount int64, amountOptions []int) bool {

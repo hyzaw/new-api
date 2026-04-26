@@ -36,12 +36,13 @@ func TestValidateTopupAmount(t *testing.T) {
 		require.Empty(t, validateTopupAmount(88, 10))
 	})
 
-	t.Run("rejects stale discounted amount when preset list changed", func(t *testing.T) {
+	t.Run("allows stale discounted amount and falls back to no discount", func(t *testing.T) {
 		operation_setting.GetPaymentSetting().AmountOptions = []int{20, 50, 100}
 		operation_setting.GetPaymentSetting().AmountDiscount = map[int]float64{30: 0.8, 50: 0.9}
 
 		require.Empty(t, validateTopupAmount(50, 10))
-		require.Equal(t, "当前充值方案已变更，请刷新页面后重试", validateTopupAmount(30, 10))
+		require.Empty(t, validateTopupAmount(30, 10))
+		require.Equal(t, 1.0, getTopupDiscount(30))
 	})
 }
 
