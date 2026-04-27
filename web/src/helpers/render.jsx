@@ -2281,6 +2281,12 @@ export function renderTieredModelPrice(opts) {
     expr_b64: exprB64,
     matched_tier: matchedTier,
     group_ratio: groupRatio,
+    user_group_ratio,
+    actual_quota_before_group: actualQuotaBeforeGroup,
+    actual_quota_after_group: actualQuotaAfterGroup,
+    actual_quota_before_request_multiplier_group: actualQuotaBeforeRequestMultiplierGroup,
+    request_multiplier: requestMultiplier,
+    service_tier: serviceTier,
     cache_tokens: cacheTokens = 0,
     cache_creation_tokens: cacheCreationTokens = 0,
     cache_creation_tokens_5m: cacheCreationTokens5m = 0,
@@ -2295,17 +2301,47 @@ export function renderTieredModelPrice(opts) {
 
   const tier = tiers.find((t) => t.label === matchedTier) || tiers[0];
   const { symbol, rate } = getCurrencyConfig();
-  const gr = groupRatio || 1;
+  const actualBefore = Number(actualQuotaBeforeGroup);
+  const actualAfter = Number(actualQuotaAfterGroup);
+  const beforeRequestMultiplier = Number(actualQuotaBeforeRequestMultiplierGroup);
+  const requestMultiplierValue = Number(requestMultiplier);
+  const hasActualQuota = Number.isFinite(actualBefore) && Number.isFinite(actualAfter);
+  const hasRequestMultiplier =
+    Number.isFinite(requestMultiplierValue) &&
+    Math.abs(requestMultiplierValue - 1) > 0.000001;
 
   const priceLines = BILLING_PRICING_VARS.map((v) => [v.field, v.label]);
 
   const lines = [
     buildBillingText('命中档位：{{tier}}', { tier: matchedTier || tier.label }),
+    getGroupRatioText(groupRatio, user_group_ratio),
+    serviceTier
+      ? buildBillingText('请求模式：{{mode}}', { mode: serviceTier })
+      : null,
+    hasRequestMultiplier
+      ? buildBillingText('请求条件倍率：{{ratio}}x', {
+          ratio: formatRatioValue(requestMultiplierValue),
+        })
+      : null,
     ...priceLines
       .filter(([field]) => tier[field] > 0)
       .map(([field, label]) =>
         buildBillingPriceText(`${label}：{{symbol}}{{price}} / 1M tokens`, { symbol, usdAmount: tier[field], rate }),
       ),
+    hasRequestMultiplier && Number.isFinite(beforeRequestMultiplier)
+      ? buildBillingText('请求倍率前扣费：{{amount}}', {
+          amount: renderQuota(beforeRequestMultiplier, 6),
+        })
+      : null,
+    hasActualQuota
+      ? buildBillingText('折前扣费：{{amount}}，折后扣费：{{finalAmount}}', {
+          amount: renderQuota(actualBefore, 6),
+          finalAmount: renderQuota(actualAfter, 6),
+        })
+      : null,
+    hasActualQuota
+      ? buildBillingText('折后扣费已包含请求条件倍率与分组倍率')
+      : null,
   ];
 
   return renderBillingArticle(lines);

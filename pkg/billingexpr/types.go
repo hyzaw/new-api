@@ -53,10 +53,12 @@ type BillingSnapshot struct {
 
 // TieredResult holds everything needed after running tiered settlement.
 type TieredResult struct {
-	ActualQuotaBeforeGroup float64 `json:"actual_quota_before_group"`
-	ActualQuotaAfterGroup  int     `json:"actual_quota_after_group"`
-	MatchedTier            string  `json:"matched_tier"`
-	CrossedTier            bool    `json:"crossed_tier"`
+	ActualQuotaBeforeGroup                  float64 `json:"actual_quota_before_group"`
+	ActualQuotaAfterGroup                   int     `json:"actual_quota_after_group"`
+	ActualQuotaBeforeRequestMultiplierGroup float64 `json:"actual_quota_before_request_multiplier_group"`
+	RequestMultiplier                       float64 `json:"request_multiplier"`
+	MatchedTier                             string  `json:"matched_tier"`
+	CrossedTier                             bool    `json:"crossed_tier"`
 }
 
 // ExprHashString returns the SHA-256 hex digest of an expression string.

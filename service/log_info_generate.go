@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 func appendRequestPath(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {
@@ -303,7 +304,19 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	}
 	other["billing_mode"] = "tiered_expr"
 	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
+	other["estimated_quota_before_group"] = snap.EstimatedQuotaBeforeGroup
+	other["estimated_quota_after_group"] = snap.EstimatedQuotaAfterGroup
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier
+		other["actual_quota_before_group"] = result.ActualQuotaBeforeGroup
+		other["actual_quota_after_group"] = result.ActualQuotaAfterGroup
+		other["actual_quota_before_request_multiplier_group"] = result.ActualQuotaBeforeRequestMultiplierGroup
+		other["request_multiplier"] = result.RequestMultiplier
+		other["crossed_tier"] = result.CrossedTier
+	}
+	if relayInfo.BillingRequestInput != nil && len(relayInfo.BillingRequestInput.Body) > 0 {
+		if serviceTier := gjson.GetBytes(relayInfo.BillingRequestInput.Body, "service_tier"); serviceTier.Exists() {
+			other["service_tier"] = serviceTier.String()
+		}
 	}
 }
