@@ -690,6 +690,7 @@ func completeAlipayF2FOrder(tradeNo string, queryResp *alipayTradeQueryResponse,
 	if err := model.CompleteSubscriptionOrder(tradeNo, payload, model.PaymentProviderAlipayF2F, paymentMethodAlipayF2F); err != nil {
 		return false, err
 	}
+	service.NotifySubscriptionSuccessAsync(tradeNo, callerIP, "subscription_alipay_f2f")
 	return true, nil
 }
 

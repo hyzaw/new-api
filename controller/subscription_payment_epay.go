@@ -161,6 +161,7 @@ func SubscriptionEpayNotify(c *gin.Context) {
 		_, _ = c.Writer.Write([]byte("fail"))
 		return
 	}
+	service.NotifySubscriptionSuccessAsync(verifyInfo.ServiceTradeNo, c.ClientIP(), "subscription_epay")
 
 	_, _ = c.Writer.Write([]byte("success"))
 }
@@ -210,6 +211,7 @@ func SubscriptionEpayReturn(c *gin.Context) {
 			c.Redirect(http.StatusFound, system_setting.ServerAddress+"/console/topup?pay=fail")
 			return
 		}
+		service.NotifySubscriptionSuccessAsync(verifyInfo.ServiceTradeNo, c.ClientIP(), "subscription_epay")
 		c.Redirect(http.StatusFound, system_setting.ServerAddress+"/console/topup?pay=success")
 		return
 	}

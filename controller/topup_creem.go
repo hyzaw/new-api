@@ -304,6 +304,7 @@ func handleCheckoutCompleted(c *gin.Context, event *CreemWebhookEvent) {
 	LockOrder(referenceId)
 	defer UnlockOrder(referenceId)
 	if err := model.CompleteSubscriptionOrder(referenceId, common.GetJsonString(event), model.PaymentProviderCreem, ""); err == nil {
+		service.NotifySubscriptionSuccessAsync(referenceId, c.ClientIP(), "subscription_creem")
 		logger.LogInfo(c.Request.Context(), fmt.Sprintf("Creem 订阅订单处理成功 trade_no=%s creem_order_id=%s", referenceId, event.Object.Order.Id))
 		c.Status(http.StatusOK)
 		return

@@ -347,6 +347,34 @@ func calcNextResetTime(base time.Time, plan *SubscriptionPlan, endUnix int64) in
 	return next.Unix()
 }
 
+func CalculateSubscriptionTotalQuota(plan *SubscriptionPlan, start time.Time) int64 {
+	if plan == nil || plan.TotalAmount <= 0 {
+		return 0
+	}
+	if start.IsZero() {
+		start = time.Now()
+	}
+	endUnix, err := calcPlanEndTime(start, plan)
+	if err != nil || endUnix <= start.Unix() {
+		return plan.TotalAmount
+	}
+	if NormalizeResetPeriod(plan.QuotaResetPeriod) == SubscriptionResetNever {
+		return plan.TotalAmount
+	}
+
+	periods := int64(1)
+	base := start
+	for periods < 10000 {
+		nextUnix := calcNextResetTime(base, plan, endUnix)
+		if nextUnix <= 0 || nextUnix >= endUnix {
+			break
+		}
+		periods++
+		base = time.Unix(nextUnix, 0)
+	}
+	return plan.TotalAmount * periods
+}
+
 func GetSubscriptionPlanById(id int) (*SubscriptionPlan, error) {
 	return getSubscriptionPlanByIdTx(nil, id)
 }
