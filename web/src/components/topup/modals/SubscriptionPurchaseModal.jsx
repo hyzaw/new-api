@@ -34,6 +34,7 @@ import { IconCreditCard } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../../helpers';
 import { getCurrencyConfig } from '../../../helpers/render';
 import {
+  calculateSubscriptionTotalQuota,
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
 } from '../../../helpers/subscriptionFormat';
@@ -59,6 +60,7 @@ const SubscriptionPurchaseModal = ({
 }) => {
   const plan = selectedPlan?.plan;
   const totalAmount = Number(plan?.total_amount || 0);
+  const calculatedTotalAmount = calculateSubscriptionTotalQuota(plan);
   const { symbol, rate } = getCurrencyConfig();
   const price = plan ? Number(plan.price_amount || 0) : 0;
   const convertedPrice = price * rate;
@@ -68,7 +70,7 @@ const SubscriptionPurchaseModal = ({
   // 只有当管理员开启支付网关 AND 套餐配置了对应的支付ID时才显示
   const hasStripe = enableStripeTopUp && !!plan?.stripe_price_id;
   const hasCreem = enableCreemTopUp && !!plan?.creem_product_id;
-  const hasEpay = enableOnlineTopUp && epayMethods.length > 0;
+  const hasEpay = epayMethods.length > 0;
   const hasAnyPayment = hasStripe || hasCreem || hasEpay;
   const purchaseLimit = Number(purchaseLimitInfo?.limit || 0);
   const purchaseCount = Number(purchaseLimitInfo?.count || 0);
@@ -129,22 +131,40 @@ const SubscriptionPurchaseModal = ({
               )}
               <div className='flex justify-between items-center'>
                 <Text strong className='text-slate-700 dark:text-slate-200'>
-                  {t('总额度')}：
+                  {t('周期额度')}：
                 </Text>
                 <div className='flex items-center'>
                   <Package size={14} className='mr-1 text-slate-500' />
                   {totalAmount > 0 ? (
                     <Tooltip content={`${t('原生额度')}：${totalAmount}`}>
-                      <Text className='text-slate-900 dark:text-slate-100'>
+                      <Text strong className='text-slate-900 dark:text-slate-100'>
                         {renderQuota(totalAmount)}
                       </Text>
                     </Tooltip>
                   ) : (
-                    <Text className='text-slate-900 dark:text-slate-100'>
+                    <Text strong className='text-slate-900 dark:text-slate-100'>
                       {t('不限')}
                     </Text>
                   )}
                 </div>
+              </div>
+              <div className='flex justify-between items-center'>
+                <Text strong className='text-slate-700 dark:text-slate-200'>
+                  {t('总额度')}：
+                </Text>
+                <Tooltip
+                  content={
+                    totalAmount > 0
+                      ? `${t('按有效期和重置周期计算')}：${calculatedTotalAmount}`
+                      : ''
+                  }
+                >
+                  <Text strong className='text-slate-900 dark:text-slate-100'>
+                    {calculatedTotalAmount > 0
+                      ? renderQuota(calculatedTotalAmount)
+                      : t('不限')}
+                  </Text>
+                </Tooltip>
               </div>
               {plan?.upgrade_group ? (
                 <div className='flex justify-between items-center'>
@@ -185,6 +205,33 @@ const SubscriptionPurchaseModal = ({
                 {t('选择支付方式')}：
               </Text>
 
+              {/* 支付宝 / 易支付优先 */}
+              {hasEpay && (
+                <div className='flex gap-2'>
+                  <Select
+                    value={selectedEpayMethod}
+                    onChange={setSelectedEpayMethod}
+                    style={{ flex: 1 }}
+                    size='default'
+                    placeholder={t('选择支付方式')}
+                    optionList={epayMethods.map((m) => ({
+                      value: m.type,
+                      label: m.name || m.type,
+                    }))}
+                    disabled={purchaseLimitReached}
+                  />
+                  <Button
+                    theme='solid'
+                    type='primary'
+                    onClick={onPayEpay}
+                    loading={paying}
+                    disabled={!selectedEpayMethod || purchaseLimitReached}
+                  >
+                    {t('支付')}
+                  </Button>
+                </div>
+              )}
+
               {/* Stripe / Creem */}
               {(hasStripe || hasCreem) && (
                 <div className='flex gap-2'>
@@ -212,33 +259,6 @@ const SubscriptionPurchaseModal = ({
                       Creem
                     </Button>
                   )}
-                </div>
-              )}
-
-              {/* 易支付 */}
-              {hasEpay && (
-                <div className='flex gap-2'>
-                  <Select
-                    value={selectedEpayMethod}
-                    onChange={setSelectedEpayMethod}
-                    style={{ flex: 1 }}
-                    size='default'
-                    placeholder={t('选择支付方式')}
-                    optionList={epayMethods.map((m) => ({
-                      value: m.type,
-                      label: m.name || m.type,
-                    }))}
-                    disabled={purchaseLimitReached}
-                  />
-                  <Button
-                    theme='solid'
-                    type='primary'
-                    onClick={onPayEpay}
-                    loading={paying}
-                    disabled={!selectedEpayMethod || purchaseLimitReached}
-                  >
-                    {t('支付')}
-                  </Button>
                 </div>
               )}
             </div>

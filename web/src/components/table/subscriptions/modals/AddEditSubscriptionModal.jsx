@@ -39,11 +39,12 @@ import {
   IconSave,
 } from '@douyinfe/semi-icons';
 import { Clock, RefreshCw } from 'lucide-react';
-import { API, showError, showSuccess } from '../../../../helpers';
+import { API, renderQuota, showError, showSuccess } from '../../../../helpers';
 import {
   quotaToDisplayAmount,
   displayAmountToQuota,
 } from '../../../../helpers/quota';
+import { calculateSubscriptionTotalQuota } from '../../../../helpers/subscriptionFormat';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 
 const { Text, Title } = Typography;
@@ -63,6 +64,17 @@ const resetPeriodOptions = [
   { value: 'monthly', label: '每月' },
   { value: 'custom', label: '自定义(秒)' },
 ];
+
+function getCalculatedTotalQuota(values) {
+  return calculateSubscriptionTotalQuota({
+    duration_unit: values?.duration_unit || 'month',
+    duration_value: Number(values?.duration_value || 1),
+    custom_seconds: Number(values?.custom_seconds || 0),
+    quota_reset_period: values?.quota_reset_period || 'never',
+    quota_reset_custom_seconds: Number(values?.quota_reset_custom_seconds || 0),
+    total_amount: displayAmountToQuota(values?.total_amount || 0),
+  });
+}
 
 const AddEditSubscriptionModal = ({
   visible,
@@ -310,14 +322,25 @@ const AddEditSubscriptionModal = ({
                     <Col span={12}>
                       <Form.InputNumber
                         field='total_amount'
-                        label={t('总额度')}
+                        label={t('周期额度')}
                         required
                         min={0}
                         precision={2}
-                        rules={[{ required: true, message: t('请输入总额度') }]}
-                        extraText={`${t('0 表示不限')} · ${t('原生额度')}：${displayAmountToQuota(
-                          values.total_amount,
-                        )}`}
+                        rules={[
+                          { required: true, message: t('请输入周期额度') },
+                        ]}
+                        extraText={
+                          <span>
+                            {t('0 表示不限')} · {t('原生额度')}：
+                            {displayAmountToQuota(values.total_amount)} ·{' '}
+                            <strong>
+                              {t('总额度')}：
+                              {getCalculatedTotalQuota(values) > 0
+                                ? renderQuota(getCalculatedTotalQuota(values))
+                                : t('不限')}
+                            </strong>
+                          </span>
+                        }
                         style={{ width: '100%' }}
                       />
                     </Col>

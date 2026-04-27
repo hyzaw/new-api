@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Badge,
   Button,
@@ -34,23 +34,50 @@ import { API, showError, showSuccess, renderQuota } from '../../helpers';
 import { getCurrencyConfig } from '../../helpers/render';
 import { RefreshCw, Sparkles } from 'lucide-react';
 import SubscriptionPurchaseModal from './modals/SubscriptionPurchaseModal';
+import AlipayQRCodeModal from './modals/AlipayQRCodeModal';
 import {
+  calculateSubscriptionTotalQuota,
   formatSubscriptionDuration,
   formatSubscriptionResetPeriod,
 } from '../../helpers/subscriptionFormat';
 
 const { Text } = Typography;
 
-// 过滤易支付方式
-function getEpayMethods(payMethods = []) {
-  return (payMethods || []).filter(
-    (m) =>
-      m?.type &&
-      m.type !== 'stripe' &&
-      m.type !== 'creem' &&
-      m.type !== 'waffo' &&
-      m.type !== 'alipay_f2f',
-  );
+const payMethodPriority = {
+  alipay: 0,
+  alipay_f2f: 1,
+  wxpay: 2,
+  usdt: 3,
+};
+
+// 过滤订阅可用的支付方式，并优先展示支付宝。
+function getEpayMethods(
+  payMethods = [],
+  enableOnlineTopUp = false,
+  enableAlipayF2FTopUp = false,
+) {
+  return (payMethods || [])
+    .filter((m) => {
+      if (!m?.type) return false;
+      if (
+        m.type === 'stripe' ||
+        m.type === 'creem' ||
+        m.type === 'waffo' ||
+        m.type === 'waffo_pancake'
+      ) {
+        return false;
+      }
+      if (m.type === 'alipay_f2f') {
+        return enableAlipayF2FTopUp;
+      }
+      return enableOnlineTopUp;
+    })
+    .sort((a, b) => {
+      const left = payMethodPriority[a.type] ?? 100;
+      const right = payMethodPriority[b.type] ?? 100;
+      if (left !== right) return left - right;
+      return String(a.name || a.type).localeCompare(String(b.name || b.type));
+    });
 }
 
 // 提交易支付表单
@@ -82,6 +109,7 @@ const SubscriptionPlansCard = ({
   enableOnlineTopUp = false,
   enableStripeTopUp = false,
   enableCreemTopUp = false,
+  enableAlipayF2FTopUp = false,
   billingPreference,
   onChangeBillingPreference,
   activeSubscriptions = [],
@@ -94,8 +122,14 @@ const SubscriptionPlansCard = ({
   const [paying, setPaying] = useState(false);
   const [selectedEpayMethod, setSelectedEpayMethod] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [alipayQRVisible, setAlipayQRVisible] = useState(false);
+  const [alipayQRData, setAlipayQRData] = useState(null);
+  const [alipayPolling, setAlipayPolling] = useState(false);
 
-  const epayMethods = useMemo(() => getEpayMethods(payMethods), [payMethods]);
+  const epayMethods = useMemo(
+    () => getEpayMethods(payMethods, enableOnlineTopUp, enableAlipayF2FTopUp),
+    [payMethods, enableOnlineTopUp, enableAlipayF2FTopUp],
+  );
 
   const openBuy = (p) => {
     setSelectedPlan(p);
@@ -107,6 +141,12 @@ const SubscriptionPlansCard = ({
     setOpen(false);
     setSelectedPlan(null);
     setPaying(false);
+  };
+
+  const closeAlipayQRModal = () => {
+    setAlipayQRVisible(false);
+    setAlipayQRData(null);
+    setAlipayPolling(false);
   };
 
   const handleRefresh = async () => {
@@ -181,6 +221,25 @@ const SubscriptionPlansCard = ({
     }
     setPaying(true);
     try {
+      if (selectedEpayMethod === 'alipay_f2f') {
+        const res = await API.post('/api/subscription/alipay_f2f/pay', {
+          plan_id: selectedPlan.plan.id,
+        });
+        if (res.data?.message === 'success') {
+          setAlipayQRData(res.data.data);
+          setAlipayQRVisible(true);
+          setAlipayPolling(true);
+          closeBuy();
+        } else {
+          const errorMsg =
+            typeof res.data?.data === 'string'
+              ? res.data.data
+              : res.data?.message || t('支付失败');
+          showError(errorMsg);
+        }
+        return;
+      }
+
       const res = await API.post('/api/subscription/epay/pay', {
         plan_id: selectedPlan.plan.id,
         payment_method: selectedEpayMethod,
@@ -202,6 +261,44 @@ const SubscriptionPlansCard = ({
       setPaying(false);
     }
   };
+
+  useEffect(() => {
+    if (!alipayQRVisible || !alipayQRData?.trade_no) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await API.get(
+          `/api/subscription/alipay_f2f/status?trade_no=${encodeURIComponent(alipayQRData.trade_no)}`,
+        );
+        if (!res.data?.success || cancelled) {
+          return;
+        }
+        const data = res.data.data || {};
+        if (data.status === 'success' || data.paid) {
+          setAlipayPolling(false);
+          setAlipayQRVisible(false);
+          showSuccess(t('支付宝支付成功'));
+          reloadSubscriptionSelf?.();
+        } else if (data.status === 'failed' || data.status === 'expired') {
+          setAlipayPolling(false);
+          setAlipayQRVisible(false);
+          showError(t('支付宝订单已关闭或支付失败'));
+        }
+      } catch (error) {
+        // ignore transient polling errors
+      }
+    };
+
+    poll();
+    const timer = window.setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [alipayQRVisible, alipayQRData?.trade_no]);
 
   // 当前订阅信息 - 支持多个订阅
   const hasActiveSubscription = activeSubscriptions.length > 0;
@@ -233,6 +330,16 @@ const SubscriptionPlansCard = ({
       const plan = p?.plan;
       if (!plan?.id) return;
       map.set(plan.id, plan.title || '');
+    });
+    return map;
+  }, [plans]);
+
+  const planMap = useMemo(() => {
+    const map = new Map();
+    (plans || []).forEach((p) => {
+      const plan = p?.plan;
+      if (!plan?.id) return;
+      map.set(plan.id, plan);
     });
     return map;
   }, [plans]);
@@ -394,6 +501,10 @@ const SubscriptionPlansCard = ({
                         : 0;
                     const planTitle =
                       planTitleMap.get(subscription?.plan_id) || '';
+                    const plan = planMap.get(subscription?.plan_id);
+                    const calculatedTotalAmount = plan
+                      ? calculateSubscriptionTotalQuota(plan)
+                      : totalAmount;
                     const remainDays = getRemainingDays(sub);
                     const usagePercent = getUsagePercent(sub);
                     const now = Date.now() / 1000;
@@ -456,12 +567,12 @@ const SubscriptionPlansCard = ({
                           </div>
                         )}
                         <div className='text-xs text-gray-500 mb-2'>
-                          {t('总额度')}:{' '}
+                          {t('周期额度')}:{' '}
                           {totalAmount > 0 ? (
                             <Tooltip
                               content={`${t('原生额度')}：${usedAmount}/${totalAmount} · ${t('剩余')} ${remainAmount}`}
                             >
-                              <span>
+                              <span className='font-semibold text-gray-700'>
                                 {renderQuota(usedAmount)}/
                                 {renderQuota(totalAmount)} · {t('剩余')}{' '}
                                 {renderQuota(remainAmount)}
@@ -476,6 +587,14 @@ const SubscriptionPlansCard = ({
                             </span>
                           )}
                         </div>
+                        {calculatedTotalAmount > totalAmount && (
+                          <div className='text-xs text-gray-500 mb-2'>
+                            {t('总额度')}:{' '}
+                            <span className='font-semibold text-gray-700'>
+                              {renderQuota(calculatedTotalAmount)}
+                            </span>
+                          </div>
+                        )}
                         {!isLast && <Divider margin={12} />}
                       </div>
                     );
@@ -504,9 +623,15 @@ const SubscriptionPlansCard = ({
                 const isPopular = index === 0 && plans.length > 1;
                 const limit = Number(plan?.max_purchase_per_user || 0);
                 const limitLabel = limit > 0 ? `${t('限购')} ${limit}` : null;
-                const totalLabel =
+                const calculatedTotalAmount =
+                  calculateSubscriptionTotalQuota(plan);
+                const periodQuotaLabel =
                   totalAmount > 0
-                    ? `${t('总额度')}: ${renderQuota(totalAmount)}`
+                    ? `${t('周期额度')}: ${renderQuota(totalAmount)}`
+                    : `${t('周期额度')}: ${t('不限')}`;
+                const totalLabel =
+                  calculatedTotalAmount > 0
+                    ? `${t('总额度')}: ${renderQuota(calculatedTotalAmount)}`
                     : `${t('总额度')}: ${t('不限')}`;
                 const upgradeLabel = plan?.upgrade_group
                   ? `${t('升级分组')}: ${plan.upgrade_group}`
@@ -522,10 +647,19 @@ const SubscriptionPlansCard = ({
                   resetLabel ? { label: resetLabel } : null,
                   totalAmount > 0
                     ? {
-                        label: totalLabel,
+                        label: periodQuotaLabel,
                         tooltip: `${t('原生额度')}：${totalAmount}`,
+                        strong: true,
                       }
-                    : { label: totalLabel },
+                    : { label: periodQuotaLabel, strong: true },
+                  {
+                    label: totalLabel,
+                    tooltip:
+                      totalAmount > 0
+                        ? `${t('按有效期和重置周期计算')}：${calculatedTotalAmount}`
+                        : null,
+                    strong: true,
+                  },
                   limitLabel ? { label: limitLabel } : null,
                   upgradeLabel ? { label: upgradeLabel } : null,
                 ].filter(Boolean);
@@ -587,7 +721,15 @@ const SubscriptionPlansCard = ({
                           const content = (
                             <div className='flex items-center gap-2 text-xs text-gray-500'>
                               <Badge dot type='tertiary' />
-                              <span>{item.label}</span>
+                              <span
+                                className={
+                                  item.strong
+                                    ? 'font-semibold text-gray-700'
+                                    : ''
+                                }
+                              >
+                                {item.label}
+                              </span>
                             </div>
                           );
                           if (!item.tooltip) {
@@ -689,6 +831,16 @@ const SubscriptionPlansCard = ({
         onPayStripe={payStripe}
         onPayCreem={payCreem}
         onPayEpay={payEpay}
+      />
+
+      <AlipayQRCodeModal
+        t={t}
+        visible={alipayQRVisible}
+        onCancel={closeAlipayQRModal}
+        qrCode={alipayQRData?.qr_code}
+        tradeNo={alipayQRData?.trade_no}
+        amount={alipayQRData?.amount}
+        polling={alipayPolling}
       />
     </>
   );

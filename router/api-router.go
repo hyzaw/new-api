@@ -163,6 +163,8 @@ func SetApiRouter(router *gin.Engine) {
 			subscriptionRoute.GET("/self", controller.GetSubscriptionSelf)
 			subscriptionRoute.PUT("/self/preference", controller.UpdateSubscriptionPreference)
 			subscriptionRoute.POST("/epay/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestEpay)
+			subscriptionRoute.POST("/alipay_f2f/pay", middleware.CriticalRateLimit(), middleware.AlipayF2FCreateOrderRateLimit(), controller.SubscriptionRequestAlipayF2F)
+			subscriptionRoute.GET("/alipay_f2f/status", controller.SubscriptionAlipayF2FStatus)
 			subscriptionRoute.POST("/stripe/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestStripePay)
 			subscriptionRoute.POST("/creem/pay", middleware.CriticalRateLimit(), controller.SubscriptionRequestCreemPay)
 		}

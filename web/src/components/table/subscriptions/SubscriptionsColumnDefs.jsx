@@ -31,6 +31,7 @@ import {
 } from '@douyinfe/semi-ui';
 import { renderQuota } from '../../../helpers';
 import { convertUSDToCurrency } from '../../../helpers/render';
+import { calculateSubscriptionTotalQuota } from '../../../helpers/subscriptionFormat';
 
 const { Text } = Typography;
 
@@ -81,14 +82,28 @@ const renderPlanTitle = (text, record, t) => {
         <Text strong style={{ color: 'var(--semi-color-success)' }}>
           {convertUSDToCurrency(Number(plan?.price_amount || 0), 2)}
         </Text>
-        <Text type='tertiary'>{t('总额度')}</Text>
+        <Text type='tertiary'>{t('周期额度')}</Text>
         {plan?.total_amount > 0 ? (
           <Tooltip content={`${t('原生额度')}：${plan.total_amount}`}>
-            <Text>{renderQuota(plan.total_amount)}</Text>
+            <Text strong>{renderQuota(plan.total_amount)}</Text>
           </Tooltip>
         ) : (
-          <Text>{t('不限')}</Text>
+          <Text strong>{t('不限')}</Text>
         )}
+        <Text type='tertiary'>{t('总额度')}</Text>
+        <Tooltip
+          content={
+            plan?.total_amount > 0
+              ? `${t('按有效期和重置周期计算')}：${calculateSubscriptionTotalQuota(plan)}`
+              : ''
+          }
+        >
+          <Text strong>
+            {plan?.total_amount > 0
+              ? renderQuota(calculateSubscriptionTotalQuota(plan))
+              : t('不限')}
+          </Text>
+        </Tooltip>
         <Text type='tertiary'>{t('升级分组')}</Text>
         <Text>{plan?.upgrade_group ? plan.upgrade_group : t('不升级')}</Text>
         <Text type='tertiary'>{t('购买上限')}</Text>
@@ -174,10 +189,26 @@ const renderTotalAmount = (text, record, t) => {
     <Text type={total > 0 ? 'secondary' : 'tertiary'}>
       {total > 0 ? (
         <Tooltip content={`${t('原生额度')}：${total}`}>
-          <span>{renderQuota(total)}</span>
+          <span className='font-semibold'>{renderQuota(total)}</span>
         </Tooltip>
       ) : (
-        t('不限')
+        <span className='font-semibold'>{t('不限')}</span>
+      )}
+    </Text>
+  );
+};
+
+const renderCalculatedTotalAmount = (text, record, t) => {
+  const plan = record?.plan;
+  const total = calculateSubscriptionTotalQuota(plan);
+  return (
+    <Text type={total > 0 ? 'secondary' : 'tertiary'}>
+      {total > 0 ? (
+        <Tooltip content={`${t('按有效期和重置周期计算')}：${total}`}>
+          <span className='font-semibold'>{renderQuota(total)}</span>
+        </Tooltip>
+      ) : (
+        <span className='font-semibold'>{t('不限')}</span>
       )}
     </Text>
   );
@@ -336,9 +367,14 @@ export const getSubscriptionsColumns = ({
         renderPaymentConfig(text, record, t, enableEpay),
     },
     {
-      title: t('总额度'),
+      title: t('周期额度'),
       width: 100,
       render: (text, record) => renderTotalAmount(text, record, t),
+    },
+    {
+      title: t('总额度'),
+      width: 100,
+      render: (text, record) => renderCalculatedTotalAmount(text, record, t),
     },
     {
       title: t('升级分组'),

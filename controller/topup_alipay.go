@@ -36,6 +36,10 @@ type AlipayF2FPayRequest struct {
 	Amount int64 `json:"amount"`
 }
 
+type SubscriptionAlipayF2FPayRequest struct {
+	PlanId int `json:"plan_id"`
+}
+
 type alipayTradePrecreateRequest struct {
 	OutTradeNo     string            `json:"out_trade_no"`
 	TotalAmount    string            `json:"total_amount"`
@@ -420,6 +424,24 @@ func createAlipayF2FOrder(id int, amount int64, payMoney float64) (*model.TopUp,
 	return topUp, topUp.Insert()
 }
 
+func createSubscriptionAlipayF2FOrder(userId int, plan *model.SubscriptionPlan) (*model.SubscriptionOrder, error) {
+	if plan == nil {
+		return nil, errors.New("套餐不存在")
+	}
+	tradeNo := fmt.Sprintf("SUBALIPAYF2F_%d_%d", userId, time.Now().UnixNano())
+	order := &model.SubscriptionOrder{
+		UserId:          userId,
+		PlanId:          plan.Id,
+		Money:           plan.PriceAmount,
+		TradeNo:         tradeNo,
+		PaymentMethod:   paymentMethodAlipayF2F,
+		PaymentProvider: model.PaymentProviderAlipayF2F,
+		CreateTime:      time.Now().Unix(),
+		Status:          common.TopUpStatusPending,
+	}
+	return order, order.Insert()
+}
+
 func RequestAlipayF2FPay(c *gin.Context) {
 	if !isAlipayF2FEnabled() {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "支付宝当面付未启用"})
@@ -511,6 +533,105 @@ func RequestAlipayF2FPay(c *gin.Context) {
 	})
 }
 
+func SubscriptionRequestAlipayF2F(c *gin.Context) {
+	if !isAlipayF2FEnabled() {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "支付宝当面付未启用"})
+		return
+	}
+
+	var req SubscriptionAlipayF2FPayRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.PlanId <= 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "参数错误"})
+		return
+	}
+
+	plan, err := model.GetSubscriptionPlanById(req.PlanId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !plan.Enabled {
+		common.ApiErrorMsg(c, "套餐未启用")
+		return
+	}
+	if plan.PriceAmount < 0.01 {
+		common.ApiErrorMsg(c, "套餐金额过低")
+		return
+	}
+
+	userId := c.GetInt("id")
+	if plan.MaxPurchasePerUser > 0 {
+		count, err := model.CountUserSubscriptionsByPlan(userId, plan.Id)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if count >= int64(plan.MaxPurchasePerUser) {
+			common.ApiErrorMsg(c, "已达到该套餐购买上限")
+			return
+		}
+	}
+
+	order, err := createSubscriptionAlipayF2FOrder(userId, plan)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "创建订单失败"})
+		return
+	}
+
+	subject := fmt.Sprintf("订阅套餐 %s", plan.Title)
+	precreateReq := alipayTradePrecreateRequest{
+		OutTradeNo:  order.TradeNo,
+		TotalAmount: strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),
+		Subject:     subject,
+		ProductCode: common.GetStringIfEmpty(setting.AlipayProductCode, setting.AlipayDefaultProductCode),
+		SellerID:    setting.AlipaySellerID,
+		Body:        subject,
+		BusinessParams: map[string]string{
+			"mc_create_trade_ip": c.ClientIP(),
+		},
+	}
+
+	body, err := doAlipayGatewayRequest("alipay.trade.precreate", precreateReq, getAlipayNotifyURL())
+	if err != nil {
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderAlipayF2F)
+		log.Printf("支付宝订阅预下单失败: tradeNo=%s err=%v", order.TradeNo, err)
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "支付宝预下单失败"})
+		return
+	}
+
+	var precreateResp alipayTradePrecreateResponse
+	if err := parseAlipayMethodResponse(body, "alipay_trade_precreate_response", &precreateResp); err != nil {
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderAlipayF2F)
+		log.Printf("解析支付宝订阅预下单响应失败: %v, body=%s", err, common.MaskSensitiveInfo(string(body)))
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "支付宝响应解析失败"})
+		return
+	}
+	if precreateResp.Code != "10000" || precreateResp.QRCode == "" {
+		_ = model.ExpireSubscriptionOrder(order.TradeNo, model.PaymentProviderAlipayF2F)
+		errMsg := precreateResp.SubMsg
+		if errMsg == "" {
+			errMsg = precreateResp.Msg
+		}
+		if errMsg == "" {
+			errMsg = "支付宝预下单失败"
+		}
+		log.Printf("支付宝订阅预下单业务失败: tradeNo=%s code=%s subCode=%s msg=%s subMsg=%s",
+			order.TradeNo, precreateResp.Code, precreateResp.SubCode, precreateResp.Msg, precreateResp.SubMsg)
+		c.JSON(http.StatusOK, gin.H{"message": "error", "data": errMsg})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "success",
+		"data": gin.H{
+			"trade_no":   order.TradeNo,
+			"qr_code":    precreateResp.QRCode,
+			"expires_in": 7200,
+			"amount":     strconv.FormatFloat(order.Money, 'f', 2, 64),
+		},
+	})
+}
+
 func queryAlipayTrade(outTradeNo string) (*alipayTradeQueryResponse, error) {
 	queryReq := alipayTradeQueryRequest{OutTradeNo: outTradeNo}
 	body, err := doAlipayGatewayRequest("alipay.trade.query", queryReq, "")
@@ -534,6 +655,44 @@ func markAlipayTopUpFailedIfPending(tradeNo string) {
 	_ = topUp.Update()
 }
 
+func markAlipaySubscriptionFailedIfPending(tradeNo string) {
+	order := model.GetSubscriptionOrderByTradeNo(tradeNo)
+	if order == nil || order.PaymentMethod != paymentMethodAlipayF2F || order.PaymentProvider != model.PaymentProviderAlipayF2F || order.Status != common.TopUpStatusPending {
+		return
+	}
+	_ = model.ExpireSubscriptionOrder(tradeNo, model.PaymentProviderAlipayF2F)
+}
+
+func completeAlipayF2FOrder(tradeNo string, queryResp *alipayTradeQueryResponse, callerIP string) (bool, error) {
+	topUp := model.GetTopUpByTradeNo(tradeNo)
+	if topUp != nil {
+		if topUp.PaymentMethod != paymentMethodAlipayF2F {
+			return false, model.ErrPaymentMethodMismatch
+		}
+		completed, err := model.RechargeAlipayF2F(tradeNo, callerIP)
+		if completed {
+			service.NotifyTopupSuccessAsync(tradeNo, callerIP, paymentMethodAlipayF2F)
+		}
+		return completed, err
+	}
+
+	order := model.GetSubscriptionOrderByTradeNo(tradeNo)
+	if order == nil || order.PaymentMethod != paymentMethodAlipayF2F || order.PaymentProvider != model.PaymentProviderAlipayF2F {
+		return false, model.ErrSubscriptionOrderNotFound
+	}
+	if order.Status == common.TopUpStatusSuccess {
+		return false, nil
+	}
+	payload := ""
+	if queryResp != nil {
+		payload = common.GetJsonString(queryResp)
+	}
+	if err := model.CompleteSubscriptionOrder(tradeNo, payload, model.PaymentProviderAlipayF2F, paymentMethodAlipayF2F); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func syncAlipayTradeStatus(tradeNo string, callerIP string) (string, bool, error) {
 	queryResp, err := queryAlipayTrade(tradeNo)
 	if err != nil {
@@ -553,15 +712,13 @@ func syncAlipayTradeStatus(tradeNo string, callerIP string) (string, bool, error
 	completed := false
 	switch queryResp.TradeStatus {
 	case "TRADE_SUCCESS", "TRADE_FINISHED":
-		completed, err = model.RechargeAlipayF2F(tradeNo, callerIP)
+		completed, err = completeAlipayF2FOrder(tradeNo, queryResp, callerIP)
 		if err != nil {
 			return queryResp.TradeStatus, false, err
 		}
-		if completed {
-			service.NotifyTopupSuccessAsync(tradeNo, callerIP, "alipay_f2f")
-		}
 	case "TRADE_CLOSED":
 		markAlipayTopUpFailedIfPending(tradeNo)
+		markAlipaySubscriptionFailedIfPending(tradeNo)
 	}
 	return queryResp.TradeStatus, completed, nil
 }
@@ -602,6 +759,37 @@ func tryRecoverAlipayNotifyWithoutVerification(
 	return true
 }
 
+func tryRecoverAlipaySubscriptionNotifyWithoutVerification(
+	outTradeNo string,
+	callerIP string,
+	syncTradeStatus func(string, string) (string, bool, error),
+) bool {
+	if outTradeNo == "" {
+		return false
+	}
+
+	order := model.GetSubscriptionOrderByTradeNo(outTradeNo)
+	if order == nil || order.PaymentMethod != paymentMethodAlipayF2F || order.PaymentProvider != model.PaymentProviderAlipayF2F {
+		return false
+	}
+
+	LockOrder(outTradeNo)
+	defer UnlockOrder(outTradeNo)
+
+	tradeStatus, _, err := syncTradeStatus(outTradeNo, callerIP)
+	if err != nil {
+		log.Printf("支付宝订阅回调验签失败后主动查单也失败: tradeNo=%s err=%v", outTradeNo, err)
+		return false
+	}
+	if !isAlipayTradeSuccessfulStatus(tradeStatus) {
+		log.Printf("支付宝订阅回调验签失败后主动查单未确认成功: tradeNo=%s status=%s", outTradeNo, tradeStatus)
+		return false
+	}
+
+	log.Printf("支付宝订阅回调验签失败，但已通过主动查单确认支付成功: tradeNo=%s status=%s", outTradeNo, tradeStatus)
+	return true
+}
+
 func AlipayF2FStatus(c *gin.Context) {
 	tradeNo := c.Query("trade_no")
 	if tradeNo == "" {
@@ -628,6 +816,35 @@ func AlipayF2FStatus(c *gin.Context) {
 		"status":       topUp.Status,
 		"trade_status": tradeStatus,
 		"paid":         topUp.Status == common.TopUpStatusSuccess,
+	})
+}
+
+func SubscriptionAlipayF2FStatus(c *gin.Context) {
+	tradeNo := c.Query("trade_no")
+	if tradeNo == "" {
+		common.ApiErrorMsg(c, "订单号不能为空")
+		return
+	}
+
+	order := model.GetSubscriptionOrderByTradeNo(tradeNo)
+	if order == nil || order.UserId != c.GetInt("id") || order.PaymentMethod != paymentMethodAlipayF2F || order.PaymentProvider != model.PaymentProviderAlipayF2F {
+		common.ApiErrorMsg(c, "订单不存在")
+		return
+	}
+
+	tradeStatus := ""
+	if order.Status == common.TopUpStatusPending {
+		LockOrder(tradeNo)
+		tradeStatus, _, _ = syncAlipayTradeStatus(tradeNo, c.ClientIP())
+		UnlockOrder(tradeNo)
+		order = model.GetSubscriptionOrderByTradeNo(tradeNo)
+	}
+
+	common.ApiSuccess(c, gin.H{
+		"trade_no":     tradeNo,
+		"status":       order.Status,
+		"trade_status": tradeStatus,
+		"paid":         order.Status == common.TopUpStatusSuccess,
 	})
 }
 
@@ -658,7 +875,8 @@ func AlipayF2FNotify(c *gin.Context) {
 	if err := verifyAlipaySignatureForContent(payload.DecodedParams, payload.RawParams); err != nil {
 		log.Printf("支付宝回调验签失败: %v", err)
 		outTradeNo := payload.DecodedParams["out_trade_no"]
-		if !tryRecoverAlipayNotifyWithoutVerification(outTradeNo, c.ClientIP(), model.GetTopUpByTradeNo, syncAlipayTradeStatus) {
+		if !tryRecoverAlipayNotifyWithoutVerification(outTradeNo, c.ClientIP(), model.GetTopUpByTradeNo, syncAlipayTradeStatus) &&
+			!tryRecoverAlipaySubscriptionNotifyWithoutVerification(outTradeNo, c.ClientIP(), syncAlipayTradeStatus) {
 			_, _ = c.Writer.Write([]byte("fail"))
 			return
 		}
