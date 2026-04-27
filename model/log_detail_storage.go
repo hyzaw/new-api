@@ -30,6 +30,7 @@ const (
 	defaultLogDetailInlineMaxBytes = 64 * 1024
 	defaultLogDetailCOSTimeout     = 10 * time.Second
 	defaultLogDetailCOSBasePath    = "log-details"
+	defaultLogDetailGzipLevel      = gzip.BestCompression
 )
 
 type logDetailCOSConfig struct {
@@ -68,6 +69,30 @@ func getLogDetailInlineMaxBytes() int {
 		return defaultLogDetailInlineMaxBytes
 	}
 	return inlineMax
+}
+
+func getLogDetailMaxBodyBytes() int {
+	maxBytes := common.GetEnvOrDefault("LOG_DETAIL_MAX_BODY_BYTES", 0)
+	if maxBytes < 0 {
+		return 0
+	}
+	return maxBytes
+}
+
+func getLogDetailStoreRequestBody() bool {
+	return common.GetEnvOrDefaultBool("LOG_DETAIL_STORE_REQUEST_BODY", true)
+}
+
+func getLogDetailStoreResponseBody() bool {
+	return common.GetEnvOrDefaultBool("LOG_DETAIL_STORE_RESPONSE_BODY", true)
+}
+
+func getLogDetailGzipLevel() int {
+	level := common.GetEnvOrDefault("LOG_DETAIL_GZIP_LEVEL", defaultLogDetailGzipLevel)
+	if level < gzip.HuffmanOnly || level > gzip.BestCompression {
+		return defaultLogDetailGzipLevel
+	}
+	return level
 }
 
 func getLogDetailCOSConfig() (logDetailCOSConfig, error) {
@@ -289,7 +314,10 @@ func logDetailBodyHash(body []byte) string {
 
 func gzipLogDetailBody(body []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	writer := gzip.NewWriter(&buf)
+	writer, err := gzip.NewWriterLevel(&buf, getLogDetailGzipLevel())
+	if err != nil {
+		return nil, err
+	}
 	if _, err := writer.Write(body); err != nil {
 		_ = writer.Close()
 		return nil, err

@@ -55,6 +55,30 @@ func TestLogDetailGzipRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBuildCapturedLogDetailBodyTruncatesByConfiguredRawBytes(t *testing.T) {
+	t.Setenv("LOG_DETAIL_MAX_BODY_BYTES", "5")
+
+	captured := buildCapturedLogDetailBody([]byte("abcdefghi"))
+	if captured == nil {
+		t.Fatal("expected captured body")
+	}
+	if captured.Body != "abcde" {
+		t.Fatalf("captured body = %q, want abcde", captured.Body)
+	}
+}
+
+func TestLogDetailBodyStoreFlags(t *testing.T) {
+	t.Setenv("LOG_DETAIL_STORE_REQUEST_BODY", "false")
+	t.Setenv("LOG_DETAIL_STORE_RESPONSE_BODY", "true")
+
+	if getLogDetailStoreRequestBody() {
+		t.Fatal("request body storage should be disabled")
+	}
+	if !getLogDetailStoreResponseBody() {
+		t.Fatal("response body storage should be enabled")
+	}
+}
+
 func TestGetLogDetailStorageSummary(t *testing.T) {
 	if got := getLogDetailStorageSummary(&LogDetail{}); got != logDetailStorageInline {
 		t.Fatalf("empty detail storage summary = %q, want %q", got, logDetailStorageInline)

@@ -154,22 +154,36 @@ func buildLogDetailFromContext(c *gin.Context) *LogDetail {
 		return nil
 	}
 	detail := &LogDetail{}
-	if storage, err := common.GetBodyStorage(c); err == nil && storage != nil {
-		if body, err := storage.Bytes(); err == nil {
-			if captured := common.BuildCapturedLogBody(body); captured != nil {
-				detail.RequestBodyEncoding = captured.Encoding
-				detail.RequestBody = captured.Body
+	if getLogDetailStoreRequestBody() {
+		if storage, err := common.GetBodyStorage(c); err == nil && storage != nil {
+			if body, err := storage.Bytes(); err == nil {
+				if captured := buildCapturedLogDetailBody(body); captured != nil {
+					detail.RequestBodyEncoding = captured.Encoding
+					detail.RequestBody = captured.Body
+				}
 			}
 		}
 	}
-	if captured := common.BuildCapturedLogBody(common.GetCapturedResponseBody(c)); captured != nil {
-		detail.ResponseBodyEncoding = captured.Encoding
-		detail.ResponseBody = captured.Body
+	if getLogDetailStoreResponseBody() {
+		if captured := buildCapturedLogDetailBody(common.GetCapturedResponseBody(c)); captured != nil {
+			detail.ResponseBodyEncoding = captured.Encoding
+			detail.ResponseBody = captured.Body
+		}
 	}
 	if detail.RequestBody == "" && detail.ResponseBody == "" {
 		return nil
 	}
 	return detail
+}
+
+func buildCapturedLogDetailBody(body []byte) *common.CapturedLogBody {
+	if len(body) == 0 {
+		return nil
+	}
+	if maxBytes := getLogDetailMaxBodyBytes(); maxBytes > 0 && len(body) > maxBytes {
+		body = body[:maxBytes]
+	}
+	return common.BuildCapturedLogBody(body)
 }
 
 func logDetailRedisEnabled() bool {
