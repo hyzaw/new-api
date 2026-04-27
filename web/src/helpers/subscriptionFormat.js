@@ -61,33 +61,39 @@ function addSubscriptionDuration(start, plan) {
   return end;
 }
 
-function nextSubscriptionResetTime(base, plan) {
+function getSubscriptionDurationMs(plan, start) {
+  const end = addSubscriptionDuration(start, plan);
+  if (!(end instanceof Date) || Number.isNaN(end.getTime()) || end <= start) {
+    return 0;
+  }
+  return end.getTime() - start.getTime();
+}
+
+function ceilDiv(left, right) {
+  if (right <= 0) return 1;
+  return Math.max(1, Math.ceil(left / right));
+}
+
+function calculateSubscriptionPeriodCount(plan, start) {
   const period = plan?.quota_reset_period || 'never';
-  const next = new Date(base.getTime());
-  if (period === 'daily') {
-    next.setHours(0, 0, 0, 0);
-    next.setDate(next.getDate() + 1);
-    return next;
-  }
-  if (period === 'weekly') {
-    next.setHours(0, 0, 0, 0);
-    const day = next.getDay() || 7;
-    next.setDate(next.getDate() + (8 - day));
-    return next;
-  }
+  if (period === 'never') return 1;
+
+  const unit = plan?.duration_unit || 'month';
+  const value = Number(plan?.duration_value || 1);
   if (period === 'monthly') {
-    next.setHours(0, 0, 0, 0);
-    next.setDate(1);
-    next.setMonth(next.getMonth() + 1);
-    return next;
+    if (unit === 'year') return Math.max(1, value * 12);
+    if (unit === 'month') return Math.max(1, value);
   }
+
+  const durationMs = getSubscriptionDurationMs(plan, start);
+  if (durationMs <= 0) return 1;
+  if (period === 'daily') return ceilDiv(durationMs, 86400 * 1000);
+  if (period === 'weekly') return ceilDiv(durationMs, 7 * 86400 * 1000);
   if (period === 'custom') {
     const seconds = Number(plan?.quota_reset_custom_seconds || 0);
-    if (seconds <= 0) return null;
-    next.setSeconds(next.getSeconds() + seconds);
-    return next;
+    return ceilDiv(durationMs, seconds * 1000);
   }
-  return null;
+  return 1;
 }
 
 export function calculateSubscriptionTotalQuota(plan, start = new Date()) {
@@ -95,18 +101,5 @@ export function calculateSubscriptionTotalQuota(plan, start = new Date()) {
   if (periodQuota <= 0) return 0;
   if ((plan?.quota_reset_period || 'never') === 'never') return periodQuota;
 
-  const end = addSubscriptionDuration(start, plan);
-  if (!(end instanceof Date) || Number.isNaN(end.getTime()) || end <= start) {
-    return periodQuota;
-  }
-
-  let periods = 1;
-  let cursor = start;
-  let next = nextSubscriptionResetTime(cursor, plan);
-  while (next && next < end && periods < 10000) {
-    periods += 1;
-    cursor = next;
-    next = nextSubscriptionResetTime(cursor, plan);
-  }
-  return periodQuota * periods;
+  return periodQuota * calculateSubscriptionPeriodCount(plan, start);
 }

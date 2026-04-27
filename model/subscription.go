@@ -351,28 +351,58 @@ func CalculateSubscriptionTotalQuota(plan *SubscriptionPlan, start time.Time) in
 	if plan == nil || plan.TotalAmount <= 0 {
 		return 0
 	}
-	if start.IsZero() {
-		start = time.Now()
-	}
-	endUnix, err := calcPlanEndTime(start, plan)
-	if err != nil || endUnix <= start.Unix() {
-		return plan.TotalAmount
-	}
 	if NormalizeResetPeriod(plan.QuotaResetPeriod) == SubscriptionResetNever {
 		return plan.TotalAmount
 	}
+	return plan.TotalAmount * calculateSubscriptionPeriodCount(plan, start)
+}
 
-	periods := int64(1)
-	base := start
-	for periods < 10000 {
-		nextUnix := calcNextResetTime(base, plan, endUnix)
-		if nextUnix <= 0 || nextUnix >= endUnix {
-			break
-		}
-		periods++
-		base = time.Unix(nextUnix, 0)
+func calculateSubscriptionPeriodCount(plan *SubscriptionPlan, start time.Time) int64 {
+	if plan == nil {
+		return 1
 	}
-	return plan.TotalAmount * periods
+	if start.IsZero() {
+		start = time.Now()
+	}
+	period := NormalizeResetPeriod(plan.QuotaResetPeriod)
+	if period == SubscriptionResetNever {
+		return 1
+	}
+	if period == SubscriptionResetMonthly {
+		switch plan.DurationUnit {
+		case SubscriptionDurationYear:
+			if plan.DurationValue > 0 {
+				return int64(plan.DurationValue) * 12
+			}
+		case SubscriptionDurationMonth:
+			if plan.DurationValue > 0 {
+				return int64(plan.DurationValue)
+			}
+		}
+	}
+
+	endUnix, err := calcPlanEndTime(start, plan)
+	if err != nil || endUnix <= start.Unix() {
+		return 1
+	}
+	durationSeconds := endUnix - start.Unix()
+	switch period {
+	case SubscriptionResetDaily:
+		return ceilPositiveDiv(durationSeconds, 86400)
+	case SubscriptionResetWeekly:
+		return ceilPositiveDiv(durationSeconds, 7*86400)
+	case SubscriptionResetCustom:
+		return ceilPositiveDiv(durationSeconds, plan.QuotaResetCustomSeconds)
+	default:
+		return 1
+	}
+}
+
+func ceilPositiveDiv(left int64, right int64) int64 {
+	if left <= 0 || right <= 0 {
+		return 1
+	}
+	return (left + right - 1) / right
 }
 
 func GetSubscriptionPlanById(id int) (*SubscriptionPlan, error) {
@@ -484,7 +514,7 @@ func CreateUserSubscriptionFromPlanTx(tx *gorm.DB, userId int, plan *Subscriptio
 			return nil, errors.New("已达到该套餐购买上限")
 		}
 	}
-	nowUnix := GetDBTimestamp()
+	nowUnix := getDBTimestampTx(tx)
 	now := time.Unix(nowUnix, 0)
 	endUnix, err := calcPlanEndTime(now, plan)
 	if err != nil {
@@ -563,7 +593,7 @@ func CompleteSubscriptionOrder(tradeNo string, providerPayload string, expectedP
 		if order.Status != common.TopUpStatusPending {
 			return ErrSubscriptionOrderStatusInvalid
 		}
-		plan, err := GetSubscriptionPlanById(order.PlanId)
+		plan, err := getSubscriptionPlanByIdTx(tx, order.PlanId)
 		if err != nil {
 			return err
 		}
