@@ -143,6 +143,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	forceImageRelay := c.GetBool("force_image_relay")
+	if forcedFormat, forcedRequest, forced := forceGPTImageRelay(relayFormat, request); forced {
+		relayFormat = forcedFormat
+		request = forcedRequest
+		forceImageRelay = true
+	}
+
 	handled, localProbeErr := tryHandleLocalRelayProbe(c, relayFormat, request)
 	if handled {
 		newAPIError = localProbeErr
@@ -153,6 +160,12 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeGenRelayInfoFailed)
 		return
+	}
+	if forceImageRelay {
+		relayInfo.RelayFormat = types.RelayFormatOpenAIImage
+		relayInfo.RelayMode = relayconstant.RelayModeImagesGenerations
+		relayInfo.RequestURLPath = "/v1/images/generations"
+		relayInfo.AppendRequestConversion(types.RelayFormatOpenAIImage)
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
@@ -325,6 +338,120 @@ func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
 		// Best-effort: leave CombineText empty to avoid large allocations.
 	}
 	return meta
+}
+
+func forceGPTImageRelay(relayFormat types.RelayFormat, request dto.Request) (types.RelayFormat, dto.Request, bool) {
+	if relayFormat == types.RelayFormatOpenAIImage || request == nil {
+		return relayFormat, request, false
+	}
+
+	switch r := request.(type) {
+	case *dto.ImageRequest:
+		if helper.IsGPTImageModel(r.Model) {
+			return types.RelayFormatOpenAIImage, r, true
+		}
+	case *dto.GeneralOpenAIRequest:
+		if helper.IsGPTImageModel(r.Model) {
+			return types.RelayFormatOpenAIImage, imageRequestFromOpenAIRequest(r), true
+		}
+	case *dto.OpenAIResponsesRequest:
+		if helper.IsGPTImageModel(r.Model) {
+			return types.RelayFormatOpenAIImage, imageRequestFromResponsesRequest(r), true
+		}
+	}
+
+	return relayFormat, request, false
+}
+
+func imageRequestFromOpenAIRequest(request *dto.GeneralOpenAIRequest) *dto.ImageRequest {
+	imageReq := &dto.ImageRequest{
+		Model:  request.Model,
+		Prompt: imagePromptFromOpenAIRequest(request),
+		Size:   request.Size,
+		User:   request.User,
+	}
+	if request.N != nil && *request.N > 0 {
+		n := uint(*request.N)
+		imageReq.N = &n
+	}
+	if request.ResponseFormat != nil {
+		switch request.ResponseFormat.Type {
+		case "url", "b64_json":
+			imageReq.ResponseFormat = request.ResponseFormat.Type
+		}
+	}
+	return imageReq
+}
+
+func imagePromptFromOpenAIRequest(request *dto.GeneralOpenAIRequest) string {
+	parts := make([]string, 0, len(request.Messages)+3)
+	appendPromptPart := func(value any) {
+		switch v := value.(type) {
+		case string:
+			if text := strings.TrimSpace(v); text != "" {
+				parts = append(parts, text)
+			}
+		case []any:
+			for _, item := range v {
+				if text := strings.TrimSpace(common.Interface2String(item)); text != "" {
+					parts = append(parts, text)
+				}
+			}
+		}
+	}
+
+	appendPromptPart(request.Prompt)
+	appendPromptPart(request.Input)
+	if text := strings.TrimSpace(request.Instruction); text != "" {
+		parts = append(parts, text)
+	}
+	for _, message := range request.Messages {
+		for _, content := range message.ParseContent() {
+			if content.Type == dto.ContentTypeText {
+				if text := strings.TrimSpace(content.Text); text != "" {
+					parts = append(parts, text)
+				}
+			}
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+func imageRequestFromResponsesRequest(request *dto.OpenAIResponsesRequest) *dto.ImageRequest {
+	return &dto.ImageRequest{
+		Model:  request.Model,
+		Prompt: imagePromptFromResponsesRequest(request),
+		User:   request.User,
+	}
+}
+
+func imagePromptFromResponsesRequest(request *dto.OpenAIResponsesRequest) string {
+	parts := make([]string, 0, 4)
+	if text := strings.TrimSpace(rawJSONString(request.Instructions)); text != "" {
+		parts = append(parts, text)
+	}
+	if text := strings.TrimSpace(rawJSONString(request.Prompt)); text != "" {
+		parts = append(parts, text)
+	}
+	for _, input := range request.ParseInput() {
+		if input.Type == "input_text" || input.Type == "" {
+			if text := strings.TrimSpace(input.Text); text != "" {
+				parts = append(parts, text)
+			}
+		}
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n"))
+}
+
+func rawJSONString(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	var text string
+	if err := common.Unmarshal(data, &text); err == nil {
+		return text
+	}
+	return ""
 }
 
 func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service.RetryParam) (*model.Channel, *types.NewAPIError) {

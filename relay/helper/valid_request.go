@@ -22,6 +22,13 @@ func GetAndValidateRequest(c *gin.Context, format types.RelayFormat) (request dt
 
 	switch format {
 	case types.RelayFormatOpenAI:
+		if relayMode != relayconstant.RelayModeImagesGenerations && relayMode != relayconstant.RelayModeImagesEdits {
+			imageRequest, imageErr := GetAndValidOpenAIImageRequest(c, relayconstant.RelayModeImagesGenerations)
+			if imageErr == nil && IsGPTImageModel(imageRequest.Model) && strings.TrimSpace(imageRequest.Prompt) != "" {
+				c.Set("force_image_relay", true)
+				return imageRequest, nil
+			}
+		}
 		request, err = GetAndValidateTextRequest(c, relayMode)
 	case types.RelayFormatGemini:
 		if strings.Contains(c.Request.URL.Path, ":embedContent") {
@@ -34,6 +41,11 @@ func GetAndValidateRequest(c *gin.Context, format types.RelayFormat) (request dt
 	case types.RelayFormatClaude:
 		request, err = GetAndValidateClaudeRequest(c)
 	case types.RelayFormatOpenAIResponses:
+		imageRequest, imageErr := GetAndValidOpenAIImageRequest(c, relayconstant.RelayModeImagesGenerations)
+		if imageErr == nil && IsGPTImageModel(imageRequest.Model) && strings.TrimSpace(imageRequest.Prompt) != "" {
+			c.Set("force_image_relay", true)
+			return imageRequest, nil
+		}
 		request, err = GetAndValidateResponsesRequest(c)
 	case types.RelayFormatOpenAIResponsesCompaction:
 		request, err = GetAndValidateResponsesCompactionRequest(c)
@@ -52,6 +64,10 @@ func GetAndValidateRequest(c *gin.Context, format types.RelayFormat) (request dt
 		return nil, fmt.Errorf("unsupported relay format: %s", format)
 	}
 	return request, err
+}
+
+func IsGPTImageModel(model string) bool {
+	return strings.HasPrefix(strings.TrimSpace(model), "gpt-image")
 }
 
 func GetAndValidAudioRequest(c *gin.Context, relayMode int) (*dto.AudioRequest, error) {
@@ -283,13 +299,13 @@ func GetAndValidateTextRequest(c *gin.Context, relayMode int) (*dto.GeneralOpenA
 	}
 	switch relayMode {
 	case relayconstant.RelayModeCompletions:
-		if textRequest.Prompt == "" {
+		if textRequest.Prompt == "" && !IsGPTImageModel(textRequest.Model) {
 			return nil, errors.New("field prompt is required")
 		}
 	case relayconstant.RelayModeChatCompletions:
 		// For FIM (Fill-in-the-middle) requests with prefix/suffix, messages is optional
 		// It will be filled by provider-specific adaptors if needed (e.g., SiliconFlow)。Or it is allowed by model vendor(s) (e.g., DeepSeek)
-		if len(textRequest.Messages) == 0 && textRequest.Prefix == nil && textRequest.Suffix == nil {
+		if len(textRequest.Messages) == 0 && textRequest.Prefix == nil && textRequest.Suffix == nil && !IsGPTImageModel(textRequest.Model) {
 			return nil, errors.New("field messages is required")
 		}
 	case relayconstant.RelayModeEmbeddings:
