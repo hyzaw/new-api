@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/stretchr/testify/require"
 )
@@ -88,6 +89,26 @@ func TestFormatClaudeResponseInfo_MessageDelta_FullUsage(t *testing.T) {
 	if !claudeInfo.Done {
 		t.Error("expected Done = true")
 	}
+}
+
+func TestFormatClaudeResponseInfo_MessageDelta_CacheCreation5mFromSSE(t *testing.T) {
+	claudeInfo := &ClaudeResponseInfo{
+		Usage: &dto.Usage{},
+	}
+	data := `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":6,"output_tokens":282,"cache_read_input_tokens":25329,"cache_creation_input_tokens":6846,"cache_creation":{"ephemeral_5m_input_tokens":6846}}}`
+	var claudeResponse dto.ClaudeResponse
+	err := common.UnmarshalJsonStr(data, &claudeResponse)
+	require.NoError(t, err)
+
+	ok := FormatClaudeResponseInfo(&claudeResponse, nil, claudeInfo)
+	require.True(t, ok)
+	require.Equal(t, "anthropic", claudeInfo.Usage.UsageSemantic)
+	require.Equal(t, 6, claudeInfo.Usage.PromptTokens)
+	require.Equal(t, 282, claudeInfo.Usage.CompletionTokens)
+	require.Equal(t, 25329, claudeInfo.Usage.PromptTokensDetails.CachedTokens)
+	require.Equal(t, 6846, claudeInfo.Usage.PromptTokensDetails.CachedCreationTokens)
+	require.Equal(t, 6846, claudeInfo.Usage.ClaudeCacheCreation5mTokens)
+	require.Equal(t, 0, claudeInfo.Usage.ClaudeCacheCreation1hTokens)
 }
 
 func TestFormatClaudeResponseInfo_MessageDelta_OnlyOutputTokens(t *testing.T) {
