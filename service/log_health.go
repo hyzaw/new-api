@@ -25,6 +25,7 @@ var (
 	requestStatusMonitorCacheOnce sync.Once
 	requestStatusMonitorCache     *cachex.HybridCache[model.RequestStatusMonitor]
 	requestStatusMonitorPruneAt   atomic.Int64
+	requestStatusMonitorPruneOnce sync.Once
 )
 
 func getRequestStatusMonitorCache() *cachex.HybridCache[model.RequestStatusMonitor] {
@@ -100,6 +101,23 @@ func pruneRequestStatusMonitorCache(cache *cachex.HybridCache[model.RequestStatu
 	if _, err := cache.DeleteMany(staleKeys); err != nil {
 		common.SysError(fmt.Sprintf("request status monitor cache prune delete failed: %v", err))
 	}
+}
+
+func StartRequestStatusMonitorCachePruneTask() {
+	requestStatusMonitorPruneOnce.Do(func() {
+		cache := getRequestStatusMonitorCache()
+		now := time.Now().Unix()
+		requestStatusMonitorPruneAt.Store(now)
+		go pruneRequestStatusMonitorCache(cache, now)
+
+		go func() {
+			ticker := time.NewTicker(requestStatusMonitorPruneInterval)
+			defer ticker.Stop()
+			for range ticker.C {
+				pruneRequestStatusMonitorCache(cache, time.Now().Unix())
+			}
+		}()
+	})
 }
 
 func GetRequestStatusMonitor() (*model.RequestStatusMonitor, error) {

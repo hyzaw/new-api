@@ -118,6 +118,9 @@ func main() {
 	// Auto-close unpaid topup orders older than 2 hours
 	service.StartTopUpExpireTask()
 
+	// Prune old request status monitor snapshots that may have been cached by older versions.
+	service.StartRequestStatusMonitorCachePruneTask()
+
 	// Wire task polling adaptor factory (breaks service -> relay import cycle)
 	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
 		a := relay.GetTaskAdaptor(platform)
