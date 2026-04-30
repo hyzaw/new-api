@@ -36,7 +36,7 @@ type Redemption struct {
 	Key                 string         `json:"key" gorm:"type:varchar(64);uniqueIndex"`
 	Status              int            `json:"status" gorm:"default:1"`
 	Name                string         `json:"name" gorm:"index"`
-	Quota               int            `json:"quota" gorm:"default:100"`
+	Quota               int            `json:"quota" gorm:"default:0"`
 	GiftQuota           int            `json:"gift_quota" gorm:"default:0;column:gift_quota"`
 	CreatedTime         int64          `json:"created_time" gorm:"bigint"`
 	RedeemedTime        int64          `json:"redeemed_time" gorm:"bigint"`
@@ -419,7 +419,22 @@ func Redeem(key string, userId int) (result *RedeemResult, err error) {
 func (redemption *Redemption) Insert() error {
 	redemption.NormalizeType()
 	var err error
-	err = DB.Create(redemption).Error
+	err = DB.Select(
+		"user_id",
+		"key",
+		"name",
+		"quota",
+		"gift_quota",
+		"created_time",
+		"expired_time",
+		"type",
+		"lottery_mode",
+		"lottery_quota_min",
+		"lottery_quota_max",
+		"lottery_quota_choices",
+		"lottery_balance_type",
+		"max_redeem_count",
+	).Create(redemption).Error
 	return err
 }
 

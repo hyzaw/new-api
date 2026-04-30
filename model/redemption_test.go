@@ -52,6 +52,40 @@ func TestRedeemNormalCodeStillSingleUse(t *testing.T) {
 	}
 }
 
+func TestRedeemNormalCodeWithGiftOnlyBalance(t *testing.T) {
+	truncateTables(t)
+
+	user := createRedemptionTestUser(t, "redeem-normal-gift-only")
+	redemption := Redemption{
+		UserId:      1,
+		Key:         "normal-redemption-code-gift-only",
+		Status:      common.RedemptionCodeStatusEnabled,
+		Name:        "normal-gift-only",
+		Quota:       0,
+		GiftQuota:   200,
+		CreatedTime: common.GetTimestamp(),
+	}
+	if err := redemption.Insert(); err != nil {
+		t.Fatalf("failed to create gift-only redemption: %v", err)
+	}
+
+	var stored Redemption
+	if err := DB.First(&stored, redemption.Id).Error; err != nil {
+		t.Fatalf("failed to reload redemption: %v", err)
+	}
+	if stored.Quota != 0 || stored.GiftQuota != 200 {
+		t.Fatalf("unexpected stored balances: quota=%d gift_quota=%d", stored.Quota, stored.GiftQuota)
+	}
+
+	result, err := Redeem(redemption.Key, user.Id)
+	if err != nil {
+		t.Fatalf("gift-only redeem failed: %v", err)
+	}
+	if result.Quota != 0 || result.GiftQuota != 200 || result.TotalQuota != 200 {
+		t.Fatalf("unexpected gift-only redeem result: %+v", result)
+	}
+}
+
 func TestRedeemLotteryCodeAllowsDifferentUsersOnce(t *testing.T) {
 	truncateTables(t)
 

@@ -72,8 +72,8 @@ const EditRedemptionModal = (props) => {
   const getInitValues = () => ({
     name: '',
     type: REDEMPTION_TYPES.NORMAL,
-    quota: 100000,
-    amount: Number(quotaToDisplayAmount(100000).toFixed(6)),
+    quota: 0,
+    amount: 0,
     gift_quota: 0,
     gift_amount: 0,
     count: 1,
@@ -175,10 +175,18 @@ const EditRedemptionModal = (props) => {
     }
   }, [props.editingRedemption.id]);
 
+  const getDefaultName = (values) => {
+    if (values.type === REDEMPTION_TYPES.LOTTERY) {
+      return t('抽奖兑换码');
+    }
+    const quota = Number(values.quota) > 0 ? values.quota : values.gift_quota;
+    return renderQuota(quota || 0);
+  };
+
   const submit = async (values) => {
     let name = values.name;
     if (!isEdit && (!name || name === '')) {
-      name = renderQuota(values.quota);
+      name = getDefaultName(values);
     }
     setLoading(true);
     let localInputs = { ...values };
@@ -481,17 +489,7 @@ const EditRedemptionModal = (props) => {
                             field='quota'
                             label={t('通用余额额度')}
                             placeholder={t('输入额度')}
-                            rules={[
-                              { required: true, message: t('请输入额度') },
-                              {
-                                validator: (rule, v) => {
-                                  const num = parseInt(v, 10);
-                                  return num > 0
-                                    ? Promise.resolve()
-                                    : Promise.reject(t('额度必须大于0'));
-                                },
-                              },
-                            ]}
+                            min={0}
                             onChange={(val) => {
                               const quota = val === '' || val == null ? 0 : val;
                               formApiRef.current?.setValue('quota', quota);
@@ -623,6 +621,7 @@ const EditRedemptionModal = (props) => {
                             field='gift_quota'
                             label={t('赠送余额额度')}
                             placeholder={t('输入赠送余额额度')}
+                            min={0}
                             onChange={(val) => {
                               const quota = val === '' || val == null ? 0 : val;
                               formApiRef.current?.setValue('gift_quota', quota);
