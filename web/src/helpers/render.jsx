@@ -106,6 +106,11 @@ import {
   SiX,
 } from 'react-icons/si';
 import GoogleIcon from '../components/common/logo/GoogleIcon';
+import XiaomiMiMo from '../components/common/logo/XiaomiMiMoIcon';
+
+const CUSTOM_LOBE_ICONS = {
+  XiaomiMiMo,
+};
 
 // 获取侧边栏Lucide图标组件
 export function getLucideIcon(key, selected = false) {
@@ -219,6 +224,11 @@ export const getModelCategories = (() => {
         filter: (model) =>
           model.model_name.toLowerCase().includes('moonshot') ||
           model.model_name.toLowerCase().includes('kimi'),
+      },
+      xiaomi: {
+        label: t('小米'),
+        icon: <XiaomiMiMo.Color />,
+        filter: (model) => model.model_name.toLowerCase().startsWith('mimo'),
       },
       zhipu: {
         label: t('智谱'),
@@ -438,7 +448,7 @@ export function getLobeHubIcon(iconName, size = 14) {
   // 解析组件路径与点号链式属性
   const segments = String(iconName).split('.');
   const baseKey = segments[0];
-  const BaseIcon = LobeIcons[baseKey];
+  const BaseIcon = LobeIcons[baseKey] || CUSTOM_LOBE_ICONS[baseKey];
 
   let IconComponent = undefined;
   let propStartIndex = 1;
@@ -447,7 +457,7 @@ export function getLobeHubIcon(iconName, size = 14) {
     IconComponent = BaseIcon[segments[1]];
     propStartIndex = 2;
   } else {
-    IconComponent = LobeIcons[baseKey];
+    IconComponent = LobeIcons[baseKey] || CUSTOM_LOBE_ICONS[baseKey];
     propStartIndex = 1;
   }
 
