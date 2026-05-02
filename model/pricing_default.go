@@ -23,6 +23,7 @@ var defaultVendorRules = map[string]string{
 	"qwen":     "阿里巴巴",
 	"deepseek": "DeepSeek",
 	"minimax":  "MiniMax",
+	"MiniMax":  "MiniMax",
 	"abab":     "MiniMax",
 	"ernie":    "百度",
 	"spark":    "讯飞",
