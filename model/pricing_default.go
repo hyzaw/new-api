@@ -2,6 +2,8 @@ package model
 
 import (
 	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // 简化的供应商映射规则
@@ -77,9 +79,12 @@ func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vend
 		vendorID := getDefaultVendorID(modelName, vendorMap)
 
 		if existing, exists := metaMap[modelName]; exists {
-			// 对已有元数据补齐缺失的 vendor_id，避免老数据一直保持空值
+			// 对已有元数据补齐缺失的 vendor_id，并持久化到数据库，避免列表页继续显示未知供应商
 			if existing.VendorID == 0 && vendorID != 0 {
 				existing.VendorID = vendorID
+				if err := existing.Update(); err != nil {
+					common.SysLog("failed to backfill model vendor mapping for " + modelName + ": " + err.Error())
+				}
 			}
 			continue
 		}
