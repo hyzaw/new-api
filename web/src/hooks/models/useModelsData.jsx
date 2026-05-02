@@ -19,7 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { API, showError, showSuccess } from '../../helpers';
+import {
+  API,
+  showError,
+  showSuccess,
+  getVendorIconName,
+} from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
 
@@ -101,7 +106,10 @@ export const useModelsData = () => {
   const vendorMap = useMemo(() => {
     const map = {};
     vendors.forEach((v) => {
-      map[v.id] = v;
+      map[v.id] = {
+        ...v,
+        icon: getVendorIconName(v.name, v.icon),
+      };
     });
     return map;
   }, [vendors]);
@@ -112,7 +120,14 @@ export const useModelsData = () => {
       const res = await API.get('/api/vendors/?page_size=1000');
       if (res.data.success) {
         const items = res.data.data.items || res.data.data || [];
-        setVendors(Array.isArray(items) ? items : []);
+        setVendors(
+          Array.isArray(items)
+            ? items.map((item) => ({
+                ...item,
+                icon: getVendorIconName(item.name, item.icon),
+              }))
+            : [],
+        );
       }
     } catch (_) {
       // ignore

@@ -26,7 +26,7 @@ import {
   Tooltip,
   Modal,
 } from '@douyinfe/semi-ui';
-import { getLobeHubIcon } from '../../../../../helpers';
+import { getLobeHubIcon, getVendorIconName } from '../../../../../helpers';
 import SearchActions from './SearchActions';
 
 const { Paragraph } = Typography;
@@ -103,8 +103,9 @@ const getAvatarText = (vendorName) =>
     : vendorName.charAt(0).toUpperCase();
 
 const createAvatarContent = (vendor, isAllVendors) => {
-  if (vendor.icon) {
-    return getLobeHubIcon(vendor.icon, CONFIG.ICON_SIZE);
+  const vendorIcon = getVendorIconName(vendor?.name, vendor?.icon);
+  if (vendorIcon) {
+    return getLobeHubIcon(vendorIcon, CONFIG.ICON_SIZE);
   }
 
   return (

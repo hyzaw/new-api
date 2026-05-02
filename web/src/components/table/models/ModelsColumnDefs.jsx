@@ -29,6 +29,7 @@ import {
 import {
   timestamp2string,
   getLobeHubIcon,
+  getVendorIconName,
   stringToColor,
 } from '../../../helpers';
 import {
@@ -62,7 +63,7 @@ const renderVendorTag = (vendorId, vendorMap, t) => {
     <Tag
       color='white'
       shape='circle'
-      prefixIcon={getLobeHubIcon(v.icon || 'Layers', 14)}
+      prefixIcon={getLobeHubIcon(getVendorIconName(v.name, v.icon) || 'Layers', 14)}
     >
       {v.name}
     </Tag>

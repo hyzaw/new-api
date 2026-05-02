@@ -112,6 +112,48 @@ const CUSTOM_LOBE_ICONS = {
   XiaomiMiMo,
 };
 
+const DEFAULT_VENDOR_ICON_NAMES = {
+  openai: 'OpenAI',
+  anthropic: 'Claude.Color',
+  google: 'Gemini.Color',
+  moonshot: 'Moonshot',
+  '智谱': 'Zhipu.Color',
+  '阿里巴巴': 'Qwen.Color',
+  deepseek: 'DeepSeek.Color',
+  minimax: 'Minimax.Color',
+  '百度': 'Wenxin.Color',
+  '讯飞': 'Spark.Color',
+  '腾讯': 'Hunyuan.Color',
+  cohere: 'Cohere.Color',
+  cloudflare: 'Cloudflare.Color',
+  '360': 'Ai360.Color',
+  '零一万物': 'Yi.Color',
+  jina: 'Jina',
+  mistral: 'Mistral.Color',
+  xai: 'XAI',
+  meta: 'Ollama',
+  '字节跳动': 'Doubao.Color',
+  '快手': 'Kling.Color',
+  '即梦': 'Jimeng.Color',
+  vidu: 'Vidu',
+  '微软': 'AzureAI',
+  microsoft: 'AzureAI',
+  azure: 'AzureAI',
+  '小米': 'XiaomiMiMo.Color',
+  xiaomi: 'XiaomiMiMo.Color',
+};
+
+export function getVendorDefaultIconName(vendorName) {
+  const key = String(vendorName || '').trim().toLowerCase();
+  return DEFAULT_VENDOR_ICON_NAMES[key] || '';
+}
+
+export function getVendorIconName(vendorName, iconName) {
+  const normalizedIcon = String(iconName || '').trim();
+  if (normalizedIcon) return normalizedIcon;
+  return getVendorDefaultIconName(vendorName);
+}
+
 // 获取侧边栏Lucide图标组件
 export function getLucideIcon(key, selected = false) {
   const size = 16;

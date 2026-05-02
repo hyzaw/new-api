@@ -19,7 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useState, useEffect, useContext, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { API, copy, showError, showInfo, showSuccess } from '../../helpers';
+import {
+  API,
+  copy,
+  showError,
+  showInfo,
+  showSuccess,
+  getVendorIconName,
+} from '../../helpers';
 import { Modal } from '@douyinfe/semi-ui';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -201,7 +208,7 @@ export const useModelPricingData = () => {
       if (m.vendor_id && vendorMap[m.vendor_id]) {
         const vendor = vendorMap[m.vendor_id];
         m.vendor_name = vendor.name;
-        m.vendor_icon = vendor.icon;
+        m.vendor_icon = getVendorIconName(vendor.name, vendor.icon);
         m.vendor_description = vendor.description;
       }
     }
@@ -247,7 +254,10 @@ export const useModelPricingData = () => {
       const vendorMap = {};
       if (Array.isArray(vendors)) {
         vendors.forEach((v) => {
-          vendorMap[v.id] = v;
+          vendorMap[v.id] = {
+            ...v,
+            icon: getVendorIconName(v.name, v.icon),
+          };
         });
       }
       setVendorsMap(vendorMap);
