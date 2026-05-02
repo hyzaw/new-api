@@ -20,6 +20,7 @@ var defaultVendorRules = map[string]string{
 	"glm-":     "智谱",
 	"qwen":     "阿里巴巴",
 	"deepseek": "DeepSeek",
+	"minimax":  "MiniMax",
 	"abab":     "MiniMax",
 	"ernie":    "百度",
 	"spark":    "讯飞",
@@ -73,18 +74,14 @@ var defaultVendorIcons = map[string]string{
 func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vendor, enableAbilities []AbilityWithChannel) {
 	for _, ability := range enableAbilities {
 		modelName := ability.Model
-		if _, exists := metaMap[modelName]; exists {
-			continue
-		}
+		vendorID := getDefaultVendorID(modelName, vendorMap)
 
-		// 匹配供应商
-		vendorID := 0
-		modelLower := strings.ToLower(modelName)
-		for pattern, vendorName := range defaultVendorRules {
-			if strings.Contains(modelLower, pattern) {
-				vendorID = getOrCreateVendor(vendorName, vendorMap)
-				break
+		if existing, exists := metaMap[modelName]; exists {
+			// 对已有元数据补齐缺失的 vendor_id，避免老数据一直保持空值
+			if existing.VendorID == 0 && vendorID != 0 {
+				existing.VendorID = vendorID
 			}
+			continue
 		}
 
 		// 创建模型元数据
@@ -95,6 +92,16 @@ func initDefaultVendorMapping(metaMap map[string]*Model, vendorMap map[int]*Vend
 			NameRule:  NameRuleExact,
 		}
 	}
+}
+
+func getDefaultVendorID(modelName string, vendorMap map[int]*Vendor) int {
+	modelLower := strings.ToLower(modelName)
+	for pattern, vendorName := range defaultVendorRules {
+		if strings.Contains(modelLower, pattern) {
+			return getOrCreateVendor(vendorName, vendorMap)
+		}
+	}
+	return 0
 }
 
 // 查找或创建供应商
