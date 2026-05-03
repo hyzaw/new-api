@@ -237,6 +237,7 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 
 			ticker.Reset(streamingTimeout)
 			data := scanner.Text()
+			info.ObserveUpstreamLine(data)
 			if common.DebugEnabled {
 				println(data)
 			}

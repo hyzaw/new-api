@@ -64,8 +64,20 @@ func appendAdminTimingInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, a
 	if upstreamHeadersMs := durationMilliseconds(relayInfo.UpstreamRequestAt, relayInfo.UpstreamResponseAt); upstreamHeadersMs >= 0 {
 		timing["upstream_headers_ms"] = upstreamHeadersMs
 	}
+	if headersToFirstByteMs := durationMilliseconds(relayInfo.UpstreamResponseAt, relayInfo.UpstreamFirstByteAt); headersToFirstByteMs >= 0 {
+		timing["headers_to_first_byte_ms"] = headersToFirstByteMs
+	}
+	if headersToFirstLineMs := durationMilliseconds(relayInfo.UpstreamResponseAt, relayInfo.UpstreamFirstLineAt); headersToFirstLineMs >= 0 {
+		timing["headers_to_first_line_ms"] = headersToFirstLineMs
+	}
+	if firstByteToFirstLineMs := durationMilliseconds(relayInfo.UpstreamFirstByteAt, relayInfo.UpstreamFirstLineAt); firstByteToFirstLineMs >= 0 {
+		timing["first_byte_to_first_line_ms"] = firstByteToFirstLineMs
+	}
 	if headersToFirstByteMs := durationMilliseconds(relayInfo.UpstreamResponseAt, relayInfo.FirstResponseTime); headersToFirstByteMs >= 0 {
 		timing["headers_to_first_token_ms"] = headersToFirstByteMs
+	}
+	if firstLineToFirstTokenMs := durationMilliseconds(relayInfo.UpstreamFirstLineAt, relayInfo.FirstResponseTime); firstLineToFirstTokenMs >= 0 {
+		timing["first_line_to_first_token_ms"] = firstLineToFirstTokenMs
 	}
 	if relayToFirstByteMs := durationMilliseconds(relayInfo.StartTime, relayInfo.FirstResponseTime); relayToFirstByteMs >= 0 {
 		timing["relay_to_first_token_ms"] = relayToFirstByteMs
@@ -80,6 +92,29 @@ func appendAdminTimingInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, a
 	}
 	if len(timing) > 0 {
 		adminInfo["timing"] = timing
+	}
+}
+
+func appendAdminStreamProbeInfo(relayInfo *relaycommon.RelayInfo, adminInfo map[string]interface{}) {
+	if relayInfo == nil || adminInfo == nil || !relayInfo.IsStream {
+		return
+	}
+
+	probe := make(map[string]interface{})
+	if relayInfo.PreFirstDataLineCount > 0 {
+		probe["lines_before_first_data"] = relayInfo.PreFirstDataLineCount
+	}
+	if relayInfo.PreFirstDataEmptyLineCount > 0 {
+		probe["empty_lines_before_first_data"] = relayInfo.PreFirstDataEmptyLineCount
+	}
+	if relayInfo.PreFirstDataNonDataLineCount > 0 {
+		probe["non_data_lines_before_first_data"] = relayInfo.PreFirstDataNonDataLineCount
+	}
+	if len(relayInfo.PreFirstDataPreview) > 0 {
+		probe["preview_lines_before_first_data"] = relayInfo.PreFirstDataPreview
+	}
+	if len(probe) > 0 {
+		adminInfo["stream_probe"] = probe
 	}
 }
 
@@ -122,6 +157,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 
 	AppendChannelAffinityAdminInfo(ctx, adminInfo)
 	appendAdminTimingInfo(ctx, relayInfo, adminInfo)
+	appendAdminStreamProbeInfo(relayInfo, adminInfo)
 
 	other["admin_info"] = adminInfo
 	appendRequestPath(ctx, relayInfo, other)

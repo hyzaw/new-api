@@ -525,6 +525,7 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		return nil, errors.New("resp is nil")
 	}
 	info.MarkUpstreamResponse()
+	resp.Body = helper.NewObservedReadCloser(resp.Body, info)
 
 	_ = req.Body.Close()
 	_ = c.Request.Body.Close()

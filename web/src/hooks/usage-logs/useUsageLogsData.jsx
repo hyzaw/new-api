@@ -639,7 +639,11 @@ export const useLogsData = () => {
       group_delay_ms: t('分组延迟'),
       relay_to_upstream_ms: t('中继到上游请求'),
       upstream_headers_ms: t('上游响应头'),
+      headers_to_first_byte_ms: t('响应头到首字节'),
+      headers_to_first_line_ms: t('响应头到首行'),
+      first_byte_to_first_line_ms: t('首字节到首行'),
       headers_to_first_token_ms: t('响应头到首字'),
+      first_line_to_first_token_ms: t('首行到首字'),
       relay_to_first_token_ms: t('中继到首字'),
       entry_to_first_token_ms: t('入口到首字'),
       retry_count: t('重试次数'),
@@ -884,6 +888,40 @@ export const useLogsData = () => {
             value: (
               <div style={{ whiteSpace: 'pre-line', lineHeight: 1.6 }}>
                 {timingLines.join('\n')}
+              </div>
+            ),
+          });
+        }
+      }
+      if (isAdminUser && other?.admin_info?.stream_probe) {
+        const streamProbe = other.admin_info.stream_probe;
+        const probeLines = [];
+        if (streamProbe.lines_before_first_data !== undefined) {
+          probeLines.push(
+            `${t('首个 data 前总行数')}：${streamProbe.lines_before_first_data}`,
+          );
+        }
+        if (streamProbe.empty_lines_before_first_data !== undefined) {
+          probeLines.push(
+            `${t('首个 data 前空行数')}：${streamProbe.empty_lines_before_first_data}`,
+          );
+        }
+        if (streamProbe.non_data_lines_before_first_data !== undefined) {
+          probeLines.push(
+            `${t('首个 data 前非 data 行数')}：${streamProbe.non_data_lines_before_first_data}`,
+          );
+        }
+        if (Array.isArray(streamProbe.preview_lines_before_first_data)) {
+          probeLines.push(
+            `${t('首个 data 前预览')}：\n${streamProbe.preview_lines_before_first_data.join('\n')}`,
+          );
+        }
+        if (probeLines.length > 0) {
+          expandDataLocal.push({
+            key: t('流前导探针'),
+            value: (
+              <div style={{ whiteSpace: 'pre-line', lineHeight: 1.6 }}>
+                {probeLines.join('\n')}
               </div>
             ),
           });

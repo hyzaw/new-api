@@ -85,19 +85,25 @@ type TokenCountMeta struct {
 }
 
 type RelayInfo struct {
-	TokenId            int
-	TokenKey           string
-	TokenGroup         string
-	UserId             int
-	UsingGroup         string // 使用的分组，当auto跨分组重试时，会变动
-	UserGroup          string // 用户所在分组
-	TokenUnlimited     bool
-	StartTime          time.Time
-	FirstResponseTime  time.Time
-	UpstreamRequestAt  time.Time
-	UpstreamResponseAt time.Time
-	AppliedGroupDelay  time.Duration
-	isFirstResponse    bool
+	TokenId                      int
+	TokenKey                     string
+	TokenGroup                   string
+	UserId                       int
+	UsingGroup                   string // 使用的分组，当auto跨分组重试时，会变动
+	UserGroup                    string // 用户所在分组
+	TokenUnlimited               bool
+	StartTime                    time.Time
+	FirstResponseTime            time.Time
+	UpstreamRequestAt            time.Time
+	UpstreamResponseAt           time.Time
+	UpstreamFirstByteAt          time.Time
+	UpstreamFirstLineAt          time.Time
+	AppliedGroupDelay            time.Duration
+	PreFirstDataLineCount        int
+	PreFirstDataEmptyLineCount   int
+	PreFirstDataNonDataLineCount int
+	PreFirstDataPreview          []string
+	isFirstResponse              bool
 	//SendLastReasoningResponse bool
 	IsStream               bool
 	IsGeminiBatchEmbedding bool
@@ -675,6 +681,41 @@ func (info *RelayInfo) MarkUpstreamResponse() {
 		return
 	}
 	info.UpstreamResponseAt = time.Now()
+}
+
+func (info *RelayInfo) MarkUpstreamFirstByte() {
+	if info == nil || !info.UpstreamFirstByteAt.IsZero() {
+		return
+	}
+	info.UpstreamFirstByteAt = time.Now()
+}
+
+func (info *RelayInfo) ObserveUpstreamLine(line string) {
+	if info == nil {
+		return
+	}
+	if info.UpstreamFirstLineAt.IsZero() {
+		info.UpstreamFirstLineAt = time.Now()
+	}
+	if info.HasSendResponse() {
+		return
+	}
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "data:") || trimmed == "[DONE]" {
+		return
+	}
+	info.PreFirstDataLineCount++
+	if trimmed == "" {
+		info.PreFirstDataEmptyLineCount++
+	} else {
+		info.PreFirstDataNonDataLineCount++
+	}
+	if len(info.PreFirstDataPreview) < 5 {
+		if len(trimmed) > 240 {
+			trimmed = trimmed[:240] + "...(truncated)"
+		}
+		info.PreFirstDataPreview = append(info.PreFirstDataPreview, trimmed)
+	}
 }
 
 func (info *RelayInfo) HasSendResponse() bool {
