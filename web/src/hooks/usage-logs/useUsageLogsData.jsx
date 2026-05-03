@@ -634,6 +634,16 @@ export const useLogsData = () => {
       }
       return `${chain.join(' -> ')}`;
     };
+    const timingLabelMap = {
+      entry_to_relay_ms: t('入口到中继'),
+      group_delay_ms: t('分组延迟'),
+      relay_to_upstream_ms: t('中继到上游请求'),
+      upstream_headers_ms: t('上游响应头'),
+      headers_to_first_token_ms: t('响应头到首字'),
+      relay_to_first_token_ms: t('中继到首字'),
+      entry_to_first_token_ms: t('入口到首字'),
+      retry_count: t('重试次数'),
+    };
 
     let expandDatesLocal = {};
     for (let i = 0; i < logs.length; i++) {
@@ -853,6 +863,27 @@ export const useLogsData = () => {
                 }}
               >
                 {ss.errors.join('\n')}
+              </div>
+            ),
+          });
+        }
+      }
+      if (isAdminUser && other?.admin_info?.timing) {
+        const timing = other.admin_info.timing;
+        const timingLines = Object.entries(timingLabelMap)
+          .filter(([key]) => timing[key] !== undefined && timing[key] !== null)
+          .map(([key, label]) => {
+            if (key === 'retry_count') {
+              return `${label}：${timing[key]}`;
+            }
+            return `${label}：${timing[key]} ms`;
+          });
+        if (timingLines.length > 0) {
+          expandDataLocal.push({
+            key: t('链路耗时'),
+            value: (
+              <div style={{ whiteSpace: 'pre-line', lineHeight: 1.6 }}>
+                {timingLines.join('\n')}
               </div>
             ),
           });

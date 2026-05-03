@@ -31,10 +31,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func applyGroupDelay(c *gin.Context, group string) *types.NewAPIError {
+func applyGroupDelay(c *gin.Context, info *relaycommon.RelayInfo, group string) *types.NewAPIError {
 	delay := operation_setting.GetGroupDelayDuration(group)
 	if delay <= 0 {
+		if info != nil {
+			info.AppliedGroupDelay = 0
+		}
 		return nil
+	}
+	if info != nil {
+		info.AppliedGroupDelay = delay
 	}
 
 	logger.LogInfo(c, fmt.Sprintf("apply group delay before upstream request: group=%s delay=%s", group, delay))
@@ -254,7 +260,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		if !delayApplied {
-			newAPIError = applyGroupDelay(c, relayInfo.UsingGroup)
+			newAPIError = applyGroupDelay(c, relayInfo, relayInfo.UsingGroup)
 			if newAPIError != nil {
 				break
 			}
@@ -743,7 +749,7 @@ func RelayTask(c *gin.Context) {
 		}
 
 		if !delayApplied {
-			taskRelayErr := applyGroupDelay(c, relayInfo.UsingGroup)
+			taskRelayErr := applyGroupDelay(c, relayInfo, relayInfo.UsingGroup)
 			if taskRelayErr != nil {
 				taskErr = service.TaskErrorWrapperLocal(taskRelayErr.Err, string(taskRelayErr.GetErrorCode()), taskRelayErr.StatusCode)
 				break

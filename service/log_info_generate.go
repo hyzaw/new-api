@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/base64"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -31,6 +32,54 @@ func appendRequestPath(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, other
 			path = path[:idx]
 		}
 		other["request_path"] = path
+	}
+}
+
+func durationMilliseconds(start time.Time, end time.Time) int64 {
+	if start.IsZero() || end.IsZero() || end.Before(start) {
+		return -1
+	}
+	return end.Sub(start).Milliseconds()
+}
+
+func appendAdminTimingInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, adminInfo map[string]interface{}) {
+	if relayInfo == nil || adminInfo == nil {
+		return
+	}
+
+	timing := make(map[string]interface{})
+	var entryTime time.Time
+	if ctx != nil {
+		entryTime = common.GetContextKeyTime(ctx, constant.ContextKeyRequestEntryTime)
+	}
+	if entryToRelayMs := durationMilliseconds(entryTime, relayInfo.StartTime); entryToRelayMs >= 0 {
+		timing["entry_to_relay_ms"] = entryToRelayMs
+	}
+	if relayInfo.AppliedGroupDelay > 0 {
+		timing["group_delay_ms"] = relayInfo.AppliedGroupDelay.Milliseconds()
+	}
+	if relayToUpstreamMs := durationMilliseconds(relayInfo.StartTime, relayInfo.UpstreamRequestAt); relayToUpstreamMs >= 0 {
+		timing["relay_to_upstream_ms"] = relayToUpstreamMs
+	}
+	if upstreamHeadersMs := durationMilliseconds(relayInfo.UpstreamRequestAt, relayInfo.UpstreamResponseAt); upstreamHeadersMs >= 0 {
+		timing["upstream_headers_ms"] = upstreamHeadersMs
+	}
+	if headersToFirstByteMs := durationMilliseconds(relayInfo.UpstreamResponseAt, relayInfo.FirstResponseTime); headersToFirstByteMs >= 0 {
+		timing["headers_to_first_token_ms"] = headersToFirstByteMs
+	}
+	if relayToFirstByteMs := durationMilliseconds(relayInfo.StartTime, relayInfo.FirstResponseTime); relayToFirstByteMs >= 0 {
+		timing["relay_to_first_token_ms"] = relayToFirstByteMs
+	}
+	if totalMs := durationMilliseconds(entryTime, relayInfo.FirstResponseTime); totalMs >= 0 {
+		timing["entry_to_first_token_ms"] = totalMs
+	}
+	if ctx != nil {
+		if useChannels := ctx.GetStringSlice("use_channel"); len(useChannels) > 1 {
+			timing["retry_count"] = len(useChannels) - 1
+		}
+	}
+	if len(timing) > 0 {
+		adminInfo["timing"] = timing
 	}
 }
 
@@ -72,6 +121,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	}
 
 	AppendChannelAffinityAdminInfo(ctx, adminInfo)
+	appendAdminTimingInfo(ctx, relayInfo, adminInfo)
 
 	other["admin_info"] = adminInfo
 	appendRequestPath(ctx, relayInfo, other)
