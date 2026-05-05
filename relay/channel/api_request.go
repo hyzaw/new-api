@@ -483,6 +483,14 @@ func sendPingData(c *gin.Context, mutex *sync.Mutex) error {
 func DoRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
 	return doRequest(c, req, info)
 }
+
+func enforceIdentityAcceptEncoding(req *http.Request) {
+	if req == nil {
+		return
+	}
+	req.Header.Set("Accept-Encoding", "identity")
+}
+
 func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http.Response, error) {
 	var client *http.Client
 	var err error
@@ -515,6 +523,7 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 		}
 	}
 
+	enforceIdentityAcceptEncoding(req)
 	info.MarkUpstreamRequest()
 	resp, err := client.Do(req)
 	if err != nil {

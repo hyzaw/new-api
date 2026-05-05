@@ -191,3 +191,14 @@ func TestProcessHeaderOverride_PassHeadersTemplateSetsRuntimeHeaders(t *testing.
 	require.Equal(t, "sess-123", upstreamReq.Header.Get("Session_id"))
 	require.Empty(t, upstreamReq.Header.Get("X-Codex-Beta-Features"))
 }
+
+func TestEnforceIdentityAcceptEncoding(t *testing.T) {
+	t.Parallel()
+
+	req := httptest.NewRequest(http.MethodPost, "https://example.com/v1/chat/completions", nil)
+	req.Header.Set("Accept-Encoding", "gzip, deflate")
+
+	enforceIdentityAcceptEncoding(req)
+
+	require.Equal(t, "identity", req.Header.Get("Accept-Encoding"))
+}
