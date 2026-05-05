@@ -372,14 +372,19 @@ func GetModelPrice(name string, printErr bool) (float64, bool) {
 	}
 
 	if strings.HasSuffix(name, CompactModelSuffix) {
-		price, ok := modelPriceMap.Get(CompactWildcardModelKey)
-		if !ok {
-			if printErr {
-				common.SysError("model price not found: " + name)
-			}
-			return -1, false
+		if price, ok := modelPriceMap.Get(CompactWildcardModelKey); ok {
+			return price, true
 		}
-		return price, true
+		baseModelName, _ := WithoutCompactModelSuffix(name)
+		if price, ok := modelPriceMap.Get(baseModelName); ok {
+			return price, true
+		}
+		normalizedBaseModelName := FormatMatchingModelName(baseModelName)
+		if normalizedBaseModelName != baseModelName {
+			if price, ok := modelPriceMap.Get(normalizedBaseModelName); ok {
+				return price, true
+			}
+		}
 	}
 
 	if printErr {
@@ -409,7 +414,16 @@ func GetModelRatio(name string) (float64, bool, string) {
 			if wildcardRatio, ok := modelRatioMap.Get(CompactWildcardModelKey); ok {
 				return wildcardRatio, true, name
 			}
-			//return 0, true, name
+			baseModelName, _ := WithoutCompactModelSuffix(name)
+			if baseModelRatio, ok := modelRatioMap.Get(baseModelName); ok {
+				return baseModelRatio, true, baseModelName
+			}
+			normalizedBaseModelName := FormatMatchingModelName(baseModelName)
+			if normalizedBaseModelName != baseModelName {
+				if baseModelRatio, ok := modelRatioMap.Get(normalizedBaseModelName); ok {
+					return baseModelRatio, true, normalizedBaseModelName
+				}
+			}
 		}
 		return 37.5, operation_setting.SelfUseModeEnabled, name
 	}
