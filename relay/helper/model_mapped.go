@@ -72,7 +72,9 @@ func ModelMappedHelper(c *gin.Context, info *common.RelayInfo, request dto.Reque
 			finalUpstreamModelName = info.UpstreamModelName
 		}
 		info.UpstreamModelName = finalUpstreamModelName
-		info.OriginModelName = ratio_setting.WithCompactModelSuffix(finalUpstreamModelName)
+		// Keep billing and channel-selection model identity stable on the original compact model.
+		// Only the upstream request model should follow channel mapping.
+		info.OriginModelName = originModelName
 	}
 	if request != nil {
 		request.SetModelName(info.UpstreamModelName)

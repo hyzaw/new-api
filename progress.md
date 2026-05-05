@@ -1,5 +1,13 @@
 # Progress
 
+- 2026-05-05: 开始排查远端 compact task 仍报 `gpt-5.5-openai-compact` 未配置价格且随后出现 `new_api_panic` 的问题。
+- 2026-05-05: 已修复 `responses/compact` 模型映射污染 `OriginModelName` 的问题，保证 compact 计费仍按原始 compact 模型键回落到基础模型价格。
+- 2026-05-05: 已修复 recover 中间件在响应已写出后仍追加 panic JSON 的问题，避免客户端收到双错误对象。
+- 2026-05-05: 已通过 `go test ./relay/helper -run \"TestModelMappedHelperResponsesCompactKeepsOriginModelForBilling|TestModelMappedHelperResponsesCompactWithoutMappingKeepsCompactOrigin|TestModelPriceHelperTieredUsesPreloadedRequestInput\" -count=1`。
+- 2026-05-05: 已通过 `go test ./middleware -run TestRelayPanicRecoverDoesNotAppendSecondJSONAfterWrite -count=1`。
+- 2026-05-05: 已通过 `go test ./setting/ratio_setting -run \"TestGetModelPriceFallsBackToBaseModelForCompact|TestGetModelPricePrefersCompactWildcardOverBaseModel|TestGetModelRatioFallsBackToBaseModelForCompact\" -count=1`。
+- 2026-05-05: 已通过 `go test ./relay/helper ./middleware ./controller ./relay -run TestDoesNotExist -count=1` 编译校验。
+
 - 已确认主卡点是请求链路中同步写 `log_details`。
 - 已完成 Redis 预写 + 后台 worker 批量落库，并同步调整读取、`has_detail` 标记和删除逻辑。
 - 已通过 `go test ./model -count=1`。

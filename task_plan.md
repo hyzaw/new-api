@@ -1,6 +1,21 @@
 # Task Plan
 
 ## Goal
+修复远端 compact task 仍报 `gpt-5.5-openai-compact` 未配置价格并伴随 panic 的问题，定位未覆盖的定价/错误处理链路并补齐 fallback。
+
+## Steps
+- [x] 复现并定位 compact task 真实命中的定价与错误处理代码路径
+- [x] 为遗漏路径补齐 compact -> 基础模型价格 fallback，并兜住后续 panic
+- [x] 运行定向测试与编译校验
+- [pending] 如用户需要则提交并推送
+
+## Decisions
+- 先假设“远端 compact task”没有走此前已修过的 `GetModelPrice/GetModelRatio` 主路径，而是命中了另一套按次价格或预扣费逻辑。
+- panic 视为二次故障，先找原始 `model_price_error` 触发点，再确保后续包装链不会因空指针追加 `new_api_panic`。
+
+---
+
+## Goal
 将 `ResponseBodyCapture` 生成的日志详情改为先写 Redis，再由后台批量渐进写入 `log_details` 主表，避免请求路径同步写库。
 
 ## Steps

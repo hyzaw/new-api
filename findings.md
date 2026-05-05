@@ -1,5 +1,9 @@
 # Findings
 
+- 2026-05-05: `responses/compact` 在 `relay/helper/model_mapped.go` 中会把 `OriginModelName` 改成“映射后的上游模型名 + `-openai-compact` 后缀”。这会污染后续计费查价键。
+- 2026-05-05: 因此当渠道模型映射把 `gpt-5.5` 映射到某个上游变体（例如带日期版本）时，计费层实际查的是映射后的 compact 名，而不是用户配置过价格的基础模型名，导致仍报“价格未配置”。
+- 2026-05-05: 用户看到的第二段 `new_api_panic` 不是首个错误根因，而是响应已写出后，后续清理/记录逻辑再次 panic，被 `middleware/RelayPanicRecover` 追加写回客户端形成双 JSON。
+
 - 现状：`model/log.go` 中 `createLogDetail` 直接 `LOG_DB.Create(detail)`。
 - `GetLogDetail`、`markLogsHasDetail`、`DeleteOldLog` 都依赖 `log_details` 表。
 - `RecordConsumeLog` / `RecordErrorLog` 都在写日志后同步调用 `createLogDetail`。
