@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -105,42 +106,53 @@ func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
 
 func GetChannel(group string, model string, retry int) (*Channel, error) {
 	var abilities []Ability
-
-	var err error = nil
-	channelQuery, err := getChannelQuery(group, model, retry)
-	if err != nil {
-		return nil, err
-	}
-	if common.UsingSQLite || common.UsingPostgreSQL {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	} else {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	}
-	if err != nil {
-		return nil, err
+	var err error
+	for _, candidate := range ratio_setting.MatchingModelCandidates(model) {
+		abilities, err = getAbilitiesByGroupModel(group, candidate, retry)
+		if err != nil {
+			return nil, err
+		}
+		if len(abilities) > 0 {
+			break
+		}
 	}
 	channel := Channel{}
-	if len(abilities) > 0 {
-		// Randomly choose one
-		weightSum := uint(0)
-		for _, ability_ := range abilities {
-			weightSum += ability_.Weight + 10
-		}
-		// Randomly choose one
-		weight := common.GetRandomInt(int(weightSum))
-		for _, ability_ := range abilities {
-			weight -= int(ability_.Weight) + 10
-			//log.Printf("weight: %d, ability weight: %d", weight, *ability_.Weight)
-			if weight <= 0 {
-				channel.Id = ability_.ChannelId
-				break
-			}
-		}
-	} else {
+	if len(abilities) == 0 {
 		return nil, nil
+	}
+	// Randomly choose one
+	weightSum := uint(0)
+	for _, ability_ := range abilities {
+		weightSum += ability_.Weight + 10
+	}
+	// Randomly choose one
+	weight := common.GetRandomInt(int(weightSum))
+	for _, ability_ := range abilities {
+		weight -= int(ability_.Weight) + 10
+		//log.Printf("weight: %d, ability weight: %d", weight, *ability_.Weight)
+		if weight <= 0 {
+			channel.Id = ability_.ChannelId
+			break
+		}
 	}
 	err = DB.First(&channel, "id = ?", channel.Id).Error
 	return &channel, err
+}
+
+func getAbilitiesByGroupModel(group string, model string, retry int) ([]Ability, error) {
+	var abilities []Ability
+	channelQuery, err := getChannelQuery(group, model, retry)
+	if err != nil {
+		if retry != 0 {
+			return nil, nil
+		}
+		return nil, err
+	}
+	err = channelQuery.Order("weight DESC").Find(&abilities).Error
+	if err != nil {
+		return nil, err
+	}
+	return abilities, nil
 }
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {
