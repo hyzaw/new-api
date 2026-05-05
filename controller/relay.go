@@ -767,10 +767,14 @@ func RelayTask(c *gin.Context) {
 		}
 
 		if !taskErr.LocalError {
+			errForLog := taskErr.Error
+			if errForLog == nil {
+				errForLog = errors.New(taskErr.Message)
+			}
 			processChannelError(c,
 				*types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey,
 					common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()),
-				types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+				types.NewOpenAIError(errForLog, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
 		}
 
 		if !shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry()) {
@@ -820,7 +824,11 @@ func RelayTask(c *gin.Context) {
 	if taskErr != nil {
 		respondTaskError(c, taskErr)
 		if !taskErr.LocalError {
-			recordRelayErrorLog(c, relayInfo, types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+			errForLog := taskErr.Error
+			if errForLog == nil {
+				errForLog = errors.New(taskErr.Message)
+			}
+			recordRelayErrorLog(c, relayInfo, types.NewOpenAIError(errForLog, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
 		}
 	}
 }

@@ -94,6 +94,8 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	var usage = &dto.Usage{}
 	var usagePostProcessed bool
 	var responseTextBuilder strings.Builder
+	var streamErr *types.NewAPIError
+	forwardedAnyData := false
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -102,6 +104,19 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
 			logger.LogError(c, "failed to unmarshal stream response: "+err.Error())
 			sr.Error(err)
+			return
+		}
+		if oaiErr, statusCode, isStreamErr := getResponsesStreamOpenAIError(streamResponse); isStreamErr {
+			if !forwardedAnyData {
+				streamErr = types.WithOpenAIError(*oaiErr, statusCode)
+				sr.Stop(streamErr)
+				return
+			}
+			if streamResponse.Type == "" {
+				streamResponse.Type = "error"
+			}
+			sendResponsesStreamData(c, streamResponse, data)
+			sr.Stop(nil)
 			return
 		}
 		switch streamResponse.Type {
@@ -169,7 +184,12 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			}
 		}
 		sendResponsesStreamData(c, streamResponse, data)
+		forwardedAnyData = true
 	})
+
+	if streamErr != nil {
+		return nil, streamErr
+	}
 
 	if usage.CompletionTokens == 0 {
 		// 计算输出文本的 token 数量
