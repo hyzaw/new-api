@@ -7,6 +7,11 @@
 - 2026-05-05: 已通过 `go test ./middleware -run TestRelayPanicRecoverDoesNotAppendSecondJSONAfterWrite -count=1`。
 - 2026-05-05: 已通过 `go test ./setting/ratio_setting -run \"TestGetModelPriceFallsBackToBaseModelForCompact|TestGetModelPricePrefersCompactWildcardOverBaseModel|TestGetModelRatioFallsBackToBaseModelForCompact\" -count=1`。
 - 2026-05-05: 已通过 `go test ./relay/helper ./middleware ./controller ./relay -run TestDoesNotExist -count=1` 编译校验。
+- 2026-05-05: 根据用户补充“这是我手动输入 /compact”，已进一步定位到基础模型 `tiered_expr` 计费未被 compact 继承。
+- 2026-05-05: 已为 `billing_setting.GetBillingMode/GetBillingExpr` 增加 compact -> 基础模型 fallback，并同步修复 `main.go` 中实际生效的全局 panic recovery，避免重复追加 `new_api_panic`。
+- 2026-05-05: 已通过 `go test ./setting/billing_setting -run \"TestGetBillingModeFallsBackToBaseModelForCompact|TestGetBillingExprFallsBackToBaseModelForCompact\" -count=1`。
+- 2026-05-05: 已通过 `go test ./relay/helper -run \"TestModelPriceHelperTieredUsesPreloadedRequestInput|TestModelPriceHelperCompactInheritsBaseTieredBilling\" -count=1`。
+- 2026-05-05: 已通过 `go test ./... -run TestDoesNotExist -count=1` 编译校验。
 
 - 已确认主卡点是请求链路中同步写 `log_details`。
 - 已完成 Redis 预写 + 后台 worker 批量落库，并同步调整读取、`has_detail` 标记和删除逻辑。

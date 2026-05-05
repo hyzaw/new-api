@@ -2,8 +2,10 @@ package billing_setting
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/config"
 )
 
@@ -33,15 +35,45 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func GetBillingMode(model string) string {
-	if mode, ok := billingSetting.BillingMode[model]; ok {
-		return mode
+	for _, candidate := range billingModelCandidates(model) {
+		if mode, ok := billingSetting.BillingMode[candidate]; ok {
+			return mode
+		}
 	}
 	return BillingModeRatio
 }
 
 func GetBillingExpr(model string) (string, bool) {
-	expr, ok := billingSetting.BillingExpr[model]
-	return expr, ok
+	for _, candidate := range billingModelCandidates(model) {
+		if expr, ok := billingSetting.BillingExpr[candidate]; ok {
+			return expr, true
+		}
+	}
+	return "", false
+}
+
+func billingModelCandidates(model string) []string {
+	candidates := make([]string, 0, 5)
+	seen := make(map[string]struct{}, 5)
+	add := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return
+		}
+		if _, ok := seen[candidate]; ok {
+			return
+		}
+		seen[candidate] = struct{}{}
+		candidates = append(candidates, candidate)
+	}
+
+	for _, candidate := range ratio_setting.MatchingModelCandidates(model) {
+		add(candidate)
+	}
+	if strings.HasSuffix(model, ratio_setting.CompactModelSuffix) {
+		add(ratio_setting.CompactWildcardModelKey)
+	}
+	return candidates
 }
 
 // ---------------------------------------------------------------------------

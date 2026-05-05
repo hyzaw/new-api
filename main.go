@@ -172,6 +172,10 @@ func main() {
 	common.SysLog("remote ip headers: " + strings.Join(server.RemoteIPHeaders, ", "))
 	server.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
 		common.SysLog(fmt.Sprintf("panic detected: %v", err))
+		if c.Writer != nil && c.Writer.Written() {
+			c.Abort()
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": gin.H{
 				"message": fmt.Sprintf("Panic detected, error: %v. Please submit a issue here: https://github.com/Calcium-Ion/new-api", err),
