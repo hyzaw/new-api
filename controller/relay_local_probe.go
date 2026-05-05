@@ -126,7 +126,7 @@ func writeLocalResponsesProbeStream(c *gin.Context, req *dto.OpenAIResponsesRequ
 
 	responseID, messageID, createdAt := newLocalResponsesProbeIDs()
 	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
+	c.Header("Cache-Control", "no-cache, no-transform")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 	c.Status(http.StatusOK)

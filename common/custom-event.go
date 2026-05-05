@@ -38,7 +38,7 @@ func checkWriter(writer io.Writer) stringWriter {
 // http://www.w3.org/TR/2009/WD-eventsource-20091029/
 
 var contentType = []string{"text/event-stream"}
-var noCache = []string{"no-cache"}
+var noCache = []string{"no-cache, no-transform"}
 
 var fieldReplacer = strings.NewReplacer(
 	"\n", "\\n",
